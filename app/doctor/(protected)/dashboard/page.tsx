@@ -58,8 +58,22 @@ export default async function DoctorDashboard() {
     <div className="space-y-6 animate-fade-in">
       {/* ── Greeting ─────────────────────────────────────── */}
       <div style={{ borderBottom: '1px solid var(--color-sage-border)', paddingBottom: '20px' }}>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {doctorProfile?.logoUrl && (
+            <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '1.5px solid var(--color-sage-border)' }}>
+              <Image
+                src={doctorProfile.logoUrl}
+                alt={`${doctorProfile.clinicName ?? 'Clinic'} logo`}
+                width={64}
+                height={64}
+                className="w-full h-full object-contain bg-white"
+              />
+            </div>
+          )}
           <div>
+            <p className="text-sm font-semibold tracking-wide uppercase" style={{ color: 'var(--color-sage)', marginBottom: '2px' }}>
+              {doctorProfile?.clinicName ?? 'Your Clinic'}
+            </p>
             <h1
               className="text-2xl md:text-3xl font-bold leading-tight"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
@@ -73,17 +87,6 @@ export default async function DoctorDashboard() {
               {formatDateOnly(today)}
             </p>
           </div>
-          {doctorProfile?.logoUrl && (
-            <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '1.5px solid var(--color-sage-border)' }}>
-              <Image
-                src={doctorProfile.logoUrl}
-                alt={`${doctorProfile.clinicName ?? 'Clinic'} logo`}
-                width={56}
-                height={56}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          )}
         </div>
       </div>
 
