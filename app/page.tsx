@@ -6,10 +6,27 @@ import type { WeeklyTimings } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const doctor = await prisma.doctor.findFirst({ select: { clinicName: true, specialty: true } })
+  const doctor = await prisma.doctor.findFirst({ select: { clinicName: true, specialty: true, address: true } })
+  const appUrl = process.env.NEXTAUTH_URL ?? 'https://vaidhconnect-893037849130.asia-south1.run.app'
+  const iconUrl = `${appUrl}/api/clinic-icon`
+  const title = doctor?.clinicName ?? 'Clinic'
+  const description = `Book appointments at ${title}${doctor?.address ? ` — ${doctor.address}` : ''}`
   return {
-    title: doctor?.clinicName ?? 'Clinic',
-    description: `Book appointments at ${doctor?.clinicName ?? 'our clinic'}`,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: appUrl,
+      images: [{ url: iconUrl, width: 512, height: 512, alt: `${title} logo` }],
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+      images: [iconUrl],
+    },
   }
 }
 
