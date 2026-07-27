@@ -87,6 +87,29 @@ function SettingsPageContent() {
     setLogoPreview(URL.createObjectURL(file))
   }
 
+  const handleQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    setQrFile(file)
+    setQrPreview(URL.createObjectURL(file))
+  }
+
+  const copyMondayToWeekdays = () => {
+    if (!doctor) return
+    const monday = (doctor.timings as WeeklyTimings)['monday']
+    if (!monday) return
+    const weekdays = ['tuesday', 'wednesday', 'thursday', 'friday'] as const
+    setDoctor(prev => {
+      if (!prev) return prev
+      const timings = { ...prev.timings } as WeeklyTimings
+      for (const day of weekdays) {
+        timings[day] = { ...monday }
+      }
+      return { ...prev, timings }
+    })
+  }
+
   const handleSave = async () => {
     if (!doctor) return
     setSaving(true)
