@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import PatientPortal from '@/components/patient/PatientPortal'
 import type { WeeklyTimings } from '@/lib/constants'
 
+export const dynamic = 'force-dynamic'
+
 export async function generateMetadata(): Promise<Metadata> {
   const doctor = await prisma.doctor.findFirst({ select: { clinicName: true, specialty: true } })
   return {

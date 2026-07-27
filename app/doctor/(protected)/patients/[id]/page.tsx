@@ -5,6 +5,8 @@ import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from '
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
   const patient = await prisma.patient.findUnique({ where: { id }, select: { name: true } })

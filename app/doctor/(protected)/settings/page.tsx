@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSession, SessionProvider } from 'next-auth/react'
-import { Save, Upload, X, Check, Palette } from 'lucide-react'
+import { Save, Upload, X, Check, Palette, Copy } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK, DEFAULT_TIMINGS } from '@/lib/constants'
 import type { WeeklyTimings, DayTiming } from '@/lib/constants'
 import Image from 'next/image'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
-  address?: string | null; mapsUrl?: string | null; phone?: string | null
+  address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null
   specialty: string; themeColor: string; qualifications?: string | null
   slotDurationMins: number; timings: WeeklyTimings
   paymentDetails: { upiId?: string; bankDetails?: string; qrCodeUrl?: string }
@@ -33,6 +33,9 @@ function SettingsPageContent() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
+  const [qrPreview, setQrPreview] = useState<string | null>(null)
+  const [qrFile, setQrFile] = useState<File | null>(null)
+  const qrInputRef = useRef<HTMLInputElement>(null)
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -95,6 +98,18 @@ function SettingsPageContent() {
         await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
       }
 
+      // Upload QR code if changed
+      if (qrFile) {
+        const fd = new FormData()
+        fd.append('qrCode', qrFile)
+        const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
+        const data = await res.json()
+        // Store the saved QR URL back into doctor state
+        if (data.doctor?.qrCodeUrl) {
+          setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, qrCodeUrl: data.doctor.qrCodeUrl } } : p)
+        }
+      }
+
       await fetch('/api/doctor/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +119,7 @@ function SettingsPageContent() {
           clinicName: doctor.clinicName,
           address: doctor.address,
           mapsUrl: doctor.mapsUrl,
+          websiteUrl: doctor.websiteUrl,
           phone: doctor.phone,
           specialty: doctor.specialty,
           themeColor: doctor.themeColor,
@@ -184,7 +200,7 @@ function SettingsPageContent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="form-group">
             <label className="form-label">Doctor Name</label>
             <input className="form-input" value={doctor.name} onChange={e => setDoctor(p => p ? { ...p, name: e.target.value } : p)} />
@@ -212,6 +228,10 @@ function SettingsPageContent() {
           <div className="form-group col-span-2">
             <label className="form-label">Google Maps URL <span className="text-slate-400 text-xs">(share link for "Get Directions" button)</span></label>
             <input className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor(p => p ? { ...p, mapsUrl: e.target.value } : p)} />
+          </div>
+          <div className="form-group col-span-2">
+            <label className="form-label">Clinic Website <span className="text-slate-400 text-xs">(optional)</span></label>
+            <input className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor(p => p ? { ...p, websiteUrl: e.target.value } : p)} />
           </div>
         </div>
       </div>
@@ -293,10 +313,25 @@ function SettingsPageContent() {
 
       {/* Clinic Timings */}
       <div className="card p-6 space-y-4">
-        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Clinic Timings</h2>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h2 className="font-semibold text-slate-800">Clinic Timings</h2>
+          <button
+            type="button"
+            onClick={copyMondayToWeekdays}
+            className="btn btn-outline btn-sm flex items-center gap-1.5"
+            title="Copy Monday timings to Tue–Fri"
+          >
+            <Copy size={13} /> Copy Mon → Weekdays
+          </button>
+        </div>
         <div className="space-y-4">
           {DAYS_OF_WEEK.map(day => {
             const timing = (doctor.timings as WeeklyTimings)[day] ?? DEFAULT_TIMINGS[day]
+            // Detect full-day mode: no meaningful evening timing
+            const isFullDay = timing.open &&
+              timing.morning?.start && timing.morning?.end &&
+              (!timing.evening?.start && !timing.evening?.end)
+
             return (
               <div key={day} className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -313,23 +348,66 @@ function SettingsPageContent() {
                 </div>
 
                 {timing.open && (
-                  <div className="grid grid-cols-2 gap-3 pl-12">
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-400 font-medium">MORNING</p>
-                      <div className="flex gap-2 items-center">
-                        <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
-                        <span className="text-slate-400 text-xs">–</span>
-                        <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
-                      </div>
+                  <div className="pl-12 space-y-2">
+                    {/* Mode toggle */}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Switch to shift mode: restore default morning + evening
+                          handleTimingChange(day, 'morning', 'start', '09:00')
+                          handleTimingChange(day, 'morning', 'end', '13:00')
+                          handleTimingChange(day, 'evening', 'start', '17:00')
+                          handleTimingChange(day, 'evening', 'end', '20:00')
+                        }}
+                        className={`px-3 py-1 rounded-md text-xs font-medium border transition-all ${!isFullDay ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-500'}`}
+                      >
+                        Morning + Evening
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Switch to full-day mode: morning has full range, clear evening
+                          handleTimingChange(day, 'morning', 'start', timing.morning?.start || '10:00')
+                          handleTimingChange(day, 'morning', 'end', timing.evening?.end || '21:00')
+                          handleTimingChange(day, 'evening', 'start', '')
+                          handleTimingChange(day, 'evening', 'end', '')
+                        }}
+                        className={`px-3 py-1 rounded-md text-xs font-medium border transition-all ${isFullDay ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-500'}`}
+                      >
+                        Full Day
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-400 font-medium">EVENING</p>
-                      <div className="flex gap-2 items-center">
-                        <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
-                        <span className="text-slate-400 text-xs">–</span>
-                        <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
+
+                    {isFullDay ? (
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-400 font-medium">HOURS</p>
+                        <div className="flex gap-2 items-center">
+                          <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                          <span className="text-slate-400 text-xs">–</span>
+                          <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs text-slate-400 font-medium">MORNING</p>
+                          <div className="flex gap-2 items-center">
+                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                            <span className="text-slate-400 text-xs">–</span>
+                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-slate-400 font-medium">EVENING</p>
+                          <div className="flex gap-2 items-center">
+                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
+                            <span className="text-slate-400 text-xs">–</span>
+                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -348,6 +426,25 @@ function SettingsPageContent() {
         <div className="form-group">
           <label className="form-label">Bank Details</label>
           <textarea className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">QR Code Image</label>
+          <div className="flex items-center gap-4">
+            <div className="w-28 h-28 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
+              {(qrPreview || doctor.paymentDetails?.qrCodeUrl) ? (
+                <Image src={qrPreview ?? doctor.paymentDetails?.qrCodeUrl!} alt="QR Code" width={112} height={112} className="w-full h-full object-contain" />
+              ) : (
+                <Upload size={24} className="text-slate-300" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <button type="button" onClick={() => qrInputRef.current?.click()} className="btn btn-outline btn-sm">
+                <Upload size={14} /> Upload QR Code
+              </button>
+              <p className="text-xs text-slate-400">PNG, JPG · Max 2MB</p>
+            </div>
+            <input ref={qrInputRef} type="file" accept="image/*" className="hidden" onChange={handleQrChange} />
+          </div>
         </div>
       </div>
 

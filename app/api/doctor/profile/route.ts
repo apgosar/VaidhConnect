@@ -47,41 +47,57 @@ export async function PATCH(request: Request) {
 
     const contentType = request.headers.get('content-type') ?? ''
 
-    // Handle multipart (logo upload)
+    // Handle multipart (logo or QR code upload)
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       const logoFile = formData.get('logo') as File | null
-
-      if (!logoFile) {
-        return Response.json({ error: 'No file provided' }, { status: 400 })
-      }
-
-      // Validate file size (2MB max)
-      if (logoFile.size > 2 * 1024 * 1024) {
-        return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
-      }
+      const qrCodeFile = formData.get('qrCode') as File | null
 
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
-      if (!allowedTypes.includes(logoFile.type)) {
-        return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+
+      // Handle Logo upload
+      if (logoFile) {
+        if (logoFile.size > 2 * 1024 * 1024) {
+          return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
+        }
+        if (!allowedTypes.includes(logoFile.type)) {
+          return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+        }
+        const buffer = Buffer.from(await logoFile.arrayBuffer())
+        const ext = logoFile.name.split('.').pop() ?? 'jpg'
+        const logoUrl = await uploadFile(buffer, `logos/${session.user.id}.${ext}`, logoFile.type)
+        const doctor = await prisma.doctor.update({ where: { id: session.user.id }, data: { logoUrl } })
+        return Response.json({ doctor: { logoUrl: doctor.logoUrl } })
       }
 
-      const buffer = Buffer.from(await logoFile.arrayBuffer())
-      const ext = logoFile.name.split('.').pop() ?? 'jpg'
-      const logoUrl = await uploadFile(buffer, `logos/${session.user.id}.${ext}`, logoFile.type)
+      // Handle QR Code upload
+      if (qrCodeFile) {
+        if (qrCodeFile.size > 2 * 1024 * 1024) {
+          return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
+        }
+        if (!allowedTypes.includes(qrCodeFile.type)) {
+          return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+        }
+        const buffer = Buffer.from(await qrCodeFile.arrayBuffer())
+        const ext = qrCodeFile.name.split('.').pop() ?? 'png'
+        const qrCodeUrl = await uploadFile(buffer, `qrcodes/${session.user.id}.${ext}`, qrCodeFile.type)
+        // Store QR code URL inside paymentDetails JSON
+        const existing = await prisma.doctor.findUnique({ where: { id: session.user.id }, select: { paymentDetails: true } })
+        const paymentDetails = (existing?.paymentDetails as Record<string, unknown>) ?? {}
+        await prisma.doctor.update({
+          where: { id: session.user.id },
+          data: { paymentDetails: { ...paymentDetails, qrCodeUrl } },
+        })
+        return Response.json({ doctor: { qrCodeUrl } })
+      }
 
-      const doctor = await prisma.doctor.update({
-        where: { id: session.user.id },
-        data: { logoUrl },
-      })
-
-      return Response.json({ doctor: { logoUrl: doctor.logoUrl } })
+      return Response.json({ error: 'No file provided' }, { status: 400 })
     }
 
     // JSON settings update
     const body = await request.json()
     const {
-      name, email, clinicName, address, mapsUrl, phone,
+      name, email, clinicName, address, mapsUrl, websiteUrl, phone,
       specialty, themeColor, qualifications, slotDurationMins,
       timings, paymentDetails, reminderIntervals,
       currentPassword, newPassword,
@@ -94,6 +110,7 @@ export async function PATCH(request: Request) {
     if (clinicName) updateData.clinicName = clinicName.trim()
     if (address !== undefined) updateData.address = address?.trim() || null
     if (mapsUrl !== undefined) updateData.mapsUrl = mapsUrl?.trim() || null
+    if (websiteUrl !== undefined) updateData.websiteUrl = websiteUrl?.trim() || null
     if (phone !== undefined) updateData.phone = phone?.trim() || null
     if (specialty) updateData.specialty = specialty
     if (themeColor) updateData.themeColor = themeColor
@@ -131,7 +148,7 @@ export async function PATCH(request: Request) {
       data: updateData,
       select: {
         id: true, name: true, email: true, clinicName: true, logoUrl: true,
-        address: true, mapsUrl: true, phone: true, specialty: true,
+        address: true, mapsUrl: true, websiteUrl: true, phone: true, specialty: true,
         themeColor: true, qualifications: true, slotDurationMins: true,
         timings: true, paymentDetails: true, reminderIntervals: true,
       },

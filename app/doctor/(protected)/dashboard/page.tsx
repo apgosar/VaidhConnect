@@ -4,9 +4,11 @@ import { formatDate, formatDateOnly } from '@/lib/slots'
 import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Calendar, Users, CheckCircle2, Clock, ChevronRight } from 'lucide-react'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function DoctorDashboard() {
@@ -19,7 +21,7 @@ export default async function DoctorDashboard() {
   const todayEnd = endOfDay(today)
   const weekEnd = endOfDay(addDays(today, 7))
 
-  const [todayAppts, upcomingAppts, totalPatients, completedToday] = await Promise.all([
+  const [todayAppts, upcomingAppts, totalPatients, completedToday, doctorProfile] = await Promise.all([
     prisma.appointment.findMany({
       where: { doctorId, status: 'BOOKED', startTime: { gte: todayStart, lte: todayEnd } },
       include: {
@@ -39,6 +41,7 @@ export default async function DoctorDashboard() {
     prisma.appointment.count({
       where: { doctorId, status: 'COMPLETED', startTime: { gte: todayStart, lte: todayEnd } },
     }),
+    prisma.doctor.findUnique({ where: { id: doctorId }, select: { logoUrl: true, clinicName: true } }),
   ])
 
   const greeting = today.getHours() < 12 ? 'Morning' : today.getHours() < 17 ? 'Afternoon' : 'Evening'
@@ -55,18 +58,33 @@ export default async function DoctorDashboard() {
     <div className="space-y-6 animate-fade-in">
       {/* ── Greeting ─────────────────────────────────────── */}
       <div style={{ borderBottom: '1px solid var(--color-sage-border)', paddingBottom: '20px' }}>
-        <h1
-          className="text-2xl md:text-3xl font-bold leading-tight"
-          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
-        >
-          Good {greeting}, Dr. {firstName}&nbsp;🌿
-        </h1>
-        <p
-          className="mt-1 text-sm font-tabular"
-          style={{ color: 'var(--color-sage)' }}
-        >
-          {formatDateOnly(today)}
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1
+              className="text-2xl md:text-3xl font-bold leading-tight"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
+            >
+              Good {greeting}, Dr. {firstName}&nbsp;🌿
+            </h1>
+            <p
+              className="mt-1 text-sm font-tabular"
+              style={{ color: 'var(--color-sage)' }}
+            >
+              {formatDateOnly(today)}
+            </p>
+          </div>
+          {doctorProfile?.logoUrl && (
+            <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0" style={{ border: '1.5px solid var(--color-sage-border)' }}>
+              <Image
+                src={doctorProfile.logoUrl}
+                alt={`${doctorProfile.clinicName ?? 'Clinic'} logo`}
+                width={56}
+                height={56}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Stat Cards ───────────────────────────────────── */}

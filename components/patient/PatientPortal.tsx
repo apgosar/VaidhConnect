@@ -74,7 +74,9 @@ function BotanicalWatermark() {
 }
 
 export default function PatientPortal({ doctor }: PatientPortalProps) {
-  const [phone, setPhone] = useState('')
+  const [countryCode, setCountryCode] = useState('+91')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const phone = countryCode + phoneNumber
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
@@ -208,21 +210,34 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="form-group">
               <label className="form-label" htmlFor="phone-input">Mobile Number</label>
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }}>
-                  <Phone size={16} />
+              <div className="flex gap-2">
+                {/* Editable country code */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="form-input text-center font-medium"
+                    style={{ width: '72px' }}
+                    value={countryCode}
+                    onChange={e => setCountryCode(e.target.value)}
+                    aria-label="Country code"
+                    maxLength={5}
+                  />
                 </div>
-                <input
-                  id="phone-input"
-                  type="tel"
-                  className="form-input pl-9"
-                  placeholder="+91 98765 43210"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  required
-                  autoComplete="tel"
-                  inputMode="tel"
-                />
+                {/* Phone number */}
+                <div className="relative flex-1">
+                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />
+                  <input
+                    id="phone-input"
+                    type="tel"
+                    className="form-input pl-9 w-full"
+                    placeholder="98765 43210"
+                    value={phoneNumber}
+                    onChange={e => setPhoneNumber(e.target.value)}
+                    required
+                    autoComplete="tel"
+                    inputMode="numeric"
+                  />
+                </div>
               </div>
               {error && <p className="form-error">{error}</p>}
             </div>

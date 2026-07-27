@@ -18,6 +18,7 @@ model Doctor {
   logoUrl            String?
   address            String?
   mapsUrl            String?  // Google Maps share URL for "Get Directions"
+  websiteUrl         String?  // Clinic website
   phone              String?
   specialty          String   @default("General Physician")
   themeColor         String   @default("#3B82F6")

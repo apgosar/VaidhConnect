@@ -31,12 +31,10 @@ export async function uploadFile(
     await file.makePublic()
     return `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/${destinationPath}`
   } else {
-    // Local filesystem
-    const localDir = path.join(process.cwd(), 'public', 'uploads', path.dirname(destinationPath))
-    await mkdir(localDir, { recursive: true })
-    const localPath = path.join(process.cwd(), 'public', 'uploads', destinationPath)
-    await writeFile(localPath, fileBuffer)
-    return `/uploads/${destinationPath}`
+    // Ephemeral environment fallback (like Cloud Run without GCS)
+    // Convert file to Base64 data URI so it can be stored directly in the database String fields
+    const base64Data = fileBuffer.toString('base64')
+    return `data:${mimeType};base64,${base64Data}`
   }
 }
 
@@ -44,6 +42,11 @@ export async function uploadFile(
  * Delete a file from GCS or local filesystem.
  */
 export async function deleteFile(filePathOrUrl: string): Promise<void> {
+  if (filePathOrUrl.startsWith('data:')) {
+    // Base64 string, nothing to delete on filesystem
+    return
+  }
+
   if (USE_GCS && bucket) {
     // Extract GCS path from URL
     const gcsPath = filePathOrUrl.replace(
