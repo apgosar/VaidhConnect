@@ -35,13 +35,13 @@ export default function AppointmentsPage() {
     }
     const p = JSON.parse(stored) as Patient
     setPatient(p)
-    fetchAppointments(p.phone)
+    fetchAppointments(p.id)
   }, [router])
 
-  const fetchAppointments = async (phone: string) => {
+  const fetchAppointments = async (id: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/appointments?patientPhone=${encodeURIComponent(phone)}`)
+      const res = await fetch(`/api/appointments?patientId=${encodeURIComponent(id)}`)
       const data = await res.json()
       setAppointments(data.appointments ?? [])
     } finally {

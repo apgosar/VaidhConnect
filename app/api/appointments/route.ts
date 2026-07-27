@@ -10,7 +10,7 @@ import { sendEmail } from '@/lib/email'
 export async function GET(request: NextRequest) {
   try {
     const date = request.nextUrl.searchParams.get('date')
-    const patientPhone = request.nextUrl.searchParams.get('patientPhone')
+    const patientId = request.nextUrl.searchParams.get('patientId')
     const mode = request.nextUrl.searchParams.get('mode') // 'slots' | 'patient'
 
     // Get doctor (single-doctor app)
@@ -61,9 +61,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Patient's appointments
-    if (patientPhone) {
+    if (patientId) {
       const patient = await prisma.patient.findUnique({
-        where: { phone: patientPhone },
+        where: { id: patientId },
       })
 
       if (!patient) {
