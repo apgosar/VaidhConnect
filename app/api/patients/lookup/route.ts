@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
     // Normalize phone: strip spaces and dashes
     const normalized = phone.replace(/[\s\-()]/g, '')
 
-    const patient = await prisma.patient.findUnique({
+    // Return ALL patients linked to this phone number (family members)
+    const patients = await prisma.patient.findMany({
       where: { phone: normalized },
       select: {
         id: true,
@@ -37,13 +38,14 @@ export async function GET(request: NextRequest) {
           },
         },
       },
+      orderBy: { createdAt: 'asc' },
     })
 
-    if (!patient) {
+    if (patients.length === 0) {
       return Response.json({ found: false })
     }
 
-    return Response.json({ found: true, patient })
+    return Response.json({ found: true, patients })
   } catch (error) {
     console.error('[patient-lookup]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

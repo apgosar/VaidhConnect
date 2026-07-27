@@ -42,7 +42,7 @@ model Doctor {
 
 model Patient {
   id             String   @id @default(cuid())
-  phone          String   @unique
+  phone          String   // Not unique — multiple family members can share a number
   name           String
   dob            DateTime
   medicalHistory String?  @db.Text

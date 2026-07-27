@@ -11,10 +11,7 @@ export async function POST(request: Request) {
 
     const normalized = phone.replace(/[\s\-()]/g, '')
 
-    const existing = await prisma.patient.findUnique({ where: { phone: normalized } })
-    if (existing) {
-      return Response.json({ error: 'Patient with this phone number already exists' }, { status: 409 })
-    }
+    // Note: multiple patients (family members) can share a phone number — no uniqueness check
 
     const patient = await prisma.patient.create({
       data: {

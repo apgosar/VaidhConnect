@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, MapPin, ExternalLink, Clock, ChevronRight } from 'lucide-react'
+import { Phone, MapPin, ExternalLink, Clock, ChevronRight, UserPlus, Calendar, User } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
+import { computeAge } from '@/lib/slots'
 
 interface DoctorProfile {
   id: string
@@ -24,6 +25,16 @@ interface DoctorProfile {
 
 interface PatientPortalProps {
   doctor: DoctorProfile
+}
+
+interface PatientRecord {
+  id: string
+  name: string
+  phone: string
+  dob: string
+  medicalHistory?: string
+  email?: string
+  appointments: { id: string; startTime: string; chiefComplaint?: string }[]
 }
 
 function formatDayTiming(day: WeeklyTimings[keyof WeeklyTimings]): string {
@@ -79,6 +90,7 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
   const phone = countryCode + phoneNumber
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [foundPatients, setFoundPatients] = useState<PatientRecord[] | null>(null)
   const router = useRouter()
 
   const specialtyData = SPECIALTIES.find(s => s.value === doctor.specialty)
@@ -99,8 +111,8 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
       const data = await res.json()
 
       if (data.found) {
-        sessionStorage.setItem('patient', JSON.stringify(data.patient))
-        router.push('/book')
+        // Show the patient selection screen
+        setFoundPatients(data.patients)
       } else {
         sessionStorage.setItem('phone', normalized)
         router.push('/register')
@@ -110,6 +122,25 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleBookForPatient = (patient: PatientRecord) => {
+    sessionStorage.setItem('patient', JSON.stringify(patient))
+    if (patient.appointments.length > 0) {
+      sessionStorage.setItem('chiefComplaint', '')
+    }
+    router.push('/book')
+  }
+
+  const handleManageForPatient = (patient: PatientRecord) => {
+    sessionStorage.setItem('patient', JSON.stringify(patient))
+    router.push('/appointments')
+  }
+
+  const handleAddFamilyMember = () => {
+    const normalized = phone.replace(/[\s\-()]/g, '')
+    sessionStorage.setItem('phone', normalized)
+    router.push('/register')
   }
 
   return (
@@ -195,7 +226,101 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
 
       {/* ── Content Cards ────────────────────────────────────── */}
       <div className="page-container-sm space-y-4 pb-16" style={{ marginTop: '-24px' }}>
-        {/* Booking Card */}
+
+        {/* ── STEP 2: Patient Selection (shown after phone lookup) ── */}
+        {foundPatients ? (
+          <div className="space-y-4 animate-fade-in">
+            {/* Header */}
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
+                  Welcome back!
+                </h2>
+                <button
+                  onClick={() => setFoundPatients(null)}
+                  className="text-xs font-medium"
+                  style={{ color: 'var(--color-sage)' }}
+                >
+                  ← Change number
+                </button>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--color-sage)' }}>
+                {foundPatients.length === 1
+                  ? 'We found your profile. Choose what you would like to do.'
+                  : `We found ${foundPatients.length} patients linked to this number. Select a patient below.`}
+              </p>
+            </div>
+
+            {/* Patient cards */}
+            {foundPatients.map(patient => {
+              const age = (() => { try { return computeAge(patient.dob) } catch { return null } })()
+              return (
+                <div key={patient.id} className="card overflow-hidden animate-fade-in">
+                  {/* Patient info header */}
+                  <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--color-sage-border)' }}>
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                      style={{ background: 'var(--color-forest)' }}
+                    >
+                      <User size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate" style={{ color: 'var(--color-charcoal)' }}>{patient.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
+                        {age !== null ? `Age ${age}` : ''}
+                        {patient.medicalHistory ? ` · ${patient.medicalHistory.slice(0, 40)}${patient.medicalHistory.length > 40 ? '…' : ''}` : ''}
+                      </p>
+                    </div>
+                    {patient.appointments.length > 0 && (
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
+                      >
+                        {patient.appointments.length} upcoming
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-0" style={{ borderTop: 'none' }}>
+                    <button
+                      onClick={() => handleManageForPatient(patient)}
+                      className="flex-1 flex flex-col items-center gap-1 py-4 text-sm font-medium transition-colors hover:bg-[var(--color-primary-bg)]"
+                      style={{ color: 'var(--color-charcoal-mid)', borderRight: '1px solid var(--color-sage-border)' }}
+                    >
+                      <Calendar size={18} style={{ color: 'var(--color-forest)' }} />
+                      <span>My Appointments</span>
+                    </button>
+                    <button
+                      onClick={() => handleBookForPatient(patient)}
+                      className="flex-1 flex flex-col items-center gap-1 py-4 text-sm font-semibold transition-colors hover:bg-[var(--color-primary-bg)]"
+                      style={{ color: 'var(--color-forest)' }}
+                    >
+                      <ChevronRight size={18} />
+                      <span>Book Appointment</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Add Family Member */}
+            <button
+              onClick={handleAddFamilyMember}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium text-sm transition-all"
+              style={{
+                border: '1.5px dashed var(--color-sage-border)',
+                color: 'var(--color-sage)',
+                background: 'transparent',
+              }}
+            >
+              <UserPlus size={16} />
+              Add a new patient for this number
+            </button>
+          </div>
+        ) : (
+
+        /* ── STEP 1: Phone Entry ── */
         <div className="card p-6 animate-fade-in">
           <h2
             className="text-xl font-bold mb-1"
@@ -254,6 +379,8 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
             </button>
           </form>
         </div>
+        )}
+
 
         {/* Clinic Info */}
         {(doctor.address || doctor.phone) && (
