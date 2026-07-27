@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { generateAvailableSlots } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
-import { startOfDay, endOfDay } from 'date-fns'
+import { startOfDay, endOfDay, format } from 'date-fns'
 import type { WeeklyTimings } from '@/lib/constants'
+import { sendWhatsApp } from '@/lib/whatsapp'
+import { sendEmail } from '@/lib/email'
 
 // GET /api/appointments?date=2024-01-15&patientPhone=xxx
 export async function GET(request: NextRequest) {
@@ -140,8 +142,24 @@ export async function POST(request: Request) {
       },
       include: {
         patient: { select: { name: true, phone: true, email: true } },
+        doctor: { select: { clinicName: true, name: true, phone: true } },
       },
     })
+
+    // Fire & Forget notifications
+    const dateStr = format(start, 'PPP')
+    const timeStr = format(start, 'p')
+    const clinicName = appointment.doctor.clinicName || 'Clinic'
+    const msg = `Hi ${appointment.patient.name}, your appointment at ${clinicName} is confirmed for ${dateStr} at ${timeStr}.`
+
+    Promise.all([
+      sendWhatsApp(appointment.patient.phone, msg),
+      appointment.patient.email ? sendEmail({
+        to: appointment.patient.email,
+        subject: 'Appointment Confirmed',
+        html: `<p>${msg}</p>`
+      }) : Promise.resolve(),
+    ]).catch(err => console.error('[Notification Error]', err))
 
     return Response.json({ appointment }, { status: 201 })
   } catch (error) {
