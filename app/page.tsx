@@ -41,10 +41,17 @@ export default async function HomePage() {
       mapsUrl: true,
       phone: true,
       specialty: true,
+      practiceDescription: true,
       themeColor: true,
       qualifications: true,
       timings: true,
       slotDurationMins: true,
+      photoUrl: true,
+      registrationNumber: true,
+      youtubeLinks: true,
+      products: true,
+      pageViews: true,
+      paymentDetails: true,
     },
   })
 
@@ -59,6 +66,12 @@ export default async function HomePage() {
     )
   }
 
+  // Increment page views in background
+  prisma.doctor.update({
+    where: { id: doctor.id },
+    data: { pageViews: { increment: 1 } }
+  }).catch(e => console.error('Failed to increment page views', e))
+
   return (
     <PatientPortal
       doctor={{
@@ -68,6 +81,13 @@ export default async function HomePage() {
         mapsUrl: doctor.mapsUrl ?? null,
         phone: doctor.phone ?? null,
         qualifications: doctor.qualifications ?? null,
+        practiceDescription: doctor.practiceDescription ?? null,
+        photoUrl: doctor.photoUrl ?? null,
+        registrationNumber: doctor.registrationNumber,
+        youtubeLinks: (doctor.youtubeLinks as string[]) ?? [],
+        products: (doctor.products as any[]) ?? [],
+        pageViews: doctor.pageViews,
+        paymentDetails: doctor.paymentDetails as any,
         timings: doctor.timings as unknown as WeeklyTimings,
       }}
     />

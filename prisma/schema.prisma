@@ -20,7 +20,15 @@ model Doctor {
   mapsUrl            String?  // Google Maps share URL for "Get Directions"
   websiteUrl         String?  // Clinic website
   phone              String?
+  registrationNumber String   @default("Reg. No: Pending") // Mandatory
+  photoUrl           String?  // Base64 Data URI or external URL for Doctor photo
+  // JSON: ["https://youtube.com/...", ...]
+  youtubeLinks       Json     @default("[]")
+  // JSON: [{ id, name, price, description, photoUrl }]
+  products           Json     @default("[]")
+  pageViews          Int      @default(0)
   specialty          String   @default("General Physician")
+  practiceDescription String? // e.g. "Ayurveda Consultant", "Orthopaedic Surgeon"
   themeColor         String   @default("#3B82F6")
   qualifications     String?  // e.g. "MBBS, MD (Cardiology), FACC"
   slotDurationMins   Int      @default(15)

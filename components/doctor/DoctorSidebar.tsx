@@ -135,7 +135,7 @@ export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarP
     <>
       {/* Desktop sidebar */}
       <aside
-        className="hidden lg:flex w-64 min-h-screen flex-col flex-shrink-0"
+        className="hidden lg:flex w-64 h-screen sticky top-0 flex-col flex-shrink-0 z-40"
         style={{ background: 'var(--color-forest)' }}
       >
         <NavContent />

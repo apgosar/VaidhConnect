@@ -10,7 +10,11 @@ import Image from 'next/image'
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
   address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null
-  specialty: string; themeColor: string; qualifications?: string | null
+  registrationNumber: string; photoUrl?: string | null;
+  youtubeLinks: string[];
+  products: { id: string; name: string; price: string; description: string; photoUrl?: string }[];
+  pageViews: number;
+  specialty: string; practiceDescription?: string | null; themeColor: string; qualifications?: string | null
   slotDurationMins: number; timings: WeeklyTimings
   paymentDetails: { upiId?: string; bankDetails?: string; qrCodeUrl?: string }
   reminderIntervals: number[]
@@ -36,6 +40,10 @@ function SettingsPageContent() {
   const [qrPreview, setQrPreview] = useState<string | null>(null)
   const [qrFile, setQrFile] = useState<File | null>(null)
   const qrInputRef = useRef<HTMLInputElement>(null)
+
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -95,6 +103,14 @@ function SettingsPageContent() {
     setQrPreview(URL.createObjectURL(file))
   }
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
   const copyMondayToWeekdays = () => {
     if (!doctor) return
     const monday = (doctor.timings as WeeklyTimings)['monday']
@@ -110,10 +126,57 @@ function SettingsPageContent() {
     })
   }
 
+  // YouTube Links Handlers
+  const handleAddYoutube = () => {
+    setDoctor(p => p ? { ...p, youtubeLinks: [...(p.youtubeLinks || []), ''] } : p)
+  }
+  const handleYoutubeChange = (index: number, value: string) => {
+    setDoctor(p => {
+      if (!p) return p
+      const links = [...(p.youtubeLinks || [])]
+      links[index] = value
+      return { ...p, youtubeLinks: links }
+    })
+  }
+  const handleRemoveYoutube = (index: number) => {
+    setDoctor(p => p ? { ...p, youtubeLinks: (p.youtubeLinks || []).filter((_, i) => i !== index) } : p)
+  }
+
+  // Products Handlers
+  const handleAddProduct = () => {
+    setDoctor(p => {
+      if (!p || (p.products || []).length >= 10) return p
+      return { ...p, products: [...(p.products || []), { id: Date.now().toString(), name: '', price: '', description: '' }] }
+    })
+  }
+  const handleProductChange = (index: number, field: string, value: string) => {
+    setDoctor(p => {
+      if (!p) return p
+      const prods = [...(p.products || [])]
+      prods[index] = { ...prods[index], [field]: value }
+      return { ...p, products: prods }
+    })
+  }
+  const handleRemoveProduct = (index: number) => {
+    setDoctor(p => p ? { ...p, products: (p.products || []).filter((_, i) => i !== index) } : p)
+  }
+  const handleProductPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 1024 * 1024) { alert('Product photo must be under 1MB'); return }
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      handleProductChange(index, 'photoUrl', ev.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSave = async () => {
     if (!doctor) return
     setSaving(true)
     try {
+      let updatedPaymentDetails = { ...doctor.paymentDetails }
+      
       // Upload logo if changed
       if (logoFile) {
         const fd = new FormData()
@@ -129,11 +192,23 @@ function SettingsPageContent() {
         const data = await res.json()
         // Store the saved QR URL back into doctor state
         if (data.doctor?.qrCodeUrl) {
+          updatedPaymentDetails.qrCodeUrl = data.doctor.qrCodeUrl
           setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, qrCodeUrl: data.doctor.qrCodeUrl } } : p)
         }
       }
 
-      await fetch('/api/doctor/profile', {
+      // Upload Doctor Photo if changed
+      if (photoFile) {
+        const fd = new FormData()
+        fd.append('photo', photoFile)
+        const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
+        const data = await res.json()
+        if (data.doctor?.photoUrl) {
+          setDoctor(p => p ? { ...p, photoUrl: data.doctor.photoUrl } : p)
+        }
+      }
+
+      const res = await fetch('/api/doctor/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,14 +220,24 @@ function SettingsPageContent() {
           websiteUrl: doctor.websiteUrl,
           phone: doctor.phone,
           specialty: doctor.specialty,
+          practiceDescription: doctor.practiceDescription,
           themeColor: doctor.themeColor,
           qualifications: doctor.qualifications,
           slotDurationMins: doctor.slotDurationMins,
           timings: doctor.timings,
-          paymentDetails: doctor.paymentDetails,
+          paymentDetails: updatedPaymentDetails,
           reminderIntervals: doctor.reminderIntervals,
+          registrationNumber: doctor.registrationNumber,
+          youtubeLinks: doctor.youtubeLinks || [],
+          products: doctor.products || [],
         }),
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert('Failed to save settings: ' + (errData.error || 'Server error'));
+        return;
+      }
 
       await update({
         name: doctor.name,
@@ -163,6 +248,8 @@ function SettingsPageContent() {
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+    } catch (e: any) {
+      alert('Error saving settings: ' + e.message);
     } finally {
       setSaving(false)
     }
@@ -202,39 +289,69 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-5">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Clinic Branding</h2>
 
-        {/* Logo */}
-        <div className="form-group">
-          <label className="form-label">Clinic Logo</label>
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
-              {(logoPreview || doctor.logoUrl) ? (
-                <Image src={logoPreview ?? doctor.logoUrl!} alt="Logo" width={80} height={80} className="w-full h-full object-contain" />
-              ) : (
-                <Upload size={24} className="text-slate-300" />
-              )}
+        {/* Logo and Photo Uploads */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+          <div className="form-group">
+            <label className="form-label">Clinic Logo</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
+                {(logoPreview || doctor.logoUrl) ? (
+                  <Image src={logoPreview ?? doctor.logoUrl!} alt="Logo" width={80} height={80} className="w-full h-full object-contain" />
+                ) : (
+                  <Upload size={24} className="text-slate-300" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <button onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                  <Upload size={14} /> Upload Logo
+                </button>
+                <p className="text-xs text-slate-400">Max 2MB</p>
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
             </div>
-            <div className="space-y-2">
-              <button onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
-                <Upload size={14} /> Upload Logo
-              </button>
-              <p className="text-xs text-slate-400">PNG, JPG, WebP, SVG · Max 2MB</p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Doctor Photo (vCard Profile)</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
+                {(photoPreview || doctor.photoUrl) ? (
+                  <Image src={photoPreview ?? doctor.photoUrl!} alt="Photo" width={80} height={80} className="w-full h-full object-cover" />
+                ) : (
+                  <Upload size={24} className="text-slate-300" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <button onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                  <Upload size={14} /> Upload Photo
+                </button>
+                <p className="text-xs text-slate-400">Max 2MB</p>
+              </div>
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
             </div>
-            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
           </div>
         </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="form-group">
             <label className="form-label">Doctor Name</label>
             <input className="form-input" value={doctor.name} onChange={e => setDoctor(p => p ? { ...p, name: e.target.value } : p)} />
           </div>
           <div className="form-group">
+            <label className="form-label">Registration Number (Mandatory)</label>
+            <input className="form-input" required placeholder="e.g. MMC 123456" value={doctor.registrationNumber ?? ''} onChange={e => setDoctor(p => p ? { ...p, registrationNumber: e.target.value } : p)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Qualifications / Degrees</label>
+            <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor(p => p ? { ...p, qualifications: e.target.value } : p)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Practice Description (Optional)</label>
+            <input className="form-input" placeholder="e.g. Ayurveda Consultant, Orthopaedic Surgeon" value={doctor.practiceDescription ?? ''} onChange={e => setDoctor(p => p ? { ...p, practiceDescription: e.target.value } : p)} />
+          </div>
+          <div className="form-group sm:col-span-2">
             <label className="form-label">Clinic Name</label>
             <input className="form-input" value={doctor.clinicName} onChange={e => setDoctor(p => p ? { ...p, clinicName: e.target.value } : p)} />
-          </div>
-          <div className="form-group col-span-2">
-            <label className="form-label">Qualifications / Degrees</label>
-            <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology), FACC" value={doctor.qualifications ?? ''} onChange={e => setDoctor(p => p ? { ...p, qualifications: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Email</label>
@@ -471,6 +588,86 @@ function SettingsPageContent() {
         </div>
       </div>
 
+      {/* YouTube Links */}
+      <div className="card p-6 space-y-4">
+        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">YouTube Videos</h2>
+        <p className="text-sm text-slate-500 mb-2">Embed YouTube videos on your vCard (e.g., patient testimonials, treatments).</p>
+        <div className="space-y-3">
+          {(doctor.youtubeLinks || []).map((link, idx) => (
+            <div key={idx} className="flex gap-2">
+              <input 
+                className="form-input flex-1" 
+                placeholder="https://youtube.com/watch?v=..." 
+                value={link} 
+                onChange={e => handleYoutubeChange(idx, e.target.value)} 
+              />
+              <button type="button" onClick={() => handleRemoveYoutube(idx)} className="btn btn-outline text-red-500 border-red-200 hover:bg-red-50 px-3">
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={handleAddYoutube} className="btn btn-outline btn-sm">
+            + Add YouTube Link
+          </button>
+        </div>
+      </div>
+
+      {/* Products Catalog */}
+      <div className="card p-6 space-y-4">
+        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Products / Services</h2>
+        <p className="text-sm text-slate-500 mb-2">List up to 10 products or services on your vCard. Patients can tap "Enquire" to WhatsApp you about them.</p>
+        <div className="space-y-6">
+          {(doctor.products || []).map((prod, idx) => (
+            <div key={prod.id} className="relative border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+              <button type="button" onClick={() => handleRemoveProduct(idx)} className="absolute top-3 right-3 text-red-400 hover:text-red-600">
+                <X size={18} />
+              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="sm:col-span-1 flex flex-col items-center gap-2">
+                  <label className="w-full aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center overflow-hidden bg-white cursor-pointer hover:bg-slate-50 transition-colors group relative">
+                    {prod.photoUrl ? (
+                      <>
+                        <Image src={prod.photoUrl} alt={prod.name} width={120} height={120} className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Upload size={24} className="text-white drop-shadow-md" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-forest transition-colors">
+                        <Upload size={24} />
+                        <span className="text-[10px] font-medium uppercase tracking-wider">Upload Image</span>
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" onChange={e => handleProductPhoto(idx, e)} />
+                  </label>
+                </div>
+                <div className="sm:col-span-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Product Name</label>
+                      <input className="form-input text-sm" placeholder="e.g. Skin Care Kit" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Price</label>
+                      <input className="form-input text-sm" placeholder="₹1500" value={prod.price} onChange={e => handleProductChange(idx, 'price', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Description</label>
+                    <textarea className="form-textarea text-sm" rows={2} placeholder="Brief description of the product..." value={prod.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {(doctor.products || []).length < 10 && (
+            <button type="button" onClick={handleAddProduct} className="btn btn-outline btn-sm">
+              + Add Product ({(doctor.products || []).length}/10)
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Change Password */}
       <div className="card p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Change Password</h2>
@@ -493,10 +690,12 @@ function SettingsPageContent() {
         </form>
       </div>
 
-      {/* Save button at bottom too */}
-      <button onClick={handleSave} className="btn btn-primary btn-lg w-full" disabled={saving}>
-        {saved ? <><Check size={16} /> Saved!</> : saving ? 'Saving...' : <><Save size={16} /> Save All Settings</>}
-      </button>
+      {/* Sticky Save Bar */}
+      <div className="sticky bottom-4 z-40 mt-8">
+        <button onClick={handleSave} className="btn btn-primary btn-lg w-full shadow-xl shadow-primary/20 ring-1 ring-black/5" disabled={saving}>
+          {saved ? <><Check size={18} /> Saved Successfully!</> : saving ? 'Saving...' : <><Save size={18} /> Save All Settings</>}
+        </button>
+      </div>
     </div>
   )
 }

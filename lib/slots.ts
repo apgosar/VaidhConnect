@@ -60,7 +60,6 @@ export function generateAvailableSlots({
         !(isEqual(slotStart, booked.endTime) || isAfter(slotStart, booked.endTime))
       )
 
-      // Don't show slots in the past
       const isPast = isBefore(slotStart, new Date())
 
       if (!isBlocked && !isBooked && !isPast) {

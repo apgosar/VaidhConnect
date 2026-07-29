@@ -23,7 +23,6 @@ interface TimeSlot {
 export default function BookPage() {
   const router = useRouter()
   const [patient, setPatient] = useState<Patient | null>(null)
-  const [chiefComplaint, setChiefComplaint] = useState('')
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [slots, setSlots] = useState<TimeSlot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -37,13 +36,11 @@ export default function BookPage() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem('patient')
-    const cc = sessionStorage.getItem('chiefComplaint')
     if (!stored) {
       router.replace('/')
       return
     }
     setPatient(JSON.parse(stored))
-    if (cc) setChiefComplaint(cc)
   }, [router])
 
   useEffect(() => {
@@ -79,7 +76,6 @@ export default function BookPage() {
           patientId: patient.id,
           startTime: selectedSlot.start,
           endTime: selectedSlot.end,
-          chiefComplaint,
         }),
       })
 
@@ -91,7 +87,6 @@ export default function BookPage() {
 
       setBookedAppointment(data.appointment)
       setStep('success')
-      sessionStorage.removeItem('chiefComplaint')
     } catch {
       alert('Something went wrong. Please try again.')
     } finally {
@@ -217,12 +212,6 @@ export default function BookPage() {
                 <span style={{ color: 'var(--color-sage)' }}>Time</span>
                 <span className="font-medium font-tabular" style={{ color: 'var(--color-charcoal)' }}>{format(parseISO(selectedSlot.start), 'hh:mm a')} – {format(parseISO(selectedSlot.end), 'hh:mm a')}</span>
               </div>
-              {chiefComplaint && (
-                <div className="flex justify-between text-sm">
-                  <span style={{ color: 'var(--color-sage)' }}>Chief Complaint</span>
-                  <span className="font-medium text-right max-w-[60%]" style={{ color: 'var(--color-charcoal)' }}>{chiefComplaint}</span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -261,23 +250,6 @@ export default function BookPage() {
       </div>
 
       <div className="page-container-sm py-6 space-y-5">
-        {/* Chief Complaint */}
-        <div className="card p-5">
-          <div className="form-group">
-            <label className="form-label" htmlFor="cc-input">
-              Reason for Visit <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              id="cc-input"
-              className="form-textarea"
-              placeholder="Describe your symptoms or reason for visit..."
-              value={chiefComplaint}
-              onChange={e => setChiefComplaint(e.target.value)}
-              rows={2}
-              required
-            />
-          </div>
-        </div>
 
         {/* Date Selection */}
         <div className="card p-5">
@@ -360,9 +332,9 @@ export default function BookPage() {
 
         {/* Continue button */}
         <button
-          onClick={() => selectedSlot && chiefComplaint && setStep('confirm')}
+          onClick={() => selectedSlot && setStep('confirm')}
           className="btn btn-primary btn-lg w-full"
-          disabled={!selectedSlot || !chiefComplaint}
+          disabled={!selectedSlot}
         >
           Continue <ChevronRight size={18} />
         </button>

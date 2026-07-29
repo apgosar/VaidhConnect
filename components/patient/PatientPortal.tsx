@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, MapPin, ExternalLink, Clock, ChevronRight, UserPlus, Calendar, User } from 'lucide-react'
+import { Phone, MapPin, ExternalLink, Clock, ChevronRight, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
@@ -13,14 +13,21 @@ interface DoctorProfile {
   name: string
   clinicName: string
   logoUrl?: string | null
+  photoUrl?: string | null
   address?: string | null
   mapsUrl?: string | null
   phone?: string | null
   specialty: string
+  practiceDescription: string | null
   themeColor: string
   qualifications?: string | null
+  registrationNumber: string
+  youtubeLinks: string[]
+  products: { id: string; name: string; price: string; description: string; photoUrl?: string }[]
+  pageViews: number
   timings: WeeklyTimings
   slotDurationMins: number
+  paymentDetails?: string | null
 }
 
 interface PatientPortalProps {
@@ -95,6 +102,28 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
 
   const specialtyData = SPECIALTIES.find(s => s.value === doctor.specialty)
 
+  const downloadVCard = () => {
+    const vcf = `BEGIN:VCARD
+VERSION:3.0
+N:;Dr. ${doctor.name};;;
+FN:Dr. ${doctor.name}
+ORG:${doctor.clinicName}
+TITLE:${doctor.specialty}
+TEL;TYPE=WORK,VOICE:${doctor.phone ?? ''}
+URL:${doctor.mapsUrl ?? ''}
+NOTE:Registration: ${doctor.registrationNumber}
+END:VCARD`
+    const blob = new Blob([vcf], { type: 'text/vcard' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Dr_${doctor.name.replace(/\s+/g, '_')}.vcf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const normalized = phone.replace(/[\s\-()]/g, '')
@@ -147,16 +176,14 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* ── Hero Header ─────────────────────────────────────── */}
       <div
+        id="about"
         className="relative overflow-hidden"
         style={{
           background: `linear-gradient(160deg, var(--color-forest) 0%, var(--color-pine) 100%)`,
           paddingBottom: '48px',
         }}
       >
-        {/* Botanical watermark — one deliberate placement */}
         <BotanicalWatermark />
-
-        {/* Subtle radial light for depth */}
         <div
           className="absolute inset-0"
           style={{
@@ -166,58 +193,91 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
           aria-hidden="true"
         />
 
-        <div className="relative page-container-sm pt-10 pb-4 text-white">
+        {/* Page Views Badge */}
+        <div className="absolute top-4 right-4 bg-black/20 backdrop-blur-md rounded-full px-3 py-1 text-xs text-white/90 border border-white/10 flex items-center gap-1.5 z-10">
+          <User size={12} />
+          {doctor.pageViews} views
+        </div>
+
+        <div className="relative page-container-sm pt-12 pb-6 text-white">
           <div className="flex flex-col items-center text-center gap-5">
-            {/* Logo / Brand mark */}
-            {doctor.logoUrl ? (
-              <div
-                className="w-20 h-20 rounded-xl overflow-hidden shadow-lg flex-shrink-0"
-                style={{ border: '1.5px solid rgba(255,255,255,0.20)' }}
-              >
-                <Image
-                  src={doctor.logoUrl}
-                  alt={`${doctor.clinicName} logo`}
-                  width={80}
-                  height={80}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            ) : (
-              <div
-                className="w-20 h-20 rounded-xl flex items-center justify-center text-4xl shadow-lg"
-                style={{ background: 'rgba(255,255,255,0.10)', border: '1.5px solid rgba(255,255,255,0.15)' }}
-              >
-                {specialtyData?.icon ?? '🌿'}
-              </div>
-            )}
+            {/* Dr Photo (Primary) and Clinic Logo (Secondary) */}
+            <div className="relative">
+              {doctor.photoUrl ? (
+                <div className="w-24 h-24 rounded-full overflow-hidden shadow-xl border-2 border-white/20">
+                  <Image src={doctor.photoUrl} alt={`Dr. ${doctor.name}`} width={96} height={96} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-4xl shadow-xl">
+                  {specialtyData?.icon ?? '👨‍⚕️'}
+                </div>
+              )}
+              {doctor.logoUrl && (
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-lg overflow-hidden bg-white shadow-lg border border-slate-100 p-0.5">
+                  <Image src={doctor.logoUrl} alt="Clinic Logo" width={40} height={40} className="w-full h-full object-contain" />
+                </div>
+              )}
+            </div>
 
             <div>
-              {/* Clinic name in display serif */}
-              <h1
-                className="text-3xl font-bold leading-tight"
-                style={{ fontFamily: 'var(--font-display)', color: 'white' }}
-              >
-                {doctor.clinicName}
-              </h1>
-              <p className="mt-2 text-base" style={{ color: 'rgba(255,255,255,0.80)' }}>
+              <h1 className="text-3xl font-bold leading-tight" style={{ fontFamily: 'var(--font-display)', color: 'white' }}>
                 Dr. {doctor.name}
-                {doctor.qualifications && (
-                  <span style={{ color: 'rgba(255,255,255,0.60)' }}> · {doctor.qualifications}</span>
-                )}
+              </h1>
+              <p className="mt-1.5 text-base font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                {doctor.clinicName}
+              </p>
+              <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.70)' }}>
+                {doctor.qualifications && <span>{doctor.qualifications} · </span>}
+                Reg: {doctor.registrationNumber}
               </p>
 
-              {/* Specialty pill — gold text on pine bg */}
-              <div
-                className="mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold"
-                style={{
-                  background: 'rgba(28,92,70,0.70)',
-                  border: '1px solid rgba(201,161,93,0.40)',
-                  color: 'var(--color-gold)',
-                  backdropFilter: 'blur(4px)',
-                }}
-              >
-                <span>{specialtyData?.icon ?? '🩺'}</span>
-                <span>{doctor.specialty}</span>
+              {doctor.practiceDescription && (
+                <p className="text-[13px] tracking-wide mt-3 font-medium" style={{ color: 'rgba(255,255,255,0.95)', fontFamily: 'var(--font-display)' }}>
+                  {doctor.practiceDescription}
+                </p>
+              )}
+
+              <div className="flex flex-col items-center gap-4 mt-4">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'rgba(28,92,70,0.70)', border: '1px solid rgba(201,161,93,0.40)', color: 'var(--color-gold)', backdropFilter: 'blur(4px)' }}>
+                  <span>{specialtyData?.icon ?? '🩺'}</span>
+                  <span>{doctor.specialty}</span>
+                </div>
+                
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button onClick={downloadVCard} className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="Save Contact">
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                      <UserPlus size={20} />
+                    </div>
+                    <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Save</span>
+                  </button>
+
+                  {doctor.phone && (
+                    <>
+                      <a href={`tel:${doctor.phone.replace(/\D/g, '')}`} className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="Call">
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                          <Phone size={20} />
+                        </div>
+                        <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Call</span>
+                      </a>
+                      
+                      <a href={`https://wa.me/${doctor.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="WhatsApp">
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                          <MessageCircle size={20} />
+                        </div>
+                        <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>WhatsApp</span>
+                      </a>
+                    </>
+                  )}
+
+                  {doctor.mapsUrl && (
+                    <a href={doctor.mapsUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="Navigate">
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                        <MapPin size={20} />
+                      </div>
+                      <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Navigate</span>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -225,7 +285,7 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
       </div>
 
       {/* ── Content Cards ────────────────────────────────────── */}
-      <div className="page-container-sm space-y-4 pb-16" style={{ marginTop: '-24px' }}>
+      <div className="page-container-sm space-y-4 pb-32" style={{ marginTop: '-24px' }}>
 
         {/* ── STEP 2: Patient Selection (shown after phone lookup) ── */}
         {foundPatients ? (
@@ -321,7 +381,7 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
         ) : (
 
         /* ── STEP 1: Phone Entry ── */
-        <div className="card p-6 animate-fade-in">
+        <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2">
           <h2
             className="text-xl font-bold mb-1"
             style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
@@ -381,10 +441,9 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
         </div>
         )}
 
-
         {/* Clinic Info */}
         {(doctor.address || doctor.phone) && (
-          <div className="card p-6 space-y-4 animate-fade-in">
+          <div id="location" className="card p-6 space-y-4 animate-fade-in scroll-mt-20">
             <h3
               className="font-semibold flex items-center gap-2"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
@@ -393,25 +452,7 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
               Clinic Information
             </h3>
 
-            {doctor.phone && (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs mb-0.5" style={{ color: 'var(--color-sage)' }}>Phone</p>
-                  <p className="font-medium" style={{ color: 'var(--color-charcoal)' }}>{doctor.phone}</p>
-                </div>
-                <a
-                  href={`tel:${doctor.phone}`}
-                  className="btn btn-outline btn-sm"
-                >
-                  <Phone size={13} />
-                  Call
-                </a>
-              </div>
-            )}
-
-            {doctor.address && doctor.phone && (
-              <div className="divider" />
-            )}
+            
 
             {doctor.address && (
               <div className="flex items-start justify-between gap-3">
@@ -470,9 +511,183 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
           </div>
         )}
 
-        <p className="text-center text-xs" style={{ color: 'var(--color-sage)' }}>
+        {/* ── Products & Services ── */}
+        {doctor.products && doctor.products.length > 0 && (
+          <div id="products" className="space-y-3 relative z-10 pt-2">
+            <h2 className="text-xl font-bold px-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Products & Services</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {doctor.products.map(prod => (
+                <div key={prod.id} className="card p-3 flex flex-col gap-2 shadow-sm animate-fade-in" style={{ border: '1px solid var(--color-sage-border)' }}>
+                  {prod.photoUrl ? (
+                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-50 mb-1">
+                      <Image src={prod.photoUrl} alt={prod.name} width={150} height={150} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-full aspect-square rounded-lg bg-slate-50 mb-1 flex items-center justify-center border border-slate-100">
+                      <span className="text-4xl">💊</span>
+                    </div>
+                  )}
+                  <h3 className="font-semibold text-sm leading-tight text-slate-800">{prod.name}</h3>
+                  {prod.description && <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>}
+                  <p className="font-bold text-sm text-forest mt-auto">{prod.price}</p>
+                  <a 
+                    href={`https://wa.me/${doctor.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, I am interested in ${prod.name}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline btn-sm w-full mt-1 border-forest text-forest hover:bg-primary-bg"
+                  >
+                    Enquire
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Payment Details ── */}
+        {doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0) && (
+          <div id="payment" className="card p-5 space-y-4 animate-fade-in scroll-mt-20">
+            <h3
+              className="font-semibold flex items-center gap-2 mb-1"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
+            >
+              <CreditCard size={18} style={{ color: 'var(--color-sage)' }} />
+              Payment Details
+            </h3>
+            {(() => {
+              let parsedPayment: any = null;
+              if (typeof doctor.paymentDetails === 'object' && doctor.paymentDetails !== null) {
+                parsedPayment = doctor.paymentDetails;
+              } else if (typeof doctor.paymentDetails === 'string' && doctor.paymentDetails.trim() !== '') {
+                try {
+                  parsedPayment = JSON.parse(doctor.paymentDetails);
+                } catch {
+                  // Not valid JSON, treat as raw text
+                }
+              }
+
+              const isObj = parsedPayment !== null && typeof parsedPayment === 'object';
+              const pay = isObj ? parsedPayment : null;
+              const rawStr = !isObj ? (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails : '') : '';
+
+              if (isObj && (pay.upiId || pay.bankDetails || pay.qrCodeUrl)) {
+                return (
+                  <div className="space-y-4">
+                    {pay.qrCodeUrl && (
+                      <div className="flex justify-center mb-4">
+                        <img src={pay.qrCodeUrl} alt="UPI QR Code" className="w-48 h-48 rounded-lg shadow-sm border border-slate-200 object-contain bg-white p-2" />
+                      </div>
+                    )}
+                    {pay.upiId && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">UPI ID</p>
+                        <p className="font-medium text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-sm tracking-wide break-all">{pay.upiId}</p>
+                      </div>
+                    )}
+                    {pay.bankDetails && (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Bank Transfer</p>
+                        <div className="bg-slate-50 px-3 py-3 rounded-lg border border-slate-100">
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed text-slate-700">{pay.bankDetails.replace(/\\n/g, '\n')}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100" style={{ color: 'var(--color-charcoal-mid)' }}>
+                  {rawStr.replace(/\\n/g, '\n')}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* ── YouTube Videos ── */}
+        {doctor.youtubeLinks && doctor.youtubeLinks.length > 0 && doctor.youtubeLinks.some(link => link.trim() !== '') && (
+          <div className="space-y-3 relative z-10" id="videos">
+            <h2 className="text-xl font-bold px-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Featured Videos</h2>
+            <div className="flex flex-col gap-4 pb-2">
+              {doctor.youtubeLinks.filter(l => l.trim() !== '').map((link, idx) => {
+                // Extract video ID for embed
+                let videoId = ''
+                try {
+                  const url = new URL(link)
+                  videoId = url.searchParams.get('v') || url.pathname.split('/').pop() || ''
+                } catch { /* ignore */ }
+                
+                if (!videoId) return null
+                return (
+                  <div key={idx} className="w-full rounded-xl overflow-hidden bg-black shadow-lg">
+                    <iframe
+                      width="100%"
+                      height="310"
+                      src={`https://www.youtube.com/embed/${videoId}`}
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        <p className="text-center text-xs pb-24" style={{ color: 'var(--color-sage)' }}>
           Each appointment is {doctor.slotDurationMins} minutes
         </p>
+      </div>
+
+      {/* ── Sticky Bottom Navigation ── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 z-50 pb-safe">
+        <div className="max-w-md mx-auto grid grid-cols-5 items-center px-2 py-3">
+          
+          {/* 1. About */}
+          <div className="flex justify-center">
+            <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
+              <User size={20} />
+              <span className="text-[10px] font-medium uppercase tracking-wider">About</span>
+            </button>
+          </div>
+          
+          {/* 2. Products */}
+          <div className="flex justify-center">
+            <button onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: doctor.products?.length ? 1 : 0.5, pointerEvents: doctor.products?.length ? 'auto' : 'none' }}>
+              <Package size={20} />
+              <span className="text-[10px] font-medium uppercase tracking-wider">Products</span>
+            </button>
+          </div>
+
+          {/* 3. Book (Center) */}
+          <div className="flex justify-center">
+            <button onClick={() => document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 transition-colors -mt-4 relative z-10">
+              <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
+                <Calendar size={22} />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
+            </button>
+          </div>
+
+          {/* 4. Videos */}
+          <div className="flex justify-center">
+            <button onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: doctor.youtubeLinks?.length ? 1 : 0.5, pointerEvents: doctor.youtubeLinks?.length ? 'auto' : 'none' }}>
+              <PlaySquare size={20} />
+              <span className="text-[10px] font-medium uppercase tracking-wider">Videos</span>
+            </button>
+          </div>
+
+          {/* 5. Payment */}
+          <div className="flex justify-center">
+            <button onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 1 : 0.5, pointerEvents: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 'auto' : 'none' }}>
+              <CreditCard size={20} />
+              <span className="text-[10px] font-medium uppercase tracking-wider">Payment</span>
+            </button>
+          </div>
+
+        </div>
       </div>
     </div>
   )
