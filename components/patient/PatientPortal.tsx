@@ -232,17 +232,12 @@ END:VCARD`
               </p>
 
               {doctor.practiceDescription && (
-                <p className="text-[13px] tracking-wide mt-3 font-medium" style={{ color: 'rgba(255,255,255,0.95)', fontFamily: 'var(--font-display)' }}>
+                <p className="mt-1.5 text-base font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
                   {doctor.practiceDescription}
                 </p>
               )}
 
-              <div className="flex flex-col items-center gap-4 mt-4">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: 'rgba(28,92,70,0.70)', border: '1px solid rgba(201,161,93,0.40)', color: 'var(--color-gold)', backdropFilter: 'blur(4px)' }}>
-                  <span>{specialtyData?.icon ?? '🩺'}</span>
-                  <span>{doctor.specialty}</span>
-                </div>
-                
+              <div className="flex flex-col items-center mt-6">
                 <div className="flex flex-wrap justify-center gap-3">
                   <button onClick={downloadVCard} className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="Save Contact">
                     <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
