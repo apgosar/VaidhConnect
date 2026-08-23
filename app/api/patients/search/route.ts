@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -9,35 +9,33 @@ export async function GET(request: NextRequest) {
     const limit = limitParam ? parseInt(limitParam) : 20
     const skip = (page - 1) * limit
 
-    const whereClause = (q && q.length >= 2) ? {
-      OR: [
-        { name: { contains: q, mode: 'insensitive' as const } },
-        { phone: { contains: q } },
-      ],
-    } : {}
+    const patientsSnap = await adminDb.collection('patients').orderBy('createdAt', 'desc').get()
+    
+    let allPatients = patientsSnap.docs.map((doc: any) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        name: data.name,
+        phone: data.phone,
+        dob: data.dob?.toDate(),
+        medicalHistory: data.medicalHistory,
+        email: data.email,
+        _count: { appointments: 0 }, // Simplified since Firestore doesn't have relation counts easily
+      }
+    })
 
-    const [patients, total] = await Promise.all([
-      prisma.patient.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          dob: true,
-          medicalHistory: true,
-          email: true,
-          _count: { select: { appointments: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.patient.count({
-        where: whereClause,
-      }),
-    ])
+    if (q && q.length >= 2) {
+      const lowerQ = q.toLowerCase()
+      allPatients = allPatients.filter((p: any) => 
+        (p.name && p.name.toLowerCase().includes(lowerQ)) || 
+        (p.phone && p.phone.includes(q))
+      )
+    }
 
-    return Response.json({ patients, total })
+    const total = allPatients.length
+    const paginatedPatients = allPatients.slice(skip, skip + limit)
+
+    return Response.json({ patients: paginatedPatients, total })
   } catch (error) {
     console.error('[patient-search]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

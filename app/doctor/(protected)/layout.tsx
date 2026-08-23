@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { auth } from '@/auth'
+import { getSession } from '@/lib/auth/session'
 import DoctorSidebar from '@/components/doctor/DoctorSidebar'
 import type { Metadata } from 'next'
 
@@ -12,21 +12,25 @@ export default async function DoctorLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
-  if (!session?.user) {
+  const session = await getSession()
+  if (!session) {
     redirect('/doctor/login')
   }
 
-  const user = session.user as Record<string, unknown>
+  // Define defaults or fetch from Firestore if missing in claims
+  const doctorName = session.name || 'Doctor'
+  const clinicName = session.clinicName || 'Clinic'
+  const specialty = session.specialty || 'General Physician'
+  const themeColor = session.themeColor || '#0F3D2E'
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* Sidebar */}
       <DoctorSidebar
-        doctorName={session.user.name ?? ''}
-        clinicName={user.clinicName as string ?? ''}
-        specialty={user.specialty as string ?? ''}
-        themeColor={user.themeColor as string ?? '#0F3D2E'}
+        doctorName={doctorName}
+        clinicName={clinicName}
+        specialty={specialty}
+        themeColor={themeColor}
       />
 
       {/* Main content */}
@@ -44,10 +48,10 @@ export default async function DoctorLayout({
               className="font-bold text-white text-sm leading-snug"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {user.clinicName as string}
+              {clinicName}
             </p>
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
-              Dr. {session.user.name}
+              Dr. {doctorName}
             </p>
           </div>
           {/* hamburger is rendered inside DoctorSidebar */}

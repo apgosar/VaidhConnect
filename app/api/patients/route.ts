@@ -1,9 +1,9 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { phone, name, dob, medicalHistory, email, chiefComplaint } = body
+    const { phone, name, dob, medicalHistory, email } = body
 
     if (!phone || !name || !dob) {
       return Response.json({ error: 'Phone, name and date of birth are required' }, { status: 400 })
@@ -13,15 +13,23 @@ export async function POST(request: Request) {
 
     // Note: multiple patients (family members) can share a phone number — no uniqueness check
 
-    const patient = await prisma.patient.create({
-      data: {
-        phone: normalized,
-        name: name.trim(),
-        dob: new Date(dob),
-        medicalHistory: medicalHistory?.trim() || null,
-        email: email?.trim() || null,
-      },
-    })
+    const patientData = {
+      phone: normalized,
+      name: name.trim(),
+      dob: new Date(dob),
+      medicalHistory: medicalHistory?.trim() || null,
+      email: email?.trim() || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    const newPatientRef = adminDb.collection('patients').doc()
+    await newPatientRef.set(patientData)
+
+    const patient = {
+      id: newPatientRef.id,
+      ...patientData
+    }
 
     return Response.json({ patient }, { status: 201 })
   } catch (error) {
@@ -39,15 +47,28 @@ export async function PUT(request: Request) {
       return Response.json({ error: 'Patient ID required' }, { status: 400 })
     }
 
-    const patient = await prisma.patient.update({
-      where: { id },
-      data: {
-        ...(name && { name: name.trim() }),
-        ...(dob && { dob: new Date(dob) }),
-        ...(medicalHistory !== undefined && { medicalHistory: medicalHistory?.trim() || null }),
-        ...(email !== undefined && { email: email?.trim() || null }),
-      },
-    })
+    const patientRef = adminDb.collection('patients').doc(id)
+    const patientDoc = await patientRef.get()
+
+    if (!patientDoc.exists) {
+      return Response.json({ error: 'Patient not found' }, { status: 404 })
+    }
+
+    const updateData: any = { updatedAt: new Date() }
+    if (name) updateData.name = name.trim()
+    if (dob) updateData.dob = new Date(dob)
+    if (medicalHistory !== undefined) updateData.medicalHistory = medicalHistory?.trim() || null
+    if (email !== undefined) updateData.email = email?.trim() || null
+
+    await patientRef.update(updateData)
+
+    const updatedDoc = await patientRef.get()
+    const pData = updatedDoc.data() as any
+    const patient = {
+      id: updatedDoc.id,
+      ...pData,
+      dob: pData.dob?.toDate(),
+    }
 
     return Response.json({ patient })
   } catch (error) {

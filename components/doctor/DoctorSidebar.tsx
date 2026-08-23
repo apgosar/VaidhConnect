@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { signOut } from 'next-auth/react'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Calendar, Users, Settings, LogOut,
   Menu, X, CalendarOff
@@ -55,6 +54,20 @@ function SidebarBotanical() {
 export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    try {
+      const { auth } = await import('@/lib/firebase/client')
+      await auth.signOut()
+      await fetch('/api/auth/session', { method: 'DELETE' })
+      router.push('/doctor/login')
+      router.refresh()
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const NavContent = () => (
     <div className="flex flex-col h-full relative overflow-hidden">
@@ -115,7 +128,7 @@ export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarP
       {/* Sign Out */}
       <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
         <button
-          onClick={() => signOut({ callbackUrl: '/doctor/login' })}
+          onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors"
           style={{ color: 'rgba(255,255,255,0.45)' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.80)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
@@ -130,6 +143,7 @@ export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarP
       <SidebarBotanical />
     </div>
   )
+
 
   return (
     <>

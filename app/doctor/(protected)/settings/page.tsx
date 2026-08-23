@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useSession, SessionProvider } from 'next-auth/react'
 import { Save, Upload, X, Check, Palette, Copy } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK, DEFAULT_TIMINGS } from '@/lib/constants'
 import type { WeeklyTimings, DayTiming } from '@/lib/constants'
@@ -21,15 +20,10 @@ interface Doctor {
 }
 
 export default function SettingsPage() {
-  return (
-    <SessionProvider>
-      <SettingsPageContent />
-    </SessionProvider>
-  )
+  return <SettingsPageContent />
 }
 
 function SettingsPageContent() {
-  const { update } = useSession()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -128,10 +122,10 @@ function SettingsPageContent() {
 
   // YouTube Links Handlers
   const handleAddYoutube = () => {
-    setDoctor(p => p ? { ...p, youtubeLinks: [...(p.youtubeLinks || []), ''] } : p)
+    setDoctor((p: any) => p ? { ...p, youtubeLinks: [...(p.youtubeLinks || []), ''] } : p)
   }
   const handleYoutubeChange = (index: number, value: string) => {
-    setDoctor(p => {
+    setDoctor((p: any) => {
       if (!p) return p
       const links = [...(p.youtubeLinks || [])]
       links[index] = value
@@ -139,18 +133,18 @@ function SettingsPageContent() {
     })
   }
   const handleRemoveYoutube = (index: number) => {
-    setDoctor(p => p ? { ...p, youtubeLinks: (p.youtubeLinks || []).filter((_, i) => i !== index) } : p)
+    setDoctor((p: any) => p ? { ...p, youtubeLinks: (p.youtubeLinks || []).filter((_: any, i: number) => i !== index) } : p)
   }
 
   // Products Handlers
   const handleAddProduct = () => {
-    setDoctor(p => {
+    setDoctor((p: any) => {
       if (!p || (p.products || []).length >= 10) return p
       return { ...p, products: [...(p.products || []), { id: Date.now().toString(), name: '', price: '', description: '' }] }
     })
   }
   const handleProductChange = (index: number, field: string, value: string) => {
-    setDoctor(p => {
+    setDoctor((p: any) => {
       if (!p) return p
       const prods = [...(p.products || [])]
       prods[index] = { ...prods[index], [field]: value }
@@ -158,7 +152,7 @@ function SettingsPageContent() {
     })
   }
   const handleRemoveProduct = (index: number) => {
-    setDoctor(p => p ? { ...p, products: (p.products || []).filter((_, i) => i !== index) } : p)
+    setDoctor((p: any) => p ? { ...p, products: (p.products || []).filter((_: any, i: number) => i !== index) } : p)
   }
   const handleProductPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -193,7 +187,7 @@ function SettingsPageContent() {
         // Store the saved QR URL back into doctor state
         if (data.doctor?.qrCodeUrl) {
           updatedPaymentDetails.qrCodeUrl = data.doctor.qrCodeUrl
-          setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, qrCodeUrl: data.doctor.qrCodeUrl } } : p)
+          setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, qrCodeUrl: data.doctor.qrCodeUrl } } : p)
         }
       }
 
@@ -204,7 +198,7 @@ function SettingsPageContent() {
         const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
         const data = await res.json()
         if (data.doctor?.photoUrl) {
-          setDoctor(p => p ? { ...p, photoUrl: data.doctor.photoUrl } : p)
+          setDoctor((p: any) => p ? { ...p, photoUrl: data.doctor.photoUrl } : p)
         }
       }
 
@@ -238,13 +232,6 @@ function SettingsPageContent() {
         alert('Failed to save settings: ' + (errData.error || 'Server error'));
         return;
       }
-
-      await update({
-        name: doctor.name,
-        clinicName: doctor.clinicName,
-        specialty: doctor.specialty,
-        themeColor: doctor.themeColor,
-      })
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
@@ -335,43 +322,43 @@ function SettingsPageContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="form-group">
             <label className="form-label">Doctor Name</label>
-            <input className="form-input" value={doctor.name} onChange={e => setDoctor(p => p ? { ...p, name: e.target.value } : p)} />
+            <input className="form-input" value={doctor.name} onChange={e => setDoctor((p: any) => p ? { ...p, name: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Registration Number (Mandatory)</label>
-            <input className="form-input" required placeholder="e.g. MMC 123456" value={doctor.registrationNumber ?? ''} onChange={e => setDoctor(p => p ? { ...p, registrationNumber: e.target.value } : p)} />
+            <input className="form-input" required placeholder="e.g. MMC 123456" value={doctor.registrationNumber ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, registrationNumber: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Qualifications / Degrees</label>
-            <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor(p => p ? { ...p, qualifications: e.target.value } : p)} />
+            <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, qualifications: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Practice Description (Optional)</label>
-            <input className="form-input" placeholder="e.g. Ayurveda Consultant, Orthopaedic Surgeon" value={doctor.practiceDescription ?? ''} onChange={e => setDoctor(p => p ? { ...p, practiceDescription: e.target.value } : p)} />
+            <input className="form-input" placeholder="e.g. Ayurveda Consultant, Orthopaedic Surgeon" value={doctor.practiceDescription ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, practiceDescription: e.target.value } : p)} />
           </div>
           <div className="form-group sm:col-span-2">
             <label className="form-label">Clinic Name</label>
-            <input className="form-input" value={doctor.clinicName} onChange={e => setDoctor(p => p ? { ...p, clinicName: e.target.value } : p)} />
+            <input className="form-input" value={doctor.clinicName} onChange={e => setDoctor((p: any) => p ? { ...p, clinicName: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Email</label>
-            <input type="email" className="form-input" value={doctor.email} onChange={e => setDoctor(p => p ? { ...p, email: e.target.value } : p)} />
+            <input type="email" className="form-input" value={doctor.email} onChange={e => setDoctor((p: any) => p ? { ...p, email: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label">Clinic Phone</label>
-            <input type="tel" className="form-input" placeholder="+91 98765 43210" value={doctor.phone ?? ''} onChange={e => setDoctor(p => p ? { ...p, phone: e.target.value } : p)} />
+            <input type="tel" className="form-input" placeholder="+91 98765 43210" value={doctor.phone ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, phone: e.target.value } : p)} />
           </div>
           <div className="form-group col-span-2">
             <label className="form-label">Clinic Address</label>
-            <textarea className="form-textarea" rows={2} value={doctor.address ?? ''} onChange={e => setDoctor(p => p ? { ...p, address: e.target.value } : p)} />
+            <textarea className="form-textarea" rows={2} value={doctor.address ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, address: e.target.value } : p)} />
           </div>
           <div className="form-group col-span-2">
             <label className="form-label">Google Maps URL <span className="text-slate-400 text-xs">(share link for "Get Directions" button)</span></label>
-            <input className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor(p => p ? { ...p, mapsUrl: e.target.value } : p)} />
+            <input className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, mapsUrl: e.target.value } : p)} />
           </div>
           <div className="form-group col-span-2">
             <label className="form-label">Clinic Website <span className="text-slate-400 text-xs">(optional)</span></label>
-            <input className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor(p => p ? { ...p, websiteUrl: e.target.value } : p)} />
+            <input className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, websiteUrl: e.target.value } : p)} />
           </div>
         </div>
       </div>
@@ -396,14 +383,14 @@ function SettingsPageContent() {
               type="color"
               className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.themeColor}
-              onChange={e => setDoctor(p => p ? { ...p, themeColor: e.target.value } : p)}
+              onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)}
             />
-            <input className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor(p => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
+            <input className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
             <div className="flex gap-2 flex-wrap">
               {SPECIALTIES.map(s => (
                 <button
                   key={s.value}
-                  onClick={() => setDoctor(p => p ? { ...p, themeColor: s.color } : p)}
+                  onClick={() => setDoctor((p: any) => p ? { ...p, themeColor: s.color } : p)}
                   title={s.value}
                   className="w-6 h-6 rounded-full border-2 border-white shadow-sm transition-transform hover:scale-110"
                   style={{ backgroundColor: s.color }}
@@ -419,7 +406,7 @@ function SettingsPageContent() {
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Appointment Settings</h2>
         <div className="form-group">
           <label className="form-label">Slot Duration (minutes)</label>
-          <select className="form-select" value={doctor.slotDurationMins} onChange={e => setDoctor(p => p ? { ...p, slotDurationMins: parseInt(e.target.value) } : p)}>
+          <select className="form-select" value={doctor.slotDurationMins} onChange={e => setDoctor((p: any) => p ? { ...p, slotDurationMins: parseInt(e.target.value) } : p)}>
             {[5, 10, 15, 20, 30, 45, 60].map(d => (
               <option key={d} value={d}>{d} minutes</option>
             ))}
@@ -437,7 +424,7 @@ function SettingsPageContent() {
                   onClick={() => {
                     const current = doctor.reminderIntervals ?? []
                     const updated = active ? current.filter(x => x !== h) : [...current, h].sort((a, b) => b - a)
-                    setDoctor(p => p ? { ...p, reminderIntervals: updated } : p)
+                    setDoctor((p: any) => p ? { ...p, reminderIntervals: updated } : p)
                   }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
                     active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-600'
@@ -561,11 +548,11 @@ function SettingsPageContent() {
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Payment Details</h2>
         <div className="form-group">
           <label className="form-label">UPI ID</label>
-          <input className="form-input" placeholder="doctor@upi" value={doctor.paymentDetails?.upiId ?? ''} onChange={e => setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, upiId: e.target.value } } : p)} />
+          <input className="form-input" placeholder="doctor@upi" value={doctor.paymentDetails?.upiId ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, upiId: e.target.value } } : p)} />
         </div>
         <div className="form-group">
           <label className="form-label">Bank Details</label>
-          <textarea className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor(p => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
+          <textarea className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
         </div>
         <div className="form-group">
           <label className="form-label">QR Code Image</label>

@@ -156,7 +156,7 @@ export default function PatientsPage() {
               </p>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => setPage((p: any) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="btn btn-outline btn-sm px-2 disabled:opacity-50"
                 >
@@ -166,7 +166,7 @@ export default function PatientsPage() {
                   Page {page} of {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setPage((p: any) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                   className="btn btn-outline btn-sm px-2 disabled:opacity-50"
                 >

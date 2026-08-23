@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -13,37 +13,48 @@ export async function GET(request: NextRequest) {
     const normalized = phone.replace(/[\s\-()]/g, '')
 
     // Return ALL patients linked to this phone number (family members)
-    const patients = await prisma.patient.findMany({
-      where: { phone: normalized },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        dob: true,
-        medicalHistory: true,
-        email: true,
-        appointments: {
-          where: {
-            status: 'BOOKED',
-            startTime: { gte: new Date() },
-          },
-          orderBy: { startTime: 'asc' },
-          take: 5,
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            status: true,
-            chiefComplaint: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
+    const patientsSnap = await adminDb.collection('patients')
+      .where('phone', '==', normalized)
+      .orderBy('createdAt', 'asc')
+      .get()
 
-    if (patients.length === 0) {
+    if (patientsSnap.empty) {
       return Response.json({ found: false })
     }
+
+    const patients = await Promise.all(patientsSnap.docs.map(async (doc) => {
+      const data = doc.data()
+      
+      // Fetch upcoming appointments manually
+      const appointmentsSnap = await adminDb.collection('appointments')
+        .where('patientId', '==', doc.id)
+        .where('status', '==', 'BOOKED')
+        .where('startTime', '>=', new Date())
+        .orderBy('startTime', 'asc')
+        .limit(5)
+        .get()
+        
+      const appointments = appointmentsSnap.docs.map((aptDoc: any) => {
+        const aptData = aptDoc.data()
+        return {
+          id: aptDoc.id,
+          startTime: aptData.startTime?.toDate(),
+          endTime: aptData.endTime?.toDate(),
+          status: aptData.status,
+          chiefComplaint: aptData.chiefComplaint,
+        }
+      })
+
+      return {
+        id: doc.id,
+        name: data.name,
+        phone: data.phone,
+        dob: data.dob?.toDate(),
+        medicalHistory: data.medicalHistory,
+        email: data.email,
+        appointments,
+      }
+    }))
 
     return Response.json({ found: true, patients })
   } catch (error) {

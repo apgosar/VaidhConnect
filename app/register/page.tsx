@@ -112,7 +112,7 @@ export default function RegisterPage() {
                   className="form-input pl-9"
                   placeholder="Enter your full name"
                   value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  onChange={e => setForm((p: any) => ({ ...p, name: e.target.value }))}
                   required
                   autoComplete="name"
                 />
@@ -131,7 +131,7 @@ export default function RegisterPage() {
                   type="date"
                   className="form-input pl-9"
                   value={form.dob}
-                  onChange={e => setForm(p => ({ ...p, dob: e.target.value }))}
+                  onChange={e => setForm((p: any) => ({ ...p, dob: e.target.value }))}
                   max={new Date().toISOString().split('T')[0]}
                   required
                 />
@@ -153,7 +153,7 @@ export default function RegisterPage() {
                 className="form-textarea"
                 placeholder="What brings you in today? (e.g. fever and headache for 3 days)"
                 value={form.chiefComplaint}
-                onChange={e => setForm(p => ({ ...p, chiefComplaint: e.target.value }))}
+                onChange={e => setForm((p: any) => ({ ...p, chiefComplaint: e.target.value }))}
                 required
                 rows={3}
               />
@@ -171,7 +171,7 @@ export default function RegisterPage() {
                   className="form-textarea pl-9"
                   placeholder="Any known conditions, allergies, current medications..."
                   value={form.medicalHistory}
-                  onChange={e => setForm(p => ({ ...p, medicalHistory: e.target.value }))}
+                  onChange={e => setForm((p: any) => ({ ...p, medicalHistory: e.target.value }))}
                   rows={3}
                 />
               </div>
@@ -190,7 +190,7 @@ export default function RegisterPage() {
                   className="form-input pl-9"
                   placeholder="you@example.com"
                   value={form.email}
-                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  onChange={e => setForm((p: any) => ({ ...p, email: e.target.value }))}
                   autoComplete="email"
                 />
               </div>

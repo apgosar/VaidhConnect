@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '@/lib/firebase/client'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 
 export default function DoctorLoginPage() {
@@ -22,33 +23,44 @@ export default function DoctorLoginPage() {
     setLoading(true)
     setError('')
 
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    })
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const idToken = await userCredential.user.getIdToken()
+      
+      const res = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken }),
+      })
 
-    if (result?.error) {
-      setError('Invalid email or password. Please try again.')
-    } else {
-      router.push('/doctor/dashboard')
-      router.refresh()
+      if (res.ok) {
+        router.push('/doctor/dashboard')
+        router.refresh()
+      } else {
+        setError('Failed to establish session. Please try again.')
+        await auth.signOut()
+      }
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Invalid email or password. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setForgotLoading(true)
+    setError('')
 
     try {
-      await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail }),
-      })
+      await sendPasswordResetEmail(auth, forgotEmail)
       setForgotSent(true)
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Failed to send password reset email.')
     } finally {
       setForgotLoading(false)
     }
@@ -182,6 +194,16 @@ export default function DoctorLoginPage() {
                       />
                     </div>
                   </div>
+                  
+                  {error && (
+                    <div
+                      className="rounded-lg px-4 py-3 text-sm"
+                      style={{ background: 'rgba(181,74,60,0.08)', border: '1px solid rgba(181,74,60,0.20)', color: '#B54A3C' }}
+                    >
+                      {error}
+                    </div>
+                  )}
+
                   <button type="submit" className="btn btn-primary w-full" disabled={forgotLoading}>
                     {forgotLoading ? 'Sending...' : 'Send Reset Link'}
                   </button>

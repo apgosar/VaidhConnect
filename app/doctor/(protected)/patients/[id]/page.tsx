@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from 'lucide-react'
@@ -9,26 +9,60 @@ export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
-  const patient = await prisma.patient.findUnique({ where: { id }, select: { name: true } })
-  return { title: patient?.name ?? 'Patient' }
+  const patientDoc = await adminDb.collection('patients').doc(id).get()
+  return { title: patientDoc.exists ? patientDoc.data()?.name : 'Patient' }
 }
 
 export default async function PatientHistoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const patient = await prisma.patient.findUnique({
-    where: { id },
-    include: {
-      appointments: {
-        orderBy: { startTime: 'desc' },
-        include: {
-          prescription: { select: { id: true, diagnosis: true, pdfPath: true } },
-          payment: { select: { id: true, amount: true, mode: true, paidAt: true } },
-        },
-      },
-    },
-  })
+  const patientDoc = await adminDb.collection('patients').doc(id).get()
 
-  if (!patient) notFound()
+  if (!patientDoc.exists) notFound()
+  
+  const patientData = patientDoc.data() as any
+  const patient = {
+    id: patientDoc.id,
+    ...patientData,
+    dob: patientData.dob?.toDate(),
+  }
+
+  // Fetch appointments
+  const appointmentsSnap = await adminDb.collection('appointments')
+    .where('patientId', '==', id)
+    .orderBy('startTime', 'desc')
+    .get()
+
+  const appointments = await Promise.all(appointmentsSnap.docs.map(async doc => {
+    const aptData = doc.data()
+    const apt = {
+      id: doc.id,
+      ...aptData,
+      startTime: aptData.startTime?.toDate(),
+      endTime: aptData.endTime?.toDate(),
+    } as any
+
+    // Fetch related prescription
+    const rxSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', doc.id).limit(1).get()
+    if (!rxSnap.empty) {
+      const rx = rxSnap.docs[0].data()
+      apt.prescription = { id: rxSnap.docs[0].id, diagnosis: rx.diagnosis, pdfPath: rx.pdfPath }
+    } else {
+      apt.prescription = null
+    }
+
+    // Fetch related payment
+    const paySnap = await adminDb.collection('payments').where('appointmentId', '==', doc.id).limit(1).get()
+    if (!paySnap.empty) {
+      const pay = paySnap.docs[0].data()
+      apt.payment = { id: paySnap.docs[0].id, amount: pay.amount, mode: pay.mode, paidAt: pay.paidAt?.toDate() }
+    } else {
+      apt.payment = null
+    }
+
+    return apt
+  }))
+  
+  patient.appointments = appointments
 
   const age = computeAge(patient.dob)
   const formatPatientId = (id: string) => `PAT-${id.slice(-6).toUpperCase()}`
@@ -83,13 +117,13 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
         </div>
         <div className="card-data p-4 text-center">
           <p className="text-2xl font-bold font-tabular" style={{ color: 'var(--color-charcoal)' }}>
-            {patient.appointments.filter(a => a.prescription).length}
+            {patient.appointments.filter((a: any) => a.prescription).length}
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Prescriptions</p>
         </div>
         <div className="card-data p-4 text-center">
           <p className="text-2xl font-bold font-tabular" style={{ color: 'var(--color-charcoal)' }}>
-            ₹{patient.appointments.reduce((sum, a) => sum + Number(a.payment?.amount ?? 0), 0).toLocaleString()}
+            ₹{patient.appointments.reduce((sum: number, a: any) => sum + Number(a.payment?.amount ?? 0), 0).toLocaleString()}
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Total Paid</p>
         </div>
@@ -105,7 +139,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           </div>
         ) : (
           <div className="space-y-3">
-            {patient.appointments.map(appt => (
+            {patient.appointments.map((appt: any) => (
               <Link
                 key={appt.id}
                 href={`/doctor/appointments/${appt.id}`}

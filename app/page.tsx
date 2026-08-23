@@ -1,4 +1,5 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
+import { FieldValue } from 'firebase-admin/firestore'
 import type { Metadata } from 'next'
 import PatientPortal from '@/components/patient/PatientPortal'
 import type { WeeklyTimings } from '@/lib/constants'
@@ -6,7 +7,8 @@ import type { WeeklyTimings } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const doctor = await prisma.doctor.findFirst({ select: { clinicName: true, specialty: true, address: true } })
+  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+  const doctor = doctorsSnap.empty ? null : doctorsSnap.docs[0].data() as any
   const appUrl = process.env.NEXTAUTH_URL ?? 'https://vaidhconnect-893037849130.asia-south1.run.app'
   const iconUrl = `${appUrl}/api/clinic-icon`
   const title = doctor?.clinicName ?? 'Clinic'
@@ -31,31 +33,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const doctor = await prisma.doctor.findFirst({
-    select: {
-      id: true,
-      name: true,
-      clinicName: true,
-      logoUrl: true,
-      address: true,
-      mapsUrl: true,
-      phone: true,
-      specialty: true,
-      practiceDescription: true,
-      themeColor: true,
-      qualifications: true,
-      timings: true,
-      slotDurationMins: true,
-      photoUrl: true,
-      registrationNumber: true,
-      youtubeLinks: true,
-      products: true,
-      pageViews: true,
-      paymentDetails: true,
-    },
-  })
+  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
 
-  if (!doctor) {
+  if (doctorsSnap.empty) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8">
@@ -66,10 +46,12 @@ export default async function HomePage() {
     )
   }
 
+  const doctorDoc = doctorsSnap.docs[0]
+  const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
+
   // Increment page views in background
-  prisma.doctor.update({
-    where: { id: doctor.id },
-    data: { pageViews: { increment: 1 } }
+  adminDb.collection('doctors').doc(doctor.id).update({ 
+    pageViews: FieldValue.increment(1) 
   }).catch(e => console.error('Failed to increment page views', e))
 
   return (
@@ -86,7 +68,7 @@ export default async function HomePage() {
         registrationNumber: doctor.registrationNumber,
         youtubeLinks: (doctor.youtubeLinks as string[]) ?? [],
         products: (doctor.products as any[]) ?? [],
-        pageViews: doctor.pageViews,
+        pageViews: doctor.pageViews ?? 0,
         paymentDetails: doctor.paymentDetails as any,
         timings: doctor.timings as unknown as WeeklyTimings,
       }}

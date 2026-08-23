@@ -1,45 +1,32 @@
-import { Storage } from '@google-cloud/storage'
-import { writeFile, mkdir } from 'fs/promises'
+import { adminStorage } from './firebase/server'
 import path from 'path'
 
-const USE_GCS = !!process.env.GCS_BUCKET_NAME
-
-const storage = USE_GCS
-  ? new Storage({
-      projectId: process.env.GCS_PROJECT_ID,
-      keyFilename: process.env.GCS_KEY_FILE || undefined,
-    })
-  : null
-
-const bucket = USE_GCS && storage ? storage.bucket(process.env.GCS_BUCKET_NAME!) : null
-
 /**
- * Upload a buffer/file to GCS (production) or local filesystem (development).
- * Returns a public URL or local path.
+ * Upload a buffer/file to Firebase Storage.
+ * Returns a public URL.
  */
 export async function uploadFile(
   fileBuffer: Buffer,
   destinationPath: string, // e.g. 'prescriptions/abc123.pdf'
   mimeType: string = 'application/octet-stream'
 ): Promise<string> {
-  if (USE_GCS && bucket) {
-    const file = bucket.file(destinationPath)
-    await file.save(fileBuffer, {
-      metadata: { contentType: mimeType },
-      resumable: false,
-    })
-    await file.makePublic()
-    return `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/${destinationPath}`
-  } else {
-    // Ephemeral environment fallback (like Cloud Run without GCS)
-    // Convert file to Base64 data URI so it can be stored directly in the database String fields
-    const base64Data = fileBuffer.toString('base64')
-    return `data:${mimeType};base64,${base64Data}`
-  }
+  const bucket = adminStorage.bucket();
+  const file = bucket.file(destinationPath);
+  
+  await file.save(fileBuffer, {
+    metadata: { contentType: mimeType },
+    resumable: false,
+  });
+  
+  await file.makePublic();
+  
+  // The bucket name might not be strictly equal to process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, 
+  // but bucket.name gives us the correct configured bucket.
+  return `https://storage.googleapis.com/${bucket.name}/${destinationPath}`;
 }
 
 /**
- * Delete a file from GCS or local filesystem.
+ * Delete a file from Firebase Storage.
  */
 export async function deleteFile(filePathOrUrl: string): Promise<void> {
   if (filePathOrUrl.startsWith('data:')) {
@@ -47,22 +34,14 @@ export async function deleteFile(filePathOrUrl: string): Promise<void> {
     return
   }
 
-  if (USE_GCS && bucket) {
-    // Extract GCS path from URL
-    const gcsPath = filePathOrUrl.replace(
-      `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/`,
-      ''
-    )
+  const bucket = adminStorage.bucket();
+  
+  // Extract GCS path from URL
+  const urlPrefix = `https://storage.googleapis.com/${bucket.name}/`;
+  if (filePathOrUrl.startsWith(urlPrefix)) {
+    const gcsPath = filePathOrUrl.replace(urlPrefix, '');
     try {
-      await bucket.file(gcsPath).delete()
-    } catch {
-      // Ignore not found errors
-    }
-  } else {
-    const { unlink } = await import('fs/promises')
-    const localPath = path.join(process.cwd(), 'public', filePathOrUrl)
-    try {
-      await unlink(localPath)
+      await bucket.file(gcsPath).delete();
     } catch {
       // Ignore not found errors
     }

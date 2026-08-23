@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 import { NextResponse } from 'next/server'
 
 // Serves the clinic logo as a raw image — used for favicon and og:image
@@ -7,7 +7,8 @@ export const revalidate = 3600
 
 export async function GET() {
   try {
-    const doctor = await prisma.doctor.findFirst({ select: { logoUrl: true } })
+    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+    const doctor = doctorsSnap.empty ? null : doctorsSnap.docs[0].data() as any
 
     if (!doctor?.logoUrl) {
       // Redirect to static default favicon if no logo is set

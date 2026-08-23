@@ -1,9 +1,9 @@
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase/server'
 import { generateAvailableSlots } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
 import { startOfDay, endOfDay, format } from 'date-fns'
 import type { WeeklyTimings } from '@/lib/constants'
-import { sendWhatsApp } from '@/lib/whatsapp'
+import { sendBookingConfirmation } from '@/lib/whatsapp'
 import { sendEmail } from '@/lib/email'
 
 // GET /api/appointments?date=2024-01-15&patientPhone=xxx
@@ -14,40 +14,42 @@ export async function GET(request: NextRequest) {
     const mode = request.nextUrl.searchParams.get('mode') // 'slots' | 'patient'
 
     // Get doctor (single-doctor app)
-    const doctor = await prisma.doctor.findFirst({
-      select: {
-        id: true,
-        slotDurationMins: true,
-        timings: true,
-      },
-    })
-
-    if (!doctor) {
+    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+    if (doctorsSnap.empty) {
       return Response.json({ error: 'Clinic not configured' }, { status: 503 })
     }
+    const doctorDoc = doctorsSnap.docs[0]
+    const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
     if (mode === 'slots' && date) {
       const targetDate = new Date(date)
       const dayStart = startOfDay(targetDate)
       const dayEnd = endOfDay(targetDate)
 
-      const [blockedSlots, bookedSlots] = await Promise.all([
-        prisma.blockedSlot.findMany({
-          where: {
-            doctorId: doctor.id,
-            startTime: { gte: dayStart },
-            endTime: { lte: dayEnd },
-          },
-        }),
-        prisma.appointment.findMany({
-          where: {
-            doctorId: doctor.id,
-            status: 'BOOKED',
-            startTime: { gte: dayStart },
-            endTime: { lte: dayEnd },
-          },
-        }),
+      // Firestore only allows inequality on one field, so we query by startTime and filter endTime in memory if needed
+      const [blockedSlotsSnap, bookedSlotsSnap] = await Promise.all([
+        adminDb.collection('blocked_slots')
+          .where('doctorId', '==', doctor.id)
+          .where('startTime', '>=', dayStart)
+          .where('startTime', '<=', dayEnd)
+          .get(),
+        adminDb.collection('appointments')
+          .where('doctorId', '==', doctor.id)
+          .where('status', '==', 'BOOKED')
+          .where('startTime', '>=', dayStart)
+          .where('startTime', '<=', dayEnd)
+          .get(),
       ])
+
+      const blockedSlots = blockedSlotsSnap.docs.map((doc: any) => {
+        const data = doc.data()
+        return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
+      })
+
+      const bookedSlots = bookedSlotsSnap.docs.map((doc: any) => {
+        const data = doc.data()
+        return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
+      })
 
       const slots = generateAvailableSlots({
         date: targetDate,
@@ -62,28 +64,27 @@ export async function GET(request: NextRequest) {
 
     // Patient's appointments
     if (patientId) {
-      const patient = await prisma.patient.findUnique({
-        where: { id: patientId },
-      })
-
-      if (!patient) {
+      const patientDoc = await adminDb.collection('patients').doc(patientId).get()
+      if (!patientDoc.exists) {
         return Response.json({ appointments: [] })
       }
 
-      const appointments = await prisma.appointment.findMany({
-        where: {
-          patientId: patient.id,
-          status: 'BOOKED',
-          startTime: { gte: new Date() },
-        },
-        orderBy: { startTime: 'asc' },
-        select: {
-          id: true,
-          startTime: true,
-          endTime: true,
-          status: true,
-          chiefComplaint: true,
-        },
+      const appointmentsSnap = await adminDb.collection('appointments')
+        .where('patientId', '==', patientId)
+        .where('status', '==', 'BOOKED')
+        .where('startTime', '>=', new Date())
+        .orderBy('startTime', 'asc')
+        .get()
+
+      const appointments = appointmentsSnap.docs.map((doc: any) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          startTime: data.startTime.toDate(),
+          endTime: data.endTime.toDate(),
+          status: data.status,
+          chiefComplaint: data.chiefComplaint,
+        }
       })
 
       return Response.json({ appointments })
@@ -106,61 +107,78 @@ export async function POST(request: Request) {
       return Response.json({ error: 'patientId, startTime and endTime are required' }, { status: 400 })
     }
 
-    const doctor = await prisma.doctor.findFirst({ select: { id: true } })
-    if (!doctor) {
+    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+    if (doctorsSnap.empty) {
       return Response.json({ error: 'Clinic not configured' }, { status: 503 })
     }
+    const doctorDoc = doctorsSnap.docs[0]
+    const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
     const start = new Date(startTime)
     const end = new Date(endTime)
 
     // Check for conflicts
-    const conflict = await prisma.appointment.findFirst({
-      where: {
-        doctorId: doctor.id,
-        status: 'BOOKED',
-        OR: [
-          { startTime: { gte: start, lt: end } },
-          { endTime: { gt: start, lte: end } },
-          { startTime: { lte: start }, endTime: { gte: end } },
-        ],
-      },
+    const conflictSnap = await adminDb.collection('appointments')
+      .where('doctorId', '==', doctor.id)
+      .where('status', '==', 'BOOKED')
+      .where('startTime', '>=', startOfDay(start))
+      .where('startTime', '<=', endOfDay(start))
+      .get()
+
+    const hasConflict = conflictSnap.docs.some((doc: any) => {
+      const apt = doc.data()
+      const aptStart = apt.startTime.toDate()
+      const aptEnd = apt.endTime.toDate()
+      return (
+        (start >= aptStart && start < aptEnd) ||
+        (end > aptStart && end <= aptEnd) ||
+        (start <= aptStart && end >= aptEnd)
+      )
     })
 
-    if (conflict) {
+    if (hasConflict) {
       return Response.json({ error: 'This slot is no longer available' }, { status: 409 })
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        patientId,
-        doctorId: doctor.id,
-        startTime: start,
-        endTime: end,
-        status: 'BOOKED',
-      },
-      include: {
-        patient: { select: { name: true, phone: true, email: true } },
-        doctor: { select: { clinicName: true, name: true, phone: true } },
-      },
-    })
+    const newAppointmentRef = adminDb.collection('appointments').doc()
+    const appointmentData = {
+      patientId,
+      doctorId: doctor.id,
+      startTime: start,
+      endTime: end,
+      status: 'BOOKED',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    
+    await newAppointmentRef.set(appointmentData)
 
     // Fire & Forget notifications
-    const dateStr = format(start, 'PPP')
-    const timeStr = format(start, 'p')
-    const clinicName = appointment.doctor.clinicName || 'Clinic'
-    const msg = `Hi ${appointment.patient.name}, your appointment at ${clinicName} is confirmed for ${dateStr} at ${timeStr}.`
+    const patientDoc = await adminDb.collection('patients').doc(patientId).get()
+    const patient = patientDoc.data() as any
 
-    Promise.all([
-      sendWhatsApp(appointment.patient.phone, msg),
-      appointment.patient.email ? sendEmail({
-        to: appointment.patient.email,
-        subject: 'Appointment Confirmed',
-        html: `<p>${msg}</p>`
-      }) : Promise.resolve(),
-    ]).catch(err => console.error('[Notification Error]', err))
+    if (patient) {
+      const dateStr = format(start, 'PPP')
+      const timeStr = format(start, 'p')
+      const clinicName = doctor.clinicName || 'Clinic'
+      const msg = `Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${dateStr} at ${timeStr}.`
 
-    return Response.json({ appointment }, { status: 201 })
+      Promise.all([
+        sendBookingConfirmation(patient.phone, {
+          patientName: patient.name,
+          doctorName: doctor.name || 'Doctor',
+          appointmentTime: `${dateStr} at ${timeStr}`,
+          clinicPhone: doctor.phone || clinicName
+        }),
+        patient.email ? sendEmail({
+          to: patient.email,
+          subject: 'Appointment Confirmed',
+          html: `<p>${msg}</p>`
+        }) : Promise.resolve(),
+      ]).catch(err => console.error('[Notification Error]', err))
+    }
+
+    return Response.json({ appointment: { id: newAppointmentRef.id, ...appointmentData } }, { status: 201 })
   } catch (error) {
     console.error('[appointments-post]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
