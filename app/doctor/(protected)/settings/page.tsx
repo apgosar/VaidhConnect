@@ -17,6 +17,10 @@ interface Doctor {
   slotDurationMins: number; timings: WeeklyTimings
   paymentDetails: { upiId?: string; bankDetails?: string; qrCodeUrl?: string }
   reminderIntervals: number[]
+  enableChiefComplaint?: boolean
+  enableMedicalHistory?: boolean
+  consultationFee?: string | null
+  followUpFee?: string | null
 }
 
 export default function SettingsPage() {
@@ -224,6 +228,10 @@ function SettingsPageContent() {
           registrationNumber: doctor.registrationNumber,
           youtubeLinks: doctor.youtubeLinks || [],
           products: doctor.products || [],
+          enableChiefComplaint: doctor.enableChiefComplaint ?? true,
+          enableMedicalHistory: doctor.enableMedicalHistory ?? true,
+          consultationFee: doctor.consultationFee,
+          followUpFee: doctor.followUpFee,
         }),
       })
 
@@ -325,9 +333,41 @@ function SettingsPageContent() {
             <input className="form-input" value={doctor.name} onChange={e => setDoctor((p: any) => p ? { ...p, name: e.target.value } : p)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Registration Number (Mandatory)</label>
-            <input className="form-input" required placeholder="e.g. MMC 123456" value={doctor.registrationNumber ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, registrationNumber: e.target.value } : p)} />
+            <label className="form-label" htmlFor="registrationNumber">Registration Number</label>
+            <input
+              id="registrationNumber"
+              type="text"
+              className="form-input"
+              value={doctor.registrationNumber || ''}
+              onChange={e => setDoctor(p => p ? { ...p, registrationNumber: e.target.value } : p)}
+              placeholder="e.g. MMC-12345"
+            />
           </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="consultationFee">Consultation Fee</label>
+            <input
+              id="consultationFee"
+              type="text"
+              className="form-input"
+              value={doctor.consultationFee || ''}
+              onChange={e => setDoctor(p => p ? { ...p, consultationFee: e.target.value } : p)}
+              placeholder="e.g. ₹500"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="followUpFee">Follow-up Fee</label>
+            <input
+              id="followUpFee"
+              type="text"
+              className="form-input"
+              value={doctor.followUpFee || ''}
+              onChange={e => setDoctor(p => p ? { ...p, followUpFee: e.target.value } : p)}
+              placeholder="e.g. ₹300"
+            />
+          </div>
+
           <div className="form-group">
             <label className="form-label">Qualifications / Degrees</label>
             <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, qualifications: e.target.value } : p)} />
@@ -435,6 +475,36 @@ function SettingsPageContent() {
               )
             })}
           </div>
+        </div>
+
+        <div className="form-group pt-4 border-t border-slate-100">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setDoctor((p: any) => p ? { ...p, enableChiefComplaint: !(p.enableChiefComplaint ?? true) } : p)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${doctor.enableChiefComplaint ?? true ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${doctor.enableChiefComplaint ?? true ? 'translate-x-5' : ''}`} />
+            </div>
+            <div>
+              <span className="font-medium text-slate-700">Enable Chief Complaint Field</span>
+              <p className="text-xs text-slate-500 mt-0.5">When enabled, patients will be required to provide their chief complaint during the online booking flow.</p>
+            </div>
+          </label>
+        </div>
+
+        <div className="form-group pt-4 border-t border-slate-100">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setDoctor((p: any) => p ? { ...p, enableMedicalHistory: !(p.enableMedicalHistory ?? true) } : p)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${doctor.enableMedicalHistory ?? true ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${doctor.enableMedicalHistory ?? true ? 'translate-x-5' : ''}`} />
+            </div>
+            <div>
+              <span className="font-medium text-slate-700">Enable Medical History Field</span>
+              <p className="text-xs text-slate-500 mt-0.5">When enabled, patients will have the option to provide their medical history during the online booking flow.</p>
+            </div>
+          </label>
         </div>
       </div>
 

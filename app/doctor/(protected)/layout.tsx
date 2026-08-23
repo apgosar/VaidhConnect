@@ -17,11 +17,15 @@ export default async function DoctorLayout({
     redirect('/doctor/login')
   }
 
-  // Define defaults or fetch from Firestore if missing in claims
-  const doctorName = session.name || 'Doctor'
-  const clinicName = session.clinicName || 'Clinic'
-  const specialty = session.specialty || 'General Physician'
-  const themeColor = session.themeColor || '#0F3D2E'
+  const { adminDb } = await import('@/lib/firebase/server')
+  const doctorDoc = await adminDb.collection('doctors').doc(session.uid).get()
+  const doctorProfile = doctorDoc.exists ? doctorDoc.data() : null
+
+  const rawDoctorName = doctorProfile?.name || session.name || 'Doctor'
+  const doctorName = rawDoctorName.replace(/^Dr\.?\s*/i, '')
+  const clinicName = doctorProfile?.clinicName || session.clinicName || 'Clinic'
+  const specialty = doctorProfile?.specialty || session.specialty || 'General Physician'
+  const themeColor = doctorProfile?.themeColor || session.themeColor || '#0F3D2E'
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-linen)' }}>

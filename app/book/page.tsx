@@ -69,6 +69,7 @@ export default function BookPage() {
     if (!selectedSlot || !patient) return
     setBooking(true)
     try {
+      const chiefComplaint = sessionStorage.getItem('chiefComplaint')
       const res = await fetch('/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,6 +77,7 @@ export default function BookPage() {
           patientId: patient.id,
           startTime: selectedSlot.start,
           endTime: selectedSlot.end,
+          chiefComplaint: chiefComplaint || undefined,
         }),
       })
 

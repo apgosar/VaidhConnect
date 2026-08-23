@@ -11,18 +11,18 @@ export const metadata: Metadata = {
   description: 'Book appointments at Jivanand Clinic — Dr. Abhay Shah, Ayurvedic Medicine',
   manifest: '/manifest.json',
   icons: {
-    icon: `${APP_URL}/api/clinic-icon`,
-    apple: `${APP_URL}/api/clinic-icon`,
+    icon: '/api/clinic-icon',
+    apple: '/api/clinic-icon',
   },
   openGraph: {
     type: 'website',
     url: APP_URL,
     siteName: 'Jivanand Clinic',
-    images: [{ url: `${APP_URL}/api/clinic-icon`, width: 512, height: 512 }],
+    images: [{ url: '/api/clinic-icon', width: 512, height: 512 }],
   },
   twitter: {
     card: 'summary',
-    images: [`${APP_URL}/api/clinic-icon`],
+    images: ['/api/clinic-icon'],
   },
 }
 

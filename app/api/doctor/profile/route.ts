@@ -114,6 +114,8 @@ export async function PATCH(request: Request) {
       timings, paymentDetails, reminderIntervals,
       registrationNumber, youtubeLinks, products, pageViews,
       newPassword,
+      enableChiefComplaint, enableMedicalHistory,
+      consultationFee, followUpFee,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -143,6 +145,10 @@ export async function PATCH(request: Request) {
     // New fields
     if (registrationNumber !== undefined) updateData.registrationNumber = registrationNumber?.trim() || "Reg. No: Pending"
     if (youtubeLinks !== undefined) updateData.youtubeLinks = youtubeLinks
+    if (enableChiefComplaint !== undefined) updateData.enableChiefComplaint = enableChiefComplaint
+    if (enableMedicalHistory !== undefined) updateData.enableMedicalHistory = enableMedicalHistory
+    if (consultationFee !== undefined) updateData.consultationFee = consultationFee?.trim() || null
+    if (followUpFee !== undefined) updateData.followUpFee = followUpFee?.trim() || null
     
     if (products !== undefined) {
       // Upload any base64 product images to Storage to avoid Firestore 1MB document limits and invalid entity errors

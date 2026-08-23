@@ -28,6 +28,8 @@ interface DoctorProfile {
   timings: WeeklyTimings
   slotDurationMins: number
   paymentDetails?: string | null
+  consultationFee?: string | null
+  followUpFee?: string | null
 }
 
 interface PatientPortalProps {
@@ -235,6 +237,26 @@ END:VCARD`
                 <p className="mt-1.5 text-base font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
                   {doctor.practiceDescription}
                 </p>
+              )}
+
+              {(doctor.consultationFee || doctor.followUpFee) && (
+                <div className="mt-4 inline-flex justify-center gap-6 text-sm bg-black/10 rounded-2xl px-6 py-2.5 border border-white/10 backdrop-blur-sm">
+                  {doctor.consultationFee && (
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Consultation</span>
+                      <span className="font-semibold text-white tracking-wide">{doctor.consultationFee}</span>
+                    </div>
+                  )}
+                  {doctor.consultationFee && doctor.followUpFee && (
+                    <div className="w-px bg-white/20 self-stretch my-1"></div>
+                  )}
+                  {doctor.followUpFee && (
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up</span>
+                      <span className="font-semibold text-white tracking-wide">{doctor.followUpFee}</span>
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="flex flex-col items-center mt-6">

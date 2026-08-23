@@ -100,7 +100,10 @@ export default async function DoctorDashboard() {
   const doctorProfile = doctorDoc.exists ? doctorDoc.data() : null
 
   const greeting = today.getHours() < 12 ? 'Morning' : today.getHours() < 17 ? 'Afternoon' : 'Evening'
-  const firstName = session?.name?.split(' ')[0] || 'Doctor'
+  
+  const rawName = doctorProfile?.name || session?.name || 'Doctor'
+  const cleanName = rawName.replace(/^Dr\.?\s*/i, '')
+  const firstName = cleanName.split(' ')[0]
 
   const stats = [
     { label: "Today's Appointments", value: todayAppts.length, icon: Calendar },

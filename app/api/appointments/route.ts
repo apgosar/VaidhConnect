@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { patientId, startTime, endTime } = body
+    const { patientId, startTime, endTime, chiefComplaint } = body
 
     if (!patientId || !startTime || !endTime) {
       return Response.json({ error: 'patientId, startTime and endTime are required' }, { status: 400 })
@@ -147,6 +147,7 @@ export async function POST(request: Request) {
       startTime: start,
       endTime: end,
       status: 'BOOKED',
+      chiefComplaint: chiefComplaint || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
