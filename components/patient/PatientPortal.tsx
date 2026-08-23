@@ -637,10 +637,11 @@ END:VCARD`
                 
                 if (!videoId) return null
                 return (
-                  <div key={idx} className="w-full rounded-xl overflow-hidden bg-black shadow-lg">
+                  <div key={idx} className="w-full aspect-video rounded-xl overflow-hidden bg-black shadow-lg">
                     <iframe
                       width="100%"
-                      height="310"
+                      height="100%"
+                      className="w-full h-full"
                       src={`https://www.youtube.com/embed/${videoId}`}
                       title="YouTube video player"
                       frameBorder="0"
