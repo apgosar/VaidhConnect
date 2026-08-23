@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   serverExternalPackages: ['@react-pdf/renderer'],
+  async rewrites() {
+    return [
+      {
+        source: '/favicon.ico',
+        destination: '/api/clinic-icon',
+      },
+    ]
+  },
 };
 
 export default nextConfig;
