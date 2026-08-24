@@ -141,6 +141,11 @@ END:VCARD`
       const res = await fetch(`/api/patients/lookup?phone=${encodeURIComponent(normalized)}`)
       const data = await res.json()
 
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong. Please try again.')
+        return
+      }
+
       if (data.found) {
         // Show the patient selection screen
         setFoundPatients(data.patients)

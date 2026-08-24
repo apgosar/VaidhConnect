@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSessionCookie, clearSessionCookie } from '@/lib/auth/session';
+import { createSessionCookie, clearSessionCookie, getSession } from '@/lib/auth/session';
+
+export async function GET() {
+  const session = await getSession();
+  return NextResponse.json({ 
+    authenticated: !!session,
+    uid: session?.uid 
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {

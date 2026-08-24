@@ -29,7 +29,14 @@ export async function GET(
     // Fetch related patient
     if (aptData.patientId) {
       const patientDoc = await adminDb.collection('patients').doc(aptData.patientId).get()
-      if (patientDoc.exists) appointment.patient = { id: patientDoc.id, ...patientDoc.data() }
+      if (patientDoc.exists) {
+        const pd = patientDoc.data() as any
+        appointment.patient = { 
+          id: patientDoc.id, 
+          ...pd,
+          dob: pd.dob?.toDate() 
+        }
+      }
     }
 
     // Fetch related prescription
@@ -173,7 +180,7 @@ export async function PATCH(
         })())
       }
 
-      Promise.all(tasks).catch(err => console.error('[Notification Error]', err))
+      await Promise.all(tasks).catch(err => console.error('[Notification Error]', err))
     }
 
     return Response.json({ appointment })

@@ -6,7 +6,9 @@ const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
 
 interface TemplateParams {
   name: string;
-  language: string;
+  language: {
+    code: string;
+  };
   components: Array<{
     type: 'body' | 'header' | 'button';
     parameters: Array<{
@@ -47,6 +49,7 @@ export async function sendWhatsAppTemplate(to: string, template: TemplateParams)
       return false
     }
 
+    console.log('[WhatsApp] Successfully sent template:', JSON.stringify(data, null, 2))
     return true
   } catch (error) {
     console.error('[WhatsApp] Network error:', error)
@@ -63,7 +66,7 @@ export async function sendBookingConfirmation(to: string, params: {
 }) {
   return sendWhatsAppTemplate(to, {
     name: 'appt_booking_confirmation',
-    language: 'en',
+    language: { code: 'en' },
     components: [{
       type: 'body',
       parameters: [
@@ -84,7 +87,7 @@ export async function sendCancellation(to: string, params: {
 }) {
   return sendWhatsAppTemplate(to, {
     name: 'appt_cancellation',
-    language: 'en',
+    language: { code: 'en' },
     components: [{
       type: 'body',
       parameters: [
@@ -106,7 +109,7 @@ export async function sendReminder(to: string, params: {
 }) {
   return sendWhatsAppTemplate(to, {
     name: 'appt_reminder',
-    language: 'en',
+    language: { code: 'en' },
     components: [{
       type: 'body',
       parameters: [
@@ -129,7 +132,7 @@ export async function sendDailySummary(to: string, params: {
 }) {
   return sendWhatsAppTemplate(to, {
     name: 'daily_summary_morning',
-    language: 'en',
+    language: { code: 'en' },
     components: [{
       type: 'body',
       parameters: [
@@ -151,7 +154,7 @@ export async function sendSummaryUpdate(to: string, params: {
 }) {
   return sendWhatsAppTemplate(to, {
     name: 'daily_summary_update',
-    language: 'en',
+    language: { code: 'en' },
     components: [{
       type: 'body',
       parameters: [

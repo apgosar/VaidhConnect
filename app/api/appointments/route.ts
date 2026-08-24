@@ -70,24 +70,40 @@ export async function GET(request: NextRequest) {
       if (!patientDoc.exists) {
         return Response.json({ appointments: [] })
       }
+      
+      const pData = patientDoc.data() as any
+      // Find all duplicate patient IDs with same phone and name
+      const dupSnap = await adminDb.collection('patients').where('phone', '==', pData.phone).get()
+      const patientIds = dupSnap.docs
+        .filter(d => d.data().name?.trim().toLowerCase() === pData.name?.trim().toLowerCase())
+        .map(d => d.id)
 
-      const appointmentsSnap = await adminDb.collection('appointments')
-        .where('patientId', '==', patientId)
-        .where('status', '==', 'BOOKED')
-        .where('startTime', '>=', new Date())
-        .orderBy('startTime', 'asc')
-        .get()
+      // Fetch all appointments for these IDs, filter in memory to avoid composite index
+      const promises = patientIds.map(id => 
+        adminDb.collection('appointments').where('patientId', '==', id).get()
+      )
+      const snaps = await Promise.all(promises)
+      
+      const appointments: any[] = []
+      const now = new Date()
 
-      const appointments = appointmentsSnap.docs.map((doc: any) => {
-        const data = doc.data()
-        return {
-          id: doc.id,
-          startTime: data.startTime.toDate(),
-          endTime: data.endTime.toDate(),
-          status: data.status,
-          chiefComplaint: data.chiefComplaint,
+      for (const snap of snaps) {
+        for (const doc of snap.docs) {
+          const data = doc.data()
+          const startTime = data.startTime?.toDate()
+          if (data.status === 'BOOKED' && startTime && startTime >= now) {
+            appointments.push({
+              id: doc.id,
+              startTime,
+              endTime: data.endTime?.toDate(),
+              status: data.status,
+              chiefComplaint: data.chiefComplaint,
+            })
+          }
         }
-      })
+      }
+      
+      appointments.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 
       return Response.json({ appointments })
     }
@@ -166,7 +182,7 @@ export async function POST(request: Request) {
       const clinicName = doctor.clinicName || 'Clinic'
       const msg = `Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${dateStr} at ${timeStr}.`
 
-      Promise.all([
+      await Promise.all([
         sendBookingConfirmation(patient.phone, {
           patientName: patient.name,
           doctorName: doctor.name || 'Doctor',

@@ -56,7 +56,31 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    return Response.json({ found: true, patients })
+    // Deduplicate in case there are legacy duplicate records with same name and DOB
+    const uniquePatients: any[] = []
+    const seen = new Set<string>()
+
+    for (const p of patients) {
+      const nameKey = p.name?.trim().toLowerCase()
+      const dobKey = p.dob ? new Date(p.dob).toISOString().split('T')[0] : ''
+      const key = `${nameKey}_${dobKey}`
+      
+      if (!seen.has(key)) {
+        seen.add(key)
+        uniquePatients.push(p)
+      } else {
+        // If it's a duplicate, we can merge appointments so they don't get lost
+        const existing = uniquePatients.find(up => up.name?.trim().toLowerCase() === nameKey && (up.dob ? new Date(up.dob).toISOString().split('T')[0] : '') === dobKey)
+        if (existing && p.appointments.length > 0) {
+          existing.appointments = [...existing.appointments, ...p.appointments]
+          // Sort merged appointments by startTime and take top 5
+          existing.appointments.sort((a: any, b: any) => a.startTime.getTime() - b.startTime.getTime())
+          existing.appointments = existing.appointments.slice(0, 5)
+        }
+      }
+    }
+
+    return Response.json({ found: true, patients: uniquePatients })
   } catch (error) {
     console.error('[patient-lookup]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

@@ -11,7 +11,40 @@ export async function POST(request: Request) {
 
     const normalized = phone.replace(/[\s\-()]/g, '')
 
-    // Note: multiple patients (family members) can share a phone number — no uniqueness check
+    // Find or create: Check if patient with same phone, name, and DOB already exists
+    const existingSnap = await adminDb.collection('patients').where('phone', '==', normalized).get()
+    
+    let existingPatient = null
+    const targetDobStr = new Date(dob).toISOString().split('T')[0]
+    const targetNameStr = name.trim().toLowerCase()
+
+    for (const doc of existingSnap.docs) {
+      const data = doc.data()
+      const docNameStr = data.name?.trim().toLowerCase()
+      const docDobStr = data.dob?.toDate().toISOString().split('T')[0]
+      
+      if (docNameStr === targetNameStr && docDobStr === targetDobStr) {
+        existingPatient = { id: doc.id, ...data }
+        break
+      }
+    }
+
+    if (existingPatient) {
+      // Update medical history if provided and return existing patient
+      const updateData: any = { updatedAt: new Date() }
+      if (medicalHistory !== undefined && medicalHistory.trim() !== '') {
+        updateData.medicalHistory = medicalHistory.trim()
+      }
+      if (email !== undefined && email.trim() !== '') {
+        updateData.email = email.trim()
+      }
+      
+      if (Object.keys(updateData).length > 1) {
+        await adminDb.collection('patients').doc(existingPatient.id).update(updateData)
+      }
+      
+      return Response.json({ patient: existingPatient }, { status: 200 })
+    }
 
     const patientData = {
       phone: normalized,
