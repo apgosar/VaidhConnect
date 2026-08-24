@@ -26,30 +26,32 @@ export async function GET(request: NextRequest) {
       const dayStart = startOfDay(targetDate)
       const dayEnd = endOfDay(targetDate)
 
-      // Firestore only allows inequality on one field, so we query by startTime and filter endTime in memory if needed
+      // Firestore only allows inequality on one field, so we query by startTime
+      // We filter doctorId and status in memory to avoid needing composite indexes (since it's a single-clinic app anyway)
       const [blockedSlotsSnap, bookedSlotsSnap] = await Promise.all([
         adminDb.collection('blocked_slots')
-          .where('doctorId', '==', doctor.id)
           .where('startTime', '>=', dayStart)
           .where('startTime', '<=', dayEnd)
           .get(),
         adminDb.collection('appointments')
-          .where('doctorId', '==', doctor.id)
-          .where('status', '==', 'BOOKED')
           .where('startTime', '>=', dayStart)
           .where('startTime', '<=', dayEnd)
           .get(),
       ])
 
-      const blockedSlots = blockedSlotsSnap.docs.map((doc: any) => {
-        const data = doc.data()
-        return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
-      })
+      const blockedSlots = blockedSlotsSnap.docs
+        .map((doc: any) => {
+          const data = doc.data()
+          return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
+        })
+        .filter(slot => slot.doctorId === doctor.id)
 
-      const bookedSlots = bookedSlotsSnap.docs.map((doc: any) => {
-        const data = doc.data()
-        return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
-      })
+      const bookedSlots = bookedSlotsSnap.docs
+        .map((doc: any) => {
+          const data = doc.data()
+          return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
+        })
+        .filter(slot => slot.doctorId === doctor.id && slot.status === 'BOOKED')
 
       const slots = generateAvailableSlots({
         date: targetDate,
@@ -91,9 +93,9 @@ export async function GET(request: NextRequest) {
     }
 
     return Response.json({ error: 'Invalid query parameters' }, { status: 400 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[appointments-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return Response.json({ error: error.message, stack: error.stack }, { status: 500 })
   }
 }
 
