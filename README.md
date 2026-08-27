@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VaidhConnect / SwasthyaConnect Clinic Management System
 
-## Getting Started
+A modern, comprehensive clinic management platform designed to streamline patient appointments, simplify doctor scheduling, and deliver automated communications.
 
-First, run the development server:
+## 🌟 Key Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### 🏥 Patient Portal
+* **Family & Multi-Patient Support**: Add and manage multiple patients (such as elderly relatives and children who do not have a mobile phone or require assistance) under a single mobile number.
+* **Self-Service Appointments**: Easily view upcoming visits, track past consultations, and manage bookings directly from the portal.
+* **Instant Online Booking**: Book appointments effortlessly by selecting from real-time available clinic time slots.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🩺 Doctor Dashboard
+* **Secure Access**: Dedicated, secure portal for doctors and clinic staff.
+* **Daily Overview**: At-a-glance dashboard displaying today's appointments, completed visits, and total patient counts.
+* **Patient Insights**: Comprehensive patient profiles featuring calculated age, chief complaints, and past consultation history.
+* **Schedule & Leave Blocking**: Block specific time slots or full dates for planned surgeries, procedures, or vacations so patients cannot book appointments during those slots.
+* **Schedule Management**: Full control over daily shifts, patient queues, and appointment flows.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🌐 Digital Presence for Your Clinic
+Create a comprehensive digital presence to showcase your practice:
+* **Clinic Timings**: Display clear morning and evening shift hours and operational days.
+* **Location**: Share clinic address and map directions for easy patient navigation.
+* **Featured Products**: Highlight clinic-recommended medicines, health supplements, or wellness products.
+* **Consultation / Follow-up Fees**: Transparently display charges for initial consultations and follow-up visits.
+* **YouTube Videos**: Embed educational videos, health tips, and clinic introduction videos.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 📅 Smart Scheduling System
+* **Dynamic Slot Generation**: Automatically divides clinic shifts into convenient appointment slots based on configured consultation durations.
+* **Conflict Prevention**: Real-time slot management prevents double booking and automatically hides booked or blocked slots.
+* **Flexible Timezone Support**: Configured to display and manage appointments accurately in the clinic's local timezone.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 💬 Automated WhatsApp Notifications
+* **Booking Confirmations**: Instantly sends patients confirmation messages with clinic details, directions, and appointment times.
+* **Reminders & Alerts**: Automated appointment reminders and instant notifications for any schedule changes or cancellations.
+* **Doctor Daily Summaries**: Delivers a daily schedule overview and real-time patient cancellation updates directly to the doctor's WhatsApp.
