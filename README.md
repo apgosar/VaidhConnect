@@ -1,4 +1,4 @@
-# VaidhConnect / SwasthyaConnect Clinic Management System
+# SwasthyaConnect Clinic Management System
 
 A modern, comprehensive clinic management platform designed to streamline patient appointments, simplify doctor scheduling, and deliver automated communications.
 
