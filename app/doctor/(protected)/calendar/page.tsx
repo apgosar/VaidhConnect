@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, parseISO, isSameDay } from 'date-fns'
+import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay, isBefore } from 'date-fns'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
@@ -18,18 +18,19 @@ interface Appointment {
 }
 
 export default function CalendarPage() {
-  const [currentWeek, setCurrentWeek] = useState(new Date())
+  const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()))
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'week' | 'agenda'>('agenda')
+  const [view, setView] = useState<'week' | 'agenda'>('week')
 
-  const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
-  const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 })
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i))
+  const weekStart = weekDays[0]
+  const weekEnd = endOfDay(weekDays[6])
+  const isCurrentPeriod = isSameDay(startDate, startOfDay(new Date())) || isBefore(startDate, startOfDay(new Date()))
 
   useEffect(() => {
     fetchAppointments()
-  }, [currentWeek])
+  }, [startDate])
 
   const fetchAppointments = async () => {
     setLoading(true)
@@ -44,15 +45,38 @@ export default function CalendarPage() {
     }
   }
 
+  // Filter out past and cancelled appointments
+  const now = new Date()
+  const activeAppointments = appointments.filter(a => {
+    if (a.status === 'CANCELLED') return false
+    const end = parseISO(a.endTime || a.startTime)
+    return end >= now
+  })
+
   const getApptsForDay = (day: Date) =>
-    appointments.filter(a => isSameDay(parseISO(a.startTime), day))
+    activeAppointments.filter(a => isSameDay(parseISO(a.startTime), day))
+
+  const handlePrevWeek = () => {
+    setStartDate(prev => {
+      const target = subDays(prev, 7)
+      const todayStart = startOfDay(new Date())
+      return isBefore(target, todayStart) ? todayStart : target
+    })
+  }
+
+  const handleNextWeek = () => {
+    setStartDate(prev => addDays(prev, 7))
+  }
+
+  const handleToday = () => {
+    setStartDate(startOfDay(new Date()))
+  }
 
   const statusColor = (status: string) => {
     switch (status) {
       case 'BOOKED':    return { background: 'rgba(15,61,46,0.07)', border: '1px solid rgba(15,61,46,0.18)', color: 'var(--color-forest)' }
       case 'COMPLETED': return { background: 'rgba(28,92,70,0.08)', border: '1px solid rgba(28,92,70,0.20)', color: 'var(--color-pine)' }
-      case 'CANCELLED': return { background: 'rgba(181,74,60,0.06)', border: '1px solid rgba(181,74,60,0.16)', color: '#B54A3C', textDecoration: 'line-through', opacity: 0.65 }
-      default:          return { background: 'var(--color-linen-dark)', border: '1px solid var(--color-sage-border)' }
+      default:          return { background: 'var(--color-linen-dark)', border: '1px solid var(--color-sage-border)', color: 'var(--color-charcoal)' }
     }
   }
 
@@ -97,7 +121,12 @@ export default function CalendarPage() {
 
       {/* Week Navigation */}
       <div className="flex items-center justify-between card px-4 py-3">
-        <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="btn btn-ghost p-2">
+        <button
+          onClick={handlePrevWeek}
+          disabled={isCurrentPeriod}
+          className="btn btn-ghost p-2 disabled:opacity-30 disabled:cursor-not-allowed"
+          title={isCurrentPeriod ? 'Cannot navigate to past dates' : 'Previous 7 days'}
+        >
           <ChevronLeft size={18} />
         </button>
         <div className="text-center">
@@ -105,14 +134,15 @@ export default function CalendarPage() {
             {format(weekStart, 'dd MMM')} – {format(weekEnd, 'dd MMM yyyy')}
           </p>
           <button
-            onClick={() => setCurrentWeek(new Date())}
-            className="text-xs mt-0.5 font-medium"
+            onClick={handleToday}
+            disabled={isCurrentPeriod}
+            className={`text-xs mt-0.5 font-medium ${isCurrentPeriod ? 'opacity-40 cursor-default' : 'hover:underline'}`}
             style={{ color: 'var(--color-gold-dark)' }}
           >
             Today
           </button>
         </div>
-        <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="btn btn-ghost p-2">
+        <button onClick={handleNextWeek} className="btn btn-ghost p-2" title="Next 7 days">
           <ChevronRight size={18} />
         </button>
       </div>
@@ -131,7 +161,7 @@ export default function CalendarPage() {
             if (dayAppts.length === 0) return null
             return (
               <div key={day.toISOString()}>
-                <div className={`flex items-center gap-2 mb-2`} style={{ color: isToday ? 'var(--color-forest)' : 'var(--color-sage)' }}>
+                <div className="flex items-center gap-2 mb-2" style={{ color: isToday ? 'var(--color-forest)' : 'var(--color-sage)' }}>
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
                     style={{
@@ -178,10 +208,10 @@ export default function CalendarPage() {
             )
           })}
 
-          {appointments.filter(a => a.status !== 'CANCELLED').length === 0 && (
+          {activeAppointments.length === 0 && (
             <div className="text-center py-12">
               <Calendar size={40} className="mx-auto mb-2" style={{ color: 'var(--color-sage-light)' }} />
-              <p style={{ color: 'var(--color-sage)' }}>No appointments this week</p>
+              <p style={{ color: 'var(--color-sage)' }}>No upcoming appointments for this period</p>
             </div>
           )}
         </div>
@@ -196,27 +226,27 @@ export default function CalendarPage() {
                 const dayAppts = getApptsForDay(day)
                 return (
                   <div
-                  key={day.toISOString()}
-                  className="p-3 text-center"
-                  style={{
-                    borderRight: '1px solid var(--color-sage-border)',
-                    background: isToday ? 'var(--color-primary-bg)' : 'transparent',
-                  }}
-                >
-                  <p className="text-xs font-medium" style={{ color: 'var(--color-sage)' }}>{format(day, 'EEE')}</p>
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center mx-auto mt-1 text-sm font-bold font-tabular"
+                    key={day.toISOString()}
+                    className="p-3 text-center"
                     style={{
-                      background: isToday ? 'var(--color-forest)' : 'transparent',
-                      color: isToday ? 'white' : 'var(--color-charcoal-mid)',
+                      borderRight: '1px solid var(--color-sage-border)',
+                      background: isToday ? 'var(--color-primary-bg)' : 'transparent',
                     }}
                   >
-                    {format(day, 'd')}
+                    <p className="text-xs font-medium" style={{ color: 'var(--color-sage)' }}>{format(day, 'EEE')}</p>
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center mx-auto mt-1 text-sm font-bold font-tabular"
+                      style={{
+                        background: isToday ? 'var(--color-forest)' : 'transparent',
+                        color: isToday ? 'white' : 'var(--color-charcoal-mid)',
+                      }}
+                    >
+                      {format(day, 'd')}
+                    </div>
+                    {dayAppts.length > 0 && (
+                      <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-gold-dark)' }}>{dayAppts.length} apt</p>
+                    )}
                   </div>
-                  {dayAppts.length > 0 && (
-                    <p className="text-xs mt-1" style={{ color: 'var(--color-gold-dark)' }}>{dayAppts.length} apt</p>
-                  )}
-                </div>
                 )
               })}
             </div>
@@ -229,11 +259,14 @@ export default function CalendarPage() {
                 return (
                   <div key={day.toISOString()} className={`border-r border-slate-100 last:border-0 p-2 space-y-1.5 ${isToday ? 'bg-blue-50/40' : ''}`}>
                     {dayAppts.map(appt => (
-                      <Link key={appt.id} href={`/doctor/appointments/${appt.id}`}
-                        className={`block rounded-lg p-2 text-xs border hover:opacity-80 transition-opacity ${statusColor(appt.status)}`}
+                      <Link
+                        key={appt.id}
+                        href={`/doctor/appointments/${appt.id}`}
+                        className="block rounded-lg p-2 text-xs hover:opacity-80 transition-opacity"
+                        style={statusColor(appt.status)}
                       >
                         <p className="font-semibold truncate">{appt.patient.name}</p>
-                        <p className="opacity-70">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
+                        <p className="opacity-70 font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
                       </Link>
                     ))}
                   </div>

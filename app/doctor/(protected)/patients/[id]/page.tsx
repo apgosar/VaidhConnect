@@ -26,10 +26,10 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
     dob: patientData.dob?.toDate(),
   }
 
-  // Fetch appointments
+  // Firestore composite index (patientId + startTime) may not exist in all environments.
+  // Fetching without orderBy and sorting in memory avoids the index requirement.
   const appointmentsSnap = await adminDb.collection('appointments')
     .where('patientId', '==', id)
-    .orderBy('startTime', 'desc')
     .get()
 
   const appointments = await Promise.all(appointmentsSnap.docs.map(async doc => {
@@ -61,7 +61,10 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
 
     return apt
   }))
-  
+
+  // Sort newest-first in memory (avoids composite index requirement on Firestore)
+  appointments.sort((a, b) => (b.startTime?.getTime() ?? 0) - (a.startTime?.getTime() ?? 0))
+
   patient.appointments = appointments
 
   const age = computeAge(patient.dob)

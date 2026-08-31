@@ -109,13 +109,13 @@ export async function PATCH(request: Request) {
     // JSON settings update
     const body = await request.json()
     const {
-      name, email, clinicName, address, mapsUrl, websiteUrl, phone,
+      name, email, clinicName, address, mapsUrl, websiteUrl, phone, whatsappPhone,
       specialty, practiceDescription, themeColor, qualifications, slotDurationMins,
       timings, paymentDetails, reminderIntervals,
       registrationNumber, youtubeLinks, products, pageViews,
       newPassword,
       enableChiefComplaint, enableMedicalHistory,
-      consultationFee, followUpFee,
+      consultationFee, followUpFee, summaryHour,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -127,6 +127,7 @@ export async function PATCH(request: Request) {
     if (mapsUrl !== undefined) updateData.mapsUrl = mapsUrl?.trim() || null
     if (websiteUrl !== undefined) updateData.websiteUrl = websiteUrl?.trim() || null
     if (phone !== undefined) updateData.phone = phone?.trim() || null
+    if (whatsappPhone !== undefined) updateData.whatsappPhone = whatsappPhone?.trim() || null
     if (specialty) updateData.specialty = specialty
     if (practiceDescription !== undefined) updateData.practiceDescription = practiceDescription?.trim() || null
     if (themeColor) updateData.themeColor = themeColor
@@ -149,6 +150,7 @@ export async function PATCH(request: Request) {
     if (enableMedicalHistory !== undefined) updateData.enableMedicalHistory = enableMedicalHistory
     if (consultationFee !== undefined) updateData.consultationFee = consultationFee?.trim() || null
     if (followUpFee !== undefined) updateData.followUpFee = followUpFee?.trim() || null
+    if (summaryHour !== undefined) updateData.summaryHour = typeof summaryHour === 'number' ? summaryHour : parseInt(summaryHour)
     
     if (products !== undefined) {
       // Upload any base64 product images to Storage to avoid Firestore 1MB document limits and invalid entity errors

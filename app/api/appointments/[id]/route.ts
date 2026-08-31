@@ -4,6 +4,56 @@ import { sendCancellation, sendSummaryUpdate } from '@/lib/whatsapp'
 import { sendEmail } from '@/lib/email'
 import { format, startOfDay, endOfDay } from 'date-fns'
 
+/**
+ * Sends the doctor an updated schedule summary for real-time same-day changes.
+ * Only fires AFTER the doctor's configured summaryHour (default 10am) — before that,
+ * the morning summary cron covers it. Uses whatsappPhone if set, falls back to phone.
+ */
+async function sendDoctorScheduleUpdate(doctorId: string, changeType: 'new_booking' | 'cancellation', patientName: string) {
+  const now = new Date()
+  const todayStart = startOfDay(now)
+  const todayEnd = endOfDay(now)
+
+  const doctorDoc = await adminDb.collection('doctors').doc(doctorId).get()
+  if (!doctorDoc.exists) return
+  const doctor = doctorDoc.data() as any
+
+  // Only fire after the configured summary hour (doctor has already received the morning summary)
+  const summaryHour: number = typeof doctor.summaryHour === 'number' ? doctor.summaryHour : 10
+  if (now.getHours() < summaryHour) return
+
+  // Prefer private whatsappPhone for notifications, fall back to clinic phone
+  const notifyPhone = doctor.whatsappPhone?.trim() || doctor.phone?.trim()
+  if (!notifyPhone) return
+
+  const remainingSnap = await adminDb.collection('appointments')
+    .where('doctorId', '==', doctorId)
+    .where('status', '==', 'BOOKED')
+    .where('startTime', '>=', todayStart)
+    .where('startTime', '<=', todayEnd)
+    .orderBy('startTime', 'asc')
+    .get()
+
+  let scheduleList = ''
+  for (const doc of remainingSnap.docs) {
+    const rApt = doc.data()
+    if (rApt.patientId) {
+      const pDoc = await adminDb.collection('patients').doc(rApt.patientId).get()
+      const pName = pDoc.data()?.name || 'Unknown'
+      const pPhone = pDoc.data()?.phone || ''
+      scheduleList += `${format(rApt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`
+    }
+  }
+  if (!scheduleList) scheduleList = 'No remaining appointments.'
+
+  await sendSummaryUpdate(notifyPhone, {
+    doctorName: doctor.name || 'Doctor',
+    cancelledPatientName: changeType === 'cancellation' ? patientName : `New booking: ${patientName}`,
+    remainingCount: remainingSnap.size.toString(),
+    scheduleList: scheduleList.trim(),
+  })
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -120,7 +170,7 @@ export async function PATCH(
       }
     }
 
-    // If cancelled, send notification
+    // If cancelled, send notification to patient + trigger doctor schedule update
     if (status === 'CANCELLED' && appointment.patient && appointment.doctor) {
       const dateStr = format(appointment.startTime, 'PPP')
       const timeStr = format(appointment.startTime, 'p')
@@ -128,8 +178,8 @@ export async function PATCH(
       const clinicPhone = appointment.doctor.phone || clinicName
       const msg = `Hi ${appointment.patient.name}, your appointment at ${clinicName} for ${dateStr} at ${timeStr} has been cancelled.`
 
-      const tasks = []
-      
+      const tasks: Promise<any>[] = []
+
       // Patient cancellation notification
       tasks.push(sendCancellation(appointment.patient.phone, {
         patientName: appointment.patient.name,
@@ -145,42 +195,26 @@ export async function PATCH(
         }))
       }
 
-      // If cancelled today, send updated summary to doctor
+      // If cancelled for today, send real-time updated schedule to doctor
+      // (only fires after the configured summaryHour — before that the morning summary covers it)
       const now = new Date()
-      if (appointment.startTime.toDateString() === now.toDateString() && appointment.doctor.phone) {
-        tasks.push((async () => {
-          const start = startOfDay(now)
-          const end = endOfDay(now)
-          const remainingSnap = await adminDb.collection('appointments')
-            .where('doctorId', '==', aptData.doctorId)
-            .where('status', '==', 'BOOKED')
-            .where('startTime', '>=', start)
-            .where('startTime', '<=', end)
-            .orderBy('startTime', 'asc')
-            .get()
-
-          let scheduleList = ''
-          for (const doc of remainingSnap.docs) {
-            const rApt = doc.data()
-            if (rApt.patientId) {
-              const pDoc = await adminDb.collection('patients').doc(rApt.patientId).get()
-              const pName = pDoc.data()?.name || 'Unknown'
-              const pPhone = pDoc.data()?.phone || 'Unknown'
-              scheduleList += `${format(rApt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`
-            }
-          }
-          if (!scheduleList) scheduleList = 'No remaining appointments.'
-
-          await sendSummaryUpdate(appointment.doctor.phone, {
-            doctorName: appointment.doctor.name || 'Doctor',
-            cancelledPatientName: appointment.patient.name,
-            remainingCount: remainingSnap.size.toString(),
-            scheduleList: scheduleList.trim()
-          })
-        })())
+      if (appointment.startTime.toDateString() === now.toDateString()) {
+        tasks.push(
+          sendDoctorScheduleUpdate(aptData.doctorId, 'cancellation', appointment.patient.name)
+            .catch(err => console.error('[DoctorScheduleUpdate Error]', err))
+        )
       }
 
       await Promise.all(tasks).catch(err => console.error('[Notification Error]', err))
+    }
+
+    // New same-day booking after summaryHour → notify doctor in real time
+    if (status === 'BOOKED' && appointment.patient) {
+      const now = new Date()
+      if (appointment.startTime.toDateString() === now.toDateString()) {
+        sendDoctorScheduleUpdate(aptData.doctorId, 'new_booking', appointment.patient.name)
+          .catch(err => console.error('[DoctorScheduleUpdate Error]', err))
+      }
     }
 
     return Response.json({ appointment })

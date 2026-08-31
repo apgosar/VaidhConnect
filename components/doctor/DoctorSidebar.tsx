@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Calendar, Users, Settings, LogOut,
-  Menu, X, CalendarOff
+  Menu, X, CalendarOff, MessageSquare
 } from 'lucide-react'
 
 interface DoctorSidebarProps {
@@ -19,6 +19,7 @@ const navItems = [
   { href: '/doctor/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/doctor/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/doctor/patients', icon: Users, label: 'Patients' },
+  { href: '/doctor/whatsapp-logs', icon: MessageSquare, label: 'WhatsApp Logs' },
   { href: '/doctor/settings', icon: Settings, label: 'Settings' },
 ]
 

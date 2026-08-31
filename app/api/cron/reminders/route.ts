@@ -28,8 +28,18 @@ export async function POST(request: Request) {
     let remindersProcessed = 0
 
     for (const hoursBeforeAppt of intervals) {
-      const windowStart = addHours(now, hoursBeforeAppt - 0.25) // 15 min window
-      const windowEnd = addHours(now, hoursBeforeAppt + 0.25)
+      let windowStart: Date
+      let windowEnd: Date
+
+      if (hoursBeforeAppt <= 1) {
+        // For 1-hour reminders: catch any appointment starting between now and ~1h15m from now
+        windowStart = now
+        windowEnd = addHours(now, 1.25)
+      } else {
+        // For 24-hour (or multi-hour) reminders: check window around the target hour
+        windowStart = addHours(now, hoursBeforeAppt - 0.5)
+        windowEnd = addHours(now, hoursBeforeAppt + 0.5)
+      }
 
       const field = hoursBeforeAppt >= 12 ? 'reminderSent24h' : 'reminderSent1h'
 

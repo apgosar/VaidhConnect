@@ -9,6 +9,7 @@ import Image from 'next/image'
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
   address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null
+  whatsappPhone?: string | null
   registrationNumber: string; photoUrl?: string | null;
   youtubeLinks: string[];
   products: { id: string; name: string; price: string; description: string; photoUrl?: string }[];
@@ -21,6 +22,7 @@ interface Doctor {
   enableMedicalHistory?: boolean
   consultationFee?: string | null
   followUpFee?: string | null
+  summaryHour?: number
 }
 
 export default function SettingsPage() {
@@ -38,6 +40,7 @@ function SettingsPageContent() {
   const [qrPreview, setQrPreview] = useState<string | null>(null)
   const [qrFile, setQrFile] = useState<File | null>(null)
   const qrInputRef = useRef<HTMLInputElement>(null)
+  const [sameAsWhatsapp, setSameAsWhatsapp] = useState(false)
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -55,6 +58,10 @@ function SettingsPageContent() {
       .then(r => r.json())
       .then(d => {
         setDoctor(d.doctor)
+        // Auto-detect if clinic phone matches whatsapp phone on load
+        if (d.doctor?.phone && d.doctor?.whatsappPhone && d.doctor.phone === d.doctor.whatsappPhone) {
+          setSameAsWhatsapp(true)
+        }
         setLoading(false)
       })
   }, [])
@@ -217,6 +224,7 @@ function SettingsPageContent() {
           mapsUrl: doctor.mapsUrl,
           websiteUrl: doctor.websiteUrl,
           phone: doctor.phone,
+          whatsappPhone: doctor.whatsappPhone,
           specialty: doctor.specialty,
           practiceDescription: doctor.practiceDescription,
           themeColor: doctor.themeColor,
@@ -232,6 +240,7 @@ function SettingsPageContent() {
           enableMedicalHistory: doctor.enableMedicalHistory ?? true,
           consultationFee: doctor.consultationFee,
           followUpFee: doctor.followUpFee,
+          summaryHour: doctor.summaryHour ?? 10,
         }),
       })
 
@@ -384,9 +393,61 @@ function SettingsPageContent() {
             <label className="form-label">Email</label>
             <input type="email" className="form-input" value={doctor.email} onChange={e => setDoctor((p: any) => p ? { ...p, email: e.target.value } : p)} />
           </div>
+
+          {/* Dr. WhatsApp Number */}
           <div className="form-group">
-            <label className="form-label">Clinic Phone</label>
-            <input type="tel" className="form-input" placeholder="+91 98765 43210" value={doctor.phone ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, phone: e.target.value } : p)} />
+            <label className="form-label" htmlFor="whatsappPhone">Dr. WhatsApp Number</label>
+            <input
+              id="whatsappPhone"
+              type="tel"
+              className="form-input"
+              placeholder="+91 98765 43210"
+              value={doctor.whatsappPhone ?? ''}
+              onChange={e => {
+                const val = e.target.value
+                setDoctor((p: any) => p ? { ...p, whatsappPhone: val } : p)
+                if (sameAsWhatsapp) {
+                  setDoctor((p: any) => p ? { ...p, phone: val } : p)
+                }
+              }}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>
+              Used internally to send you schedule notifications (booking confirmations, cancellations, daily summary). This number is never displayed anywhere.
+            </p>
+          </div>
+
+          {/* Clinic Phone */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="clinicPhone">Clinic Phone</label>
+            <input
+              id="clinicPhone"
+              type="tel"
+              className="form-input"
+              placeholder="+91 98765 43210"
+              value={doctor.phone ?? ''}
+              disabled={sameAsWhatsapp}
+              style={sameAsWhatsapp ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+              onChange={e => setDoctor((p: any) => p ? { ...p, phone: e.target.value } : p)}
+            />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sameAsWhatsapp}
+                onChange={e => {
+                  const checked = e.target.checked
+                  setSameAsWhatsapp(checked)
+                  if (checked && doctor.whatsappPhone) {
+                    setDoctor((p: any) => p ? { ...p, phone: p.whatsappPhone } : p)
+                  }
+                }}
+                className="w-4 h-4 rounded"
+                style={{ accentColor: 'var(--color-forest)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>Same as Dr. WhatsApp number</span>
+            </label>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>
+              Shown on the patient-facing landing page and included in WhatsApp messages sent to patients.
+            </p>
           </div>
           <div className="form-group col-span-2">
             <label className="form-label">Clinic Address</label>
@@ -474,6 +535,27 @@ function SettingsPageContent() {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        {/* Daily Summary Time */}
+        <div className="form-group pt-4 border-t border-slate-100">
+          <label className="form-label" htmlFor="summaryHour">Daily WhatsApp Summary Time</label>
+          <div className="flex items-center gap-3">
+            <select
+              id="summaryHour"
+              className="form-select w-40"
+              value={doctor.summaryHour ?? 10}
+              onChange={e => setDoctor((p: any) => p ? { ...p, summaryHour: parseInt(e.target.value) } : p)}
+            >
+              {Array.from({ length: 24 }, (_, i) => {
+                const label = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`
+                return <option key={i} value={i}>{label}</option>
+              })}
+            </select>
+            <p className="text-sm" style={{ color: 'var(--color-sage)' }}>
+              You'll receive today's appointment schedule on WhatsApp at this time every day.
+            </p>
           </div>
         </div>
 

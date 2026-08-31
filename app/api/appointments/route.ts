@@ -3,8 +3,8 @@ import { generateAvailableSlots } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
 import { startOfDay, endOfDay, format } from 'date-fns'
 import type { WeeklyTimings } from '@/lib/constants'
-import { sendBookingConfirmation } from '@/lib/whatsapp'
-import { sendEmail } from '@/lib/email'
+import { sendBookingConfirmation, sendReminder } from '@/lib/whatsapp'
+import { sendEmail, appointmentReminderHtml } from '@/lib/email'
 
 // GET /api/appointments?date=2024-01-15&patientPhone=xxx
 export async function GET(request: NextRequest) {
@@ -159,6 +159,15 @@ export async function POST(request: Request) {
     }
 
     const newAppointmentRef = adminDb.collection('appointments').doc()
+    const now = new Date()
+    const diffHours = (start.getTime() - now.getTime()) / (1000 * 60 * 60)
+
+    // Set reminder flags according to booking lead time:
+    // If booked < 24h before, 24h reminder is marked true (skip 24h cron).
+    // If booked < 1h before, 1h reminder is marked true (sent immediately below).
+    const reminderSent24h = diffHours < 24
+    const reminderSent1h = diffHours < 1
+
     const appointmentData = {
       patientId,
       doctorId: doctor.id,
@@ -166,8 +175,10 @@ export async function POST(request: Request) {
       endTime: end,
       status: 'BOOKED',
       chiefComplaint: chiefComplaint || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      reminderSent24h,
+      reminderSent1h,
+      createdAt: now,
+      updatedAt: now,
     }
     
     await newAppointmentRef.set(appointmentData)
@@ -180,24 +191,108 @@ export async function POST(request: Request) {
       const dateStr = format(start, 'PPP')
       const timeStr = format(start, 'p')
       const clinicName = doctor.clinicName || 'Clinic'
-      const msg = `Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${dateStr} at ${timeStr}.`
+      const appointmentTimeFormatted = `${dateStr} at ${timeStr}`
+      const clinicPhone = doctor.phone || clinicName
+      const msg = `Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${appointmentTimeFormatted}.`
 
-      await Promise.all([
+      const notificationTasks: Promise<any>[] = [
+        // 1. Appointment Confirmation WhatsApp
         sendBookingConfirmation(patient.phone, {
           patientName: patient.name,
           doctorName: doctor.name || 'Doctor',
-          appointmentTime: `${dateStr} at ${timeStr}`,
-          clinicPhone: doctor.phone || clinicName
+          appointmentTime: appointmentTimeFormatted,
+          clinicPhone: clinicPhone
         }),
+        // 1. Appointment Confirmation Email (if available)
         patient.email ? sendEmail({
           to: patient.email,
           subject: 'Appointment Confirmed',
           html: `<p>${msg}</p>`
         }) : Promise.resolve(),
-      ]).catch(err => console.error('[Notification Error]', err))
+      ]
+
+      // 2. If appointment is booked less than 1 hour before, send Appointment Reminder IMMEDIATELY
+      if (diffHours < 1) {
+        notificationTasks.push(
+          sendReminder(patient.phone, {
+            patientName: patient.name,
+            doctorName: doctor.name || 'Doctor',
+            appointmentTime: appointmentTimeFormatted,
+            clinicPhone: clinicPhone,
+            directionsUrl: doctor.mapsUrl || 'Contact clinic for directions'
+          })
+        )
+
+        if (patient.email) {
+          notificationTasks.push(
+            sendEmail({
+              to: patient.email,
+              subject: `Reminder: Upcoming Appointment — ${clinicName}`,
+              html: appointmentReminderHtml({
+                patientName: patient.name,
+                doctorName: doctor.name || 'Doctor',
+                clinicName: clinicName,
+                appointmentTime: appointmentTimeFormatted,
+                clinicPhone: doctor.phone ?? undefined,
+                clinicAddress: doctor.address ?? undefined,
+              })
+            })
+          )
+        }
+      }
+
+      await Promise.all(notificationTasks).catch(err => console.error('[Notification Error]', err))
+
+      // If this is a same-day booking and it's after the doctor's configured summaryHour,
+      // send a real-time updated schedule notification (before summaryHour the morning cron covers it)
+      const now = new Date()
+      const summaryHour: number = typeof doctor.summaryHour === 'number' ? doctor.summaryHour : 10
+      if (start.toDateString() === now.toDateString() && now.getHours() >= summaryHour) {
+        const notifyPhone = (doctor.whatsappPhone as string | undefined)?.trim() || (doctor.phone as string | undefined)?.trim()
+        if (notifyPhone) {
+          const { sendSummaryUpdate } = await import('@/lib/whatsapp')
+          const remainingSnap = await adminDb.collection('appointments')
+            .where('doctorId', '==', doctor.id)
+            .where('status', '==', 'BOOKED')
+            .where('startTime', '>=', startOfDay(now))
+            .where('startTime', '<=', endOfDay(now))
+            .orderBy('startTime', 'asc')
+            .get()
+
+          let scheduleList = ''
+          for (const doc of remainingSnap.docs) {
+            const rApt = doc.data()
+            if (rApt.patientId) {
+              const pDoc = await adminDb.collection('patients').doc(rApt.patientId).get()
+              const pName = pDoc.data()?.name || 'Unknown'
+              const pPhone = pDoc.data()?.phone || ''
+              scheduleList += `${format(rApt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`
+            }
+          }
+          if (!scheduleList) scheduleList = 'No remaining appointments.'
+
+          sendSummaryUpdate(notifyPhone, {
+            doctorName: doctor.name || 'Doctor',
+            cancelledPatientName: `New booking: ${patient.name}`,
+            remainingCount: remainingSnap.size.toString(),
+            scheduleList: scheduleList.trim(),
+          }).catch(err => console.error('[DoctorScheduleUpdate Error]', err))
+        }
+      }
     }
 
-    return Response.json({ appointment: { id: newAppointmentRef.id, ...appointmentData } }, { status: 201 })
+    return Response.json({
+      appointment: {
+        id: newAppointmentRef.id,
+        ...appointmentData,
+        doctor: {
+          name: doctor.name || 'Doctor',
+          clinicName: doctor.clinicName || 'Clinic',
+          address: doctor.address || undefined,
+          phone: doctor.phone || undefined,
+        },
+      },
+    }, { status: 201 })
   } catch (error) {
     console.error('[appointments-post]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
