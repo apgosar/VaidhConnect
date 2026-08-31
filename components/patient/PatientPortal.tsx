@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, MapPin, ExternalLink, Clock, ChevronRight, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
+import { Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
@@ -44,6 +44,57 @@ interface PatientRecord {
   medicalHistory?: string
   email?: string
   appointments: { id: string; startTime: string; chiefComplaint?: string }[]
+}
+
+function ProductCard({ prod, doctorPhone }: { prod: DoctorProfile['products'][0]; doctorPhone?: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = (prod.description?.length ?? 0) > 60
+
+  return (
+    <div className="card p-3 flex flex-col gap-2 shadow-sm animate-fade-in" style={{ border: '1px solid var(--color-sage-border)' }}>
+      {prod.photoUrl ? (
+        <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-50 mb-1">
+          <Image src={prod.photoUrl} alt={prod.name} width={150} height={150} className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-full aspect-square rounded-lg bg-slate-50 mb-1 flex items-center justify-center border border-slate-100">
+          <span className="text-4xl">💊</span>
+        </div>
+      )}
+      <h3 className="font-semibold text-sm leading-tight text-slate-800">{prod.name}</h3>
+      {prod.description && (
+        <div className="text-xs text-slate-600">
+          <p className={expanded ? 'whitespace-pre-wrap leading-relaxed' : 'line-clamp-2 leading-relaxed'}>
+            {prod.description}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setExpanded(prev => !prev)}
+              className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all hover:opacity-90 active:scale-95 shadow-xs cursor-pointer"
+              style={{
+                background: expanded ? 'rgba(15, 61, 46, 0.12)' : 'var(--color-primary-bg)',
+                color: 'var(--color-forest)',
+                border: '1px solid rgba(15, 61, 46, 0.28)',
+              }}
+            >
+              <span>{expanded ? 'Show Less' : 'Show More'}</span>
+              {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )}
+        </div>
+      )}
+      <p className="font-bold text-sm text-forest mt-auto">{prod.price}</p>
+      <a 
+        href={`https://wa.me/${doctorPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, I am interested in ${prod.name}`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn btn-outline btn-sm w-full mt-1 border-forest text-forest hover:bg-primary-bg"
+      >
+        Enquire
+      </a>
+    </div>
+  )
 }
 
 function formatDayTiming(day: WeeklyTimings[keyof WeeklyTimings]): string {
@@ -539,28 +590,7 @@ END:VCARD`
             <h2 className="text-xl font-bold px-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Products & Services</h2>
             <div className="grid grid-cols-2 gap-3">
               {doctor.products.map(prod => (
-                <div key={prod.id} className="card p-3 flex flex-col gap-2 shadow-sm animate-fade-in" style={{ border: '1px solid var(--color-sage-border)' }}>
-                  {prod.photoUrl ? (
-                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-50 mb-1">
-                      <Image src={prod.photoUrl} alt={prod.name} width={150} height={150} className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-square rounded-lg bg-slate-50 mb-1 flex items-center justify-center border border-slate-100">
-                      <span className="text-4xl">💊</span>
-                    </div>
-                  )}
-                  <h3 className="font-semibold text-sm leading-tight text-slate-800">{prod.name}</h3>
-                  {prod.description && <p className="text-xs text-slate-500 line-clamp-2">{prod.description}</p>}
-                  <p className="font-bold text-sm text-forest mt-auto">{prod.price}</p>
-                  <a 
-                    href={`https://wa.me/${doctor.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, I am interested in ${prod.name}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-outline btn-sm w-full mt-1 border-forest text-forest hover:bg-primary-bg"
-                  >
-                    Enquire
-                  </a>
-                </div>
+                <ProductCard key={prod.id} prod={prod} doctorPhone={doctor.phone} />
               ))}
             </div>
           </div>
