@@ -236,10 +236,6 @@ export default function DoctorLoginPage() {
             </>
           )}
         </div>
-
-        <p className="text-center text-xs mt-6" style={{ color: 'var(--color-sage-light)' }}>
-          Default credentials: doctor@clinic.app / changeme123
-        </p>
       </div>
     </div>
   )

@@ -1,11 +1,11 @@
 import { getSession } from '@/lib/auth/session'
 import { adminDb } from '@/lib/firebase/server'
-import { formatDate, formatDateOnly } from '@/lib/slots'
+import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Calendar, Users, CheckCircle2, Clock, ChevronRight } from 'lucide-react'
+import { Calendar, Users, CheckCircle2, Clock, ChevronRight, CalendarOff } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +41,14 @@ export default async function DoctorDashboard() {
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'COMPLETED')
     .where('startTime', '>=', todayStart)
+    .get()
+
+  // Firestore only allows an inequality filter on one field, so blocks
+  // starting before today (but still running into it, e.g. an overnight
+  // block) are caught by filtering endTime in memory below.
+  const blockedTodaySnap = await adminDb.collection('blocked_slots')
+    .where('doctorId', '==', doctorId)
+    .where('startTime', '<=', todayEnd)
     .get()
 
   const patientsCountSnap = await adminDb.collection('patients').count().get()
@@ -96,6 +104,12 @@ export default async function DoctorDashboard() {
     .filter((a: any) => a.startTime <= todayEnd)
 
   const completedToday = completedTodayDocs.length
+
+  const blockedToday = blockedTodaySnap.docs
+    .map((doc: any) => ({ id: doc.id, ...doc.data(), startTime: doc.data().startTime?.toDate(), endTime: doc.data().endTime?.toDate() }))
+    .filter((b: any) => b.endTime >= todayStart)
+    .sort((a: any, b: any) => a.startTime.getTime() - b.startTime.getTime())
+
   const totalPatients = patientsCountSnap.data().count
   const doctorProfile = doctorDoc.exists ? doctorDoc.data() : null
 
@@ -251,6 +265,56 @@ export default async function DoctorDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Blocked Today ─────────────────────────────────── */}
+      {blockedToday.length > 0 && (
+        <div className="card-data overflow-hidden">
+          <div
+            className="flex justify-between items-center px-5 py-4"
+            style={{ borderBottom: '1px solid var(--color-sage-border)' }}
+          >
+            <h2
+              className="font-semibold text-base flex items-center gap-2"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
+            >
+              <CalendarOff size={16} style={{ color: '#B54A3C' }} />
+              Blocked Today
+            </h2>
+            <Link
+              href="/doctor/blocked-slots"
+              className="text-sm flex items-center gap-1 font-medium"
+              style={{ color: 'var(--color-gold-dark)' }}
+            >
+              Manage <ChevronRight size={14} />
+            </Link>
+          </div>
+          <div>
+            {blockedToday.map((block: any, idx: number) => (
+              <div
+                key={block.id}
+                className="flex items-center justify-between px-5 py-3.5"
+                style={{
+                  borderBottom: idx < blockedToday.length - 1 ? '1px solid var(--color-sage-border)' : 'none',
+                }}
+              >
+                <div>
+                  <p className="text-sm" style={{ color: 'var(--color-charcoal)' }}>
+                    {block.reason || 'Blocked period'}
+                  </p>
+                  {isMultiDayBlock(block) && (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-sage)' }}>
+                      Multi-day: {formatDateOnly(block.startTime)} – {formatDateOnly(block.endTime)}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm font-medium font-tabular shrink-0 ml-3" style={{ color: '#B54A3C' }}>
+                  {formatBlockRangeForDay(block, today)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Upcoming appointments ────────────────────────── */}
       {upcomingAppts.length > 0 && (

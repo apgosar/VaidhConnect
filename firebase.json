@@ -1,0 +1,11 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": [
+    {
+      "bucket": "vaidhconnect-app.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ]
+}

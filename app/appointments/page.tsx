@@ -42,6 +42,10 @@ export default function AppointmentsPage() {
     setLoading(true)
     try {
       const res = await fetch(`/api/appointments?patientId=${encodeURIComponent(id)}`)
+      if (res.status === 401) {
+        router.push('/')
+        return
+      }
       const data = await res.json()
       setAppointments(data.appointments ?? [])
     } finally {
@@ -62,6 +66,10 @@ export default function AppointmentsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'CANCELLED' }),
       })
+      if (res.status === 401) {
+        router.push('/')
+        return
+      }
       if (res.ok) {
         setAppointments(prev => prev.filter(a => a.id !== id))
         setCancelConfirm(null)

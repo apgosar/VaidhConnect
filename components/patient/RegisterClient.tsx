@@ -27,12 +27,25 @@ export default function RegisterClient({ config }: RegisterClientProps) {
   const [age, setAge] = useState<number | null>(null)
 
   useEffect(() => {
-    const storedPhone = sessionStorage.getItem('phone')
-    if (!storedPhone) {
-      router.replace('/')
-      return
-    }
-    setPhone(storedPhone)
+    // Registration requires a verified OTP session — the phone number
+    // shown here (and the one the server will actually use) comes from
+    // that session, never from anything the client could set itself.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/patient/session')
+        const data = await res.json()
+        if (cancelled) return
+        if (!data.authenticated) {
+          router.replace('/')
+          return
+        }
+        setPhone(data.phoneNumber || '')
+      } catch {
+        if (!cancelled) router.replace('/')
+      }
+    })()
+    return () => { cancelled = true }
   }, [router])
 
   useEffect(() => {
@@ -60,7 +73,9 @@ export default function RegisterClient({ config }: RegisterClientProps) {
       const res = await fetch('/api/patients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, ...form }),
+        // No phone field — the server derives it from the verified OTP
+        // session, never from the request body.
+        body: JSON.stringify(form),
       })
 
       const data = await res.json()

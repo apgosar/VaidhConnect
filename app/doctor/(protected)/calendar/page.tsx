@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay, isBefore } from 'date-fns'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
-import { formatDate, computeAge } from '@/lib/slots'
+import { formatDate, computeAge, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 
 interface Appointment {
   id: string
@@ -17,9 +17,17 @@ interface Appointment {
   payment?: { id: string } | null
 }
 
+interface BlockedSlot {
+  id: string
+  startTime: string
+  endTime: string
+  reason?: string | null
+}
+
 export default function CalendarPage() {
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()))
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'agenda'>('week')
 
@@ -30,6 +38,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetchAppointments()
+    fetchBlockedSlots()
   }, [startDate])
 
   const fetchAppointments = async () => {
@@ -45,6 +54,18 @@ export default function CalendarPage() {
     }
   }
 
+  const fetchBlockedSlots = async () => {
+    try {
+      const from = weekStart.toISOString()
+      const to = weekEnd.toISOString()
+      const res = await fetch(`/api/doctor/blocked-slots?from=${from}&to=${to}`)
+      const data = await res.json()
+      setBlockedSlots(data.blocks ?? [])
+    } catch {
+      // non-critical — appointments still render without blocks
+    }
+  }
+
   // Filter out past and cancelled appointments
   const now = new Date()
   const activeAppointments = appointments.filter(a => {
@@ -55,6 +76,14 @@ export default function CalendarPage() {
 
   const getApptsForDay = (day: Date) =>
     activeAppointments.filter(a => isSameDay(parseISO(a.startTime), day))
+
+  // Overlap check (not same-day-start) so a block spanning past midnight
+  // still shows up on every day it actually covers.
+  const getBlocksForDay = (day: Date) => {
+    const dayStart = startOfDay(day)
+    const dayEnd = endOfDay(day)
+    return blockedSlots.filter(b => parseISO(b.startTime) < dayEnd && parseISO(b.endTime) > dayStart)
+  }
 
   const handlePrevWeek = () => {
     setStartDate(prev => {
@@ -157,8 +186,9 @@ export default function CalendarPage() {
         <div className="space-y-4">
           {weekDays.map(day => {
             const dayAppts = getApptsForDay(day)
+            const dayBlocks = getBlocksForDay(day)
             const isToday = isSameDay(day, new Date())
-            if (dayAppts.length === 0) return null
+            if (dayAppts.length === 0 && dayBlocks.length === 0) return null
             return (
               <div key={day.toISOString()}>
                 <div className="flex items-center gap-2 mb-2" style={{ color: isToday ? 'var(--color-forest)' : 'var(--color-sage)' }}>
@@ -172,14 +202,51 @@ export default function CalendarPage() {
                     {format(day, 'd')}
                   </div>
                   <span className="text-sm font-semibold font-tabular">{format(day, 'EEEE, dd MMM')}</span>
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
-                  >
-                    {dayAppts.length} appt{dayAppts.length > 1 ? 's' : ''}
-                  </span>
+                  {dayAppts.length > 0 && (
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
+                    >
+                      {dayAppts.length} appt{dayAppts.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {dayBlocks.length > 0 && (
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(181,74,60,0.08)', color: '#B54A3C' }}
+                    >
+                      {dayBlocks.length} blocked
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-2 pl-10">
+                  {dayBlocks.map(block => {
+                    const blockDates = { startTime: parseISO(block.startTime), endTime: parseISO(block.endTime) }
+                    const multiDay = isMultiDayBlock(blockDates)
+                    return (
+                    <Link
+                      key={block.id}
+                      href="/doctor/blocked-slots"
+                      className="block card-data p-3 hover:shadow-md transition-shadow"
+                      style={{ background: 'rgba(181,74,60,0.06)', border: '1px solid rgba(181,74,60,0.18)', color: '#B54A3C' }}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-sm">Blocked</p>
+                          {block.reason && <p className="text-xs opacity-70 mt-0.5">{block.reason}</p>}
+                          {multiDay && (
+                            <p className="text-xs opacity-60 mt-0.5">
+                              Multi-day: {format(blockDates.startTime, 'dd MMM')} – {format(blockDates.endTime, 'dd MMM')}
+                            </p>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium font-tabular shrink-0 ml-2">
+                          {formatBlockRangeForDay(blockDates, day)}
+                        </p>
+                      </div>
+                    </Link>
+                    )
+                  })}
                   {dayAppts.map(appt => (
                     <Link
                       key={appt.id}
@@ -208,7 +275,7 @@ export default function CalendarPage() {
             )
           })}
 
-          {activeAppointments.length === 0 && (
+          {activeAppointments.length === 0 && blockedSlots.length === 0 && (
             <div className="text-center py-12">
               <Calendar size={40} className="mx-auto mb-2" style={{ color: 'var(--color-sage-light)' }} />
               <p style={{ color: 'var(--color-sage)' }}>No upcoming appointments for this period</p>
@@ -224,6 +291,7 @@ export default function CalendarPage() {
               {weekDays.map(day => {
                 const isToday = isSameDay(day, new Date())
                 const dayAppts = getApptsForDay(day)
+                const dayBlocks = getBlocksForDay(day)
                 return (
                   <div
                     key={day.toISOString()}
@@ -246,6 +314,9 @@ export default function CalendarPage() {
                     {dayAppts.length > 0 && (
                       <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-gold-dark)' }}>{dayAppts.length} apt</p>
                     )}
+                    {dayBlocks.length > 0 && (
+                      <p className="text-xs mt-0.5 font-medium" style={{ color: '#B54A3C' }}>{dayBlocks.length} blocked</p>
+                    )}
                   </div>
                 )
               })}
@@ -255,9 +326,24 @@ export default function CalendarPage() {
             <div className="grid grid-cols-7 min-h-[300px]">
               {weekDays.map(day => {
                 const dayAppts = getApptsForDay(day)
+                const dayBlocks = getBlocksForDay(day)
                 const isToday = isSameDay(day, new Date())
                 return (
                   <div key={day.toISOString()} className={`border-r border-slate-100 last:border-0 p-2 space-y-1.5 ${isToday ? 'bg-blue-50/40' : ''}`}>
+                    {dayBlocks.map(block => {
+                      const blockDates = { startTime: parseISO(block.startTime), endTime: parseISO(block.endTime) }
+                      return (
+                      <Link
+                        key={block.id}
+                        href="/doctor/blocked-slots"
+                        className="block rounded-lg p-2 text-xs hover:opacity-80 transition-opacity"
+                        style={{ background: 'rgba(181,74,60,0.06)', border: '1px solid rgba(181,74,60,0.18)', color: '#B54A3C' }}
+                      >
+                        <p className="font-semibold truncate">{block.reason || 'Blocked'}</p>
+                        <p className="opacity-70 font-tabular">{formatBlockRangeForDay(blockDates, day)}</p>
+                      </Link>
+                      )
+                    })}
                     {dayAppts.map(appt => (
                       <Link
                         key={appt.id}

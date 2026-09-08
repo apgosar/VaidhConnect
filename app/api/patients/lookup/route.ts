@@ -1,18 +1,19 @@
 import { adminDb } from '@/lib/firebase/server'
-import { type NextRequest } from 'next/server'
+import { getPatientSession } from '@/lib/auth/patientSession'
 
-export async function GET(request: NextRequest) {
+// GET /api/patients/lookup — returns every patient record linked to the
+// CALLER'S OWN verified phone number (family members share a number).
+// No phone parameter is accepted: the number always comes from the
+// verified OTP session, never from client input.
+export async function GET() {
   try {
-    const phone = request.nextUrl.searchParams.get('phone')
-
-    if (!phone) {
-      return Response.json({ error: 'Phone number required' }, { status: 400 })
+    const session = await getPatientSession()
+    if (!session) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Normalize phone: strip spaces and dashes
-    const normalized = phone.replace(/[\s\-()]/g, '')
+    const normalized = session.phoneNumber.replace(/[\s\-()]/g, '')
 
-    // Return ALL patients linked to this phone number (family members)
     const patientsSnap = await adminDb.collection('patients')
       .where('phone', '==', normalized)
       .orderBy('createdAt', 'asc')
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const patients = await Promise.all(patientsSnap.docs.map(async (doc) => {
       const data = doc.data()
-      
+
       // Fetch upcoming appointments manually
       const appointmentsSnap = await adminDb.collection('appointments')
         .where('patientId', '==', doc.id)
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
         .orderBy('startTime', 'asc')
         .limit(5)
         .get()
-        
+
       const appointments = appointmentsSnap.docs.map((aptDoc: any) => {
         const aptData = aptDoc.data()
         return {
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
       const nameKey = p.name?.trim().toLowerCase()
       const dobKey = p.dob ? new Date(p.dob).toISOString().split('T')[0] : ''
       const key = `${nameKey}_${dobKey}`
-      
+
       if (!seen.has(key)) {
         seen.add(key)
         uniquePatients.push(p)

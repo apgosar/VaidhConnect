@@ -6,6 +6,7 @@ import { ArrowLeft, Calendar, Clock, CheckCircle2, ChevronRight, ChevronLeft, Do
 import { addDays, format, parseISO } from 'date-fns'
 import { computeAge, formatDate } from '@/lib/slots'
 import { createGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar'
+import SiteFooter from '@/components/SiteFooter'
 
 interface Patient {
   id: string
@@ -19,6 +20,12 @@ interface TimeSlot {
   start: string
   end: string
   label: string
+}
+
+interface BlockedPeriod {
+  startTime: string
+  endTime: string
+  reason: string | null
 }
 
 interface BookedAppointment {
@@ -39,6 +46,7 @@ export default function BookPage() {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [slots, setSlots] = useState<TimeSlot[]>([])
+  const [blockedPeriods, setBlockedPeriods] = useState<BlockedPeriod[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
   const [step, setStep] = useState<'select' | 'confirm' | 'success'>('select')
@@ -66,12 +74,14 @@ export default function BookPage() {
   const fetchSlots = async (date: Date) => {
     setLoadingSlots(true)
     setSlots([])
+    setBlockedPeriods([])
     setSelectedSlot(null)
     try {
       const dateStr = format(date, 'yyyy-MM-dd')
       const res = await fetch(`/api/appointments?mode=slots&date=${dateStr}`)
       const data = await res.json()
       setSlots(data.slots ?? [])
+      setBlockedPeriods(data.blockedPeriods ?? [])
     } catch {
       // silent fail
     } finally {
@@ -97,6 +107,11 @@ export default function BookPage() {
 
       const data = await res.json()
       if (!res.ok) {
+        if (res.status === 401) {
+          alert('Your session has expired. Please verify your phone number again.')
+          router.push('/')
+          return
+        }
         alert(data.error ?? 'Booking failed. Please try another slot.')
         return
       }
@@ -263,6 +278,7 @@ export default function BookPage() {
             </div>
           </div>
         </div>
+        <SiteFooter />
       </div>
     )
   }
@@ -327,6 +343,7 @@ export default function BookPage() {
           )}
           </button>
         </div>
+        <SiteFooter />
       </div>
     )
   }
@@ -395,6 +412,20 @@ export default function BookPage() {
             Available Slots — {format(selectedDate, 'EEEE, dd MMM')}
           </h3>
 
+          {!loadingSlots && blockedPeriods.length > 0 && (
+            <div
+              className="rounded-lg px-3 py-2.5 mb-3 space-y-1"
+              style={{ background: 'rgba(181,74,60,0.06)', border: '1px solid rgba(181,74,60,0.18)' }}
+            >
+              {blockedPeriods.map((block, idx) => (
+                <p key={idx} className="text-xs" style={{ color: '#B54A3C' }}>
+                  Doctor unavailable {format(parseISO(block.startTime), 'hh:mm a')} – {format(parseISO(block.endTime), 'hh:mm a')}
+                  {block.reason ? ` · ${block.reason}` : ''}
+                </p>
+              ))}
+            </div>
+          )}
+
           {loadingSlots ? (
             <div className="flex items-center justify-center py-8 gap-2" style={{ color: 'var(--color-sage)' }}>
               <div className="spinner" />
@@ -439,6 +470,7 @@ export default function BookPage() {
           Continue <ChevronRight size={18} />
         </button>
       </div>
+      <SiteFooter />
     </div>
   )
 }

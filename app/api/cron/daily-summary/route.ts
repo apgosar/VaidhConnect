@@ -4,13 +4,14 @@ import { startOfDay, endOfDay, format } from 'date-fns'
 
 // POST /api/cron/daily-summary
 // Secured with a secret token. Called every hour by a cron scheduler.
-// The doctor configures which hour they want the summary (summaryHour, default 10 = 10am).
+// No fallback: if CRON_SECRET is unset, every request is rejected rather
+// than silently accepting a value published in this repository's source.
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET ?? 'dev-cron-secret'
+    const cronSecret = process.env.CRON_SECRET
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== 'Bearer ' + cronSecret) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -22,17 +23,15 @@ export async function POST(request: Request) {
     const doctorDoc = doctorsSnap.docs[0]
     const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
-    // Use whatsappPhone for private notifications; fall back to clinic phone
     const notifyPhone = (doctor.whatsappPhone as string | undefined)?.trim() || (doctor.phone as string | undefined)?.trim()
     if (!notifyPhone) {
       return Response.json({ message: 'Doctor phone number not configured' })
     }
 
-    // Check if it is the configured summary hour (default 10 = 10am)
     const summaryHour: number = typeof doctor.summaryHour === 'number' ? doctor.summaryHour : 10
     const now = new Date()
     if (now.getHours() !== summaryHour) {
-      return Response.json({ message: `Not summary time yet. Configured hour: ${summaryHour}, current hour: ${now.getHours()}` })
+      return Response.json({ message: 'Not summary time yet. Configured hour: ' + summaryHour + ', current hour: ' + now.getHours() })
     }
 
     const start = startOfDay(now)
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
         const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
         const pName = pDoc.data()?.name || 'Unknown'
         const pPhone = pDoc.data()?.phone || ''
-        scheduleList += `${format(apt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`
+        scheduleList += format(apt.startTime.toDate(), 'p') + ' - ' + pName + ' - ' + pPhone + '\n'
       }
     }
     if (!scheduleList) scheduleList = 'No appointments scheduled for today.'
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
       scheduleList: scheduleList.trim()
     })
 
-    return Response.json({ message: `Sent daily summary to doctor with ${appointmentsSnap.size} appointments.` })
+    return Response.json({ message: 'Sent daily summary to doctor with ' + appointmentsSnap.size + ' appointments.' })
   } catch (error) {
     console.error('[cron-daily-summary]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
@@ -148,12 +148,73 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
   const [countryCode, setCountryCode] = useState('+91')
   const [phoneNumber, setPhoneNumber] = useState('')
   const phone = countryCode + phoneNumber
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [foundPatients, setFoundPatients] = useState<PatientRecord[] | null>(null)
   const router = useRouter()
 
+  // Identity is normally a verified phone number, not a typed-in one:
+  // 'checking' (looking for an existing session on mount), 'phone' (entry
+  // form), 'verified' (session established, running lookup).
+  //
+  // TEMPORARY: the WhatsApp OTP code delivery is bypassed right now (Meta
+  // error 132001 — patient_otp_verification template isn't approved), so
+  // there's currently no 'otp' step: submitting the phone form signs the
+  // patient in directly via /api/patient/otp/bypass. See that route's
+  // comment for how to restore real verification.
+  const [authStep, setAuthStep] = useState<'checking' | 'phone' | 'verified'>('checking')
+  const [otpSending, setOtpSending] = useState(false)
+
   const specialtyData = SPECIALTIES.find(s => s.value === doctor.specialty)
+
+  const runLookup = async () => {
+    setError('')
+    try {
+      const res = await fetch('/api/patients/lookup')
+      const data = await res.json()
+
+      if (!res.ok) {
+        // Session missing/expired between the check and this call — fall
+        // back to the phone step, which is the only screen that actually
+        // renders {error}, so the failure isn't stuck behind a spinner.
+        setError(data.error || 'Something went wrong. Please try again.')
+        setAuthStep('phone')
+        return
+      }
+
+      if (data.found) {
+        setFoundPatients(data.patients)
+      } else {
+        router.push('/register')
+      }
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setAuthStep('phone')
+    }
+  }
+
+  useEffect(() => {
+    // Skip straight to the lookup if a verified session already exists,
+    // so a returning patient doesn't have to re-verify their phone number
+    // every visit.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/patient/session')
+        const data = await res.json()
+        if (cancelled) return
+        if (data.authenticated) {
+          setAuthStep('verified')
+          await runLookup()
+        } else {
+          setAuthStep('phone')
+        }
+      } catch {
+        if (!cancelled) setAuthStep('phone')
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const downloadVCard = () => {
     const vcf = `BEGIN:VCARD
@@ -177,19 +238,25 @@ END:VCARD`
     URL.revokeObjectURL(url)
   }
 
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     const normalized = phone.replace(/[\s\-()]/g, '')
     if (normalized.length < 10) {
       setError('Please enter a valid phone number')
       return
     }
 
-    setLoading(true)
+    setOtpSending(true)
     setError('')
 
     try {
-      const res = await fetch(`/api/patients/lookup?phone=${encodeURIComponent(normalized)}`)
+      // TEMPORARY: signs in straight from the typed phone number — see
+      // /api/patient/otp/bypass for why.
+      const res = await fetch('/api/patient/otp/bypass', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized }),
+      })
       const data = await res.json()
 
       if (!res.ok) {
@@ -197,18 +264,41 @@ END:VCARD`
         return
       }
 
-      if (data.found) {
-        // Show the patient selection screen
-        setFoundPatients(data.patients)
-      } else {
-        sessionStorage.setItem('phone', normalized)
-        router.push('/register')
+      const { signInWithCustomToken } = await import('firebase/auth')
+      const { auth } = await import('@/lib/firebase/client')
+      const userCredential = await signInWithCustomToken(auth, data.customToken)
+      const idToken = await userCredential.user.getIdToken()
+
+      const sessionRes = await fetch('/api/patient/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!sessionRes.ok) {
+        setError('Failed to continue. Please try again.')
+        return
       }
+
+      setAuthStep('verified')
+      await runLookup()
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
-      setLoading(false)
+      setOtpSending(false)
     }
+  }
+
+  const handleChangeNumber = async () => {
+    try {
+      await fetch('/api/patient/session', { method: 'DELETE' })
+    } catch {
+      // ignore — worst case the stale cookie just expires on its own
+    }
+    setFoundPatients(null)
+    setAuthStep('phone')
+    setPhoneNumber('')
+    setError('')
   }
 
   const handleBookForPatient = (patient: PatientRecord) => {
@@ -225,8 +315,6 @@ END:VCARD`
   }
 
   const handleAddFamilyMember = () => {
-    const normalized = phone.replace(/[\s\-()]/g, '')
-    sessionStorage.setItem('phone', normalized)
     router.push('/register')
   }
 
@@ -370,7 +458,7 @@ END:VCARD`
                   Welcome back!
                 </h2>
                 <button
-                  onClick={() => setFoundPatients(null)}
+                  onClick={handleChangeNumber}
                   className="text-xs font-medium"
                   style={{ color: 'var(--color-sage)' }}
                 >
@@ -451,6 +539,13 @@ END:VCARD`
               Add a new patient for this number
             </button>
           </div>
+        ) : authStep === 'checking' || authStep === 'verified' ? (
+
+        /* ── Checking for an existing session / running the lookup ── */
+        <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2 flex items-center justify-center py-14">
+          <div className="spinner" />
+        </div>
+
         ) : (
 
         /* ── STEP 1: Phone Entry ── */
@@ -465,7 +560,7 @@ END:VCARD`
             Enter your mobile number to get started
           </p>
 
-          <form onSubmit={handlePhoneSubmit} className="space-y-4">
+          <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="form-group">
               <label className="form-label" htmlFor="phone-input">Mobile Number</label>
               <div className="flex gap-2">
@@ -502,10 +597,10 @@ END:VCARD`
             <button
               type="submit"
               className="btn btn-primary btn-lg w-full"
-              disabled={loading}
+              disabled={otpSending}
             >
-              {loading ? (
-                <><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Checking...</span></>
+              {otpSending ? (
+                <><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Continuing...</span></>
               ) : (
                 <><span>Continue</span><ChevronRight size={18} /></>
               )}

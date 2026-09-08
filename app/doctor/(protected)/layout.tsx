@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth/session'
 import DoctorSidebar from '@/components/doctor/DoctorSidebar'
+import SiteFooter from '@/components/SiteFooter'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default async function DoctorLayout({
   const clinicName = doctorProfile?.clinicName || session.clinicName || 'Clinic'
   const specialty = doctorProfile?.specialty || session.specialty || 'General Physician'
   const themeColor = doctorProfile?.themeColor || session.themeColor || '#0F3D2E'
+  const logoUrl = doctorProfile?.logoUrl ?? null
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-linen)' }}>
@@ -35,6 +37,7 @@ export default async function DoctorLayout({
         clinicName={clinicName}
         specialty={specialty}
         themeColor={themeColor}
+        logoUrl={logoUrl}
       />
 
       {/* Main content */}
@@ -67,6 +70,8 @@ export default async function DoctorLayout({
         >
           {children}
         </main>
+
+        <SiteFooter />
       </div>
     </div>
   )

@@ -1,8 +1,14 @@
 import { adminDb } from '@/lib/firebase/server'
+import { getSession } from '@/lib/auth/session'
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession()
+    if (!session?.uid) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const q = request.nextUrl.searchParams.get('q')
     const page = parseInt(request.nextUrl.searchParams.get('page') ?? '1')
     const limitParam = request.nextUrl.searchParams.get('limit')
@@ -20,20 +26,26 @@ export async function GET(request: NextRequest) {
         dob: data.dob?.toDate(),
         medicalHistory: data.medicalHistory,
         email: data.email,
-        _count: { appointments: 0 }, // Simplified since Firestore doesn't have relation counts easily
       }
     })
 
     if (q && q.length >= 2) {
       const lowerQ = q.toLowerCase()
-      allPatients = allPatients.filter((p: any) => 
-        (p.name && p.name.toLowerCase().includes(lowerQ)) || 
+      allPatients = allPatients.filter((p: any) =>
+        (p.name && p.name.toLowerCase().includes(lowerQ)) ||
         (p.phone && p.phone.includes(q))
       )
     }
 
     const total = allPatients.length
-    const paginatedPatients = allPatients.slice(skip, skip + limit)
+    const pageSlice = allPatients.slice(skip, skip + limit)
+
+    // Aggregation count query, not a full fetch — cheap even with many
+    // appointments, and only run for the page actually being returned.
+    const paginatedPatients = await Promise.all(pageSlice.map(async (p: any) => {
+      const countSnap = await adminDb.collection('appointments').where('patientId', '==', p.id).count().get()
+      return { ...p, _count: { appointments: countSnap.data().count } }
+    }))
 
     return Response.json({ patients: paginatedPatients, total })
   } catch (error) {

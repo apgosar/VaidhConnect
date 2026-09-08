@@ -1,10 +1,11 @@
 import { adminDb } from '@/lib/firebase/server'
-import { generateAvailableSlots } from '@/lib/slots'
+import { generateAvailableSlots, getWorkingWindowsForDay } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
 import { startOfDay, endOfDay, format } from 'date-fns'
 import type { WeeklyTimings } from '@/lib/constants'
 import { sendBookingConfirmation, sendReminder } from '@/lib/whatsapp'
 import { sendEmail, appointmentReminderHtml } from '@/lib/email'
+import { getPatientSession } from '@/lib/auth/patientSession'
 
 // GET /api/appointments?date=2024-01-15&patientPhone=xxx
 export async function GET(request: NextRequest) {
@@ -26,11 +27,14 @@ export async function GET(request: NextRequest) {
       const dayStart = startOfDay(targetDate)
       const dayEnd = endOfDay(targetDate)
 
-      // Firestore only allows inequality on one field, so we query by startTime
-      // We filter doctorId and status in memory to avoid needing composite indexes (since it's a single-clinic app anyway)
+      // Firestore only allows inequality on one field, so we query by
+      // startTime and filter the rest in memory. blocked_slots is queried
+      // as "starts on or before this day" (not "starts within this day")
+      // and then filtered by endTime >= dayStart below, so a multi-day
+      // block still shows up on every day it actually covers, not just
+      // the day it started on.
       const [blockedSlotsSnap, bookedSlotsSnap] = await Promise.all([
         adminDb.collection('blocked_slots')
-          .where('startTime', '>=', dayStart)
           .where('startTime', '<=', dayEnd)
           .get(),
         adminDb.collection('appointments')
@@ -44,14 +48,14 @@ export async function GET(request: NextRequest) {
           const data = doc.data()
           return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
         })
-        .filter(slot => slot.doctorId === doctor.id)
+        .filter((slot: any) => slot.doctorId === doctor.id && slot.endTime >= dayStart)
 
       const bookedSlots = bookedSlotsSnap.docs
         .map((doc: any) => {
           const data = doc.data()
           return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
         })
-        .filter(slot => slot.doctorId === doctor.id && slot.status === 'BOOKED')
+        .filter((slot: any) => slot.doctorId === doctor.id && slot.status === 'BOOKED')
 
       const slots = generateAvailableSlots({
         date: targetDate,
@@ -61,17 +65,54 @@ export async function GET(request: NextRequest) {
         bookedSlots,
       })
 
-      return Response.json({ slots })
+      // Surfaced to patients alongside the slot picker so they can see
+      // *why* fewer slots are available that day, instead of blocked
+      // time just silently vanishing from the list. Each period is
+      // clipped to the overlap with an actual clinic working-hour
+      // window — never the raw (possibly multi-day) block boundaries,
+      // which would show a nonsensical/backwards-looking time range once
+      // only their time-of-day is displayed (e.g. a block from 12:00 PM
+      // one day to 10:14 AM three days later becoming "12:00 PM – 10:14
+      // AM" on screen).
+      const workingWindows = getWorkingWindowsForDay(targetDate, doctor.timings as unknown as WeeklyTimings)
+      const blockedPeriods: Array<{ startTime: string; endTime: string; reason: string | null }> = []
+      for (const b of blockedSlots) {
+        for (const w of workingWindows) {
+          const overlapStart = b.startTime > w.start ? b.startTime : w.start
+          const overlapEnd = b.endTime < w.end ? b.endTime : w.end
+          if (overlapStart < overlapEnd) {
+            blockedPeriods.push({
+              startTime: overlapStart.toISOString(),
+              endTime: overlapEnd.toISOString(),
+              reason: b.reason ?? null,
+            })
+          }
+        }
+      }
+
+      return Response.json({ slots, blockedPeriods })
     }
 
     // Patient's appointments
     if (patientId) {
+      const patientSession = await getPatientSession()
+      if (!patientSession) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
       const patientDoc = await adminDb.collection('patients').doc(patientId).get()
       if (!patientDoc.exists) {
         return Response.json({ appointments: [] })
       }
-      
+
       const pData = patientDoc.data() as any
+
+      // Ownership check: this patient record must belong to the caller's
+      // own verified number, not just any patientId they happen to pass.
+      if (pData.phone !== patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
       // Find all duplicate patient IDs with same phone and name
       const dupSnap = await adminDb.collection('patients').where('phone', '==', pData.phone).get()
       const patientIds = dupSnap.docs
@@ -111,18 +152,31 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: 'Invalid query parameters' }, { status: 400 })
   } catch (error: any) {
     console.error('[appointments-get]', error)
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 })
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 // POST /api/appointments — book an appointment
 export async function POST(request: Request) {
   try {
+    const patientSession = await getPatientSession()
+    if (!patientSession) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { patientId, startTime, endTime, chiefComplaint } = body
 
     if (!patientId || !startTime || !endTime) {
       return Response.json({ error: 'patientId, startTime and endTime are required' }, { status: 400 })
+    }
+
+    // Ownership check: a verified caller may only book on behalf of a
+    // patient record under their own number (themselves or a family
+    // member registered under the same verified phone).
+    const ownerCheckDoc = await adminDb.collection('patients').doc(patientId).get()
+    if (!ownerCheckDoc.exists || ownerCheckDoc.data()?.phone !== patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const doctorsSnap = await adminDb.collection('doctors').limit(1).get()

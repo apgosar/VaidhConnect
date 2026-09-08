@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Uploads go through the server (Firebase Admin SDK), which bypasses
+    // these rules. Public assets (logos, doctor photos, product images)
+    // are read directly from their public GCS URL — a bucket-level ACL
+    // set by lib/storage.ts, not the Firebase Storage client SDK — so this
+    // deny-all does not affect them. It only blocks the client SDK from
+    // being used to read or write anything directly from the browser.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

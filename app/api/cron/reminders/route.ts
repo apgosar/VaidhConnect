@@ -5,13 +5,15 @@ import { formatDate } from '@/lib/slots'
 import { addHours, subHours } from 'date-fns'
 
 // POST /api/cron/reminders — called by a cron job every 15 minutes
-// Secured with a secret token
+// Secured with a secret token. No fallback: if CRON_SECRET is unset, every
+// request is rejected rather than silently accepting a value published in
+// this repository's source.
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET ?? 'dev-cron-secret'
+    const cronSecret = process.env.CRON_SECRET
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret || authHeader !== 'Bearer ' + cronSecret) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -32,18 +34,15 @@ export async function POST(request: Request) {
       let windowEnd: Date
 
       if (hoursBeforeAppt <= 1) {
-        // For 1-hour reminders: catch any appointment starting between now and ~1h15m from now
         windowStart = now
         windowEnd = addHours(now, 1.25)
       } else {
-        // For 24-hour (or multi-hour) reminders: check window around the target hour
         windowStart = addHours(now, hoursBeforeAppt - 0.5)
         windowEnd = addHours(now, hoursBeforeAppt + 0.5)
       }
 
       const field = hoursBeforeAppt >= 12 ? 'reminderSent24h' : 'reminderSent1h'
 
-      // Firestore allows only one field for inequality filters, so filter `field` in memory
       const appointmentsSnap = await adminDb.collection('appointments')
         .where('doctorId', '==', doctor.id)
         .where('status', '==', 'BOOKED')
@@ -73,11 +72,10 @@ export async function POST(request: Request) {
           clinicPhone: doctor.phone ?? undefined,
         }
 
-        // Send Email
         if (patient.email) {
           await sendEmail({
             to: patient.email,
-            subject: `Reminder: Appointment in ${hoursBeforeAppt} hour(s) — ${doctor.clinicName}`,
+            subject: 'Reminder: Appointment in ' + hoursBeforeAppt + ' hour(s) — ' + doctor.clinicName,
             html: appointmentReminderHtml({
               ...msgParams,
               clinicAddress: doctor.address ?? undefined,
@@ -85,7 +83,6 @@ export async function POST(request: Request) {
           })
         }
 
-        // Send WhatsApp
         const clinicPhone = doctor.phone || doctor.clinicName
         await sendReminder(patient.phone, {
           patientName: patient.name,
@@ -95,7 +92,6 @@ export async function POST(request: Request) {
           directionsUrl: doctor.mapsUrl || 'Contact clinic for directions'
         })
 
-        // Mark reminder as sent
         await adminDb.collection('appointments').doc(appt.id).update({
           [field]: true,
           updatedAt: new Date(),
@@ -105,7 +101,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ message: `Processed ${remindersProcessed} reminders` })
+    return Response.json({ message: 'Processed ' + remindersProcessed + ' reminders' })
   } catch (error) {
     console.error('[cron-reminders]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

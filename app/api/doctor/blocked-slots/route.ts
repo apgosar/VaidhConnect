@@ -15,16 +15,20 @@ export async function GET(request: Request) {
 
     let query: any = adminDb.collection('blocked_slots').where('doctorId', '==', session.uid)
 
-    if (from) {
-      query = query.where('startTime', '>=', new Date(from))
+    // This needs an OVERLAP query ("covers some part of [from, to]"), not
+    // "starts within [from, to]" — otherwise a multi-day block that
+    // started before `from` (e.g. last week, still running) silently
+    // disappears from this week's view. Firestore only allows an
+    // inequality filter on one field, so we filter startTime <= to here
+    // and endTime >= from in memory below.
+    if (to) {
+      query = query.where('startTime', '<=', new Date(to))
     }
-    
-    // Firestore only supports inequality filters on a single field, 
-    // so we sort by startTime and fetch, then filter 'to' in memory if needed.
+
     query = query.orderBy('startTime', 'asc')
 
     const snapshot = await query.get()
-    
+
     let blocks = snapshot.docs.map((doc: any) => {
       const data = doc.data()
       return {
@@ -35,9 +39,9 @@ export async function GET(request: Request) {
       }
     })
 
-    if (to) {
-      const toDate = new Date(to)
-      blocks = blocks.filter((b: any) => b.endTime <= toDate)
+    if (from) {
+      const fromDate = new Date(from)
+      blocks = blocks.filter((b: any) => b.endTime >= fromDate)
     }
 
     return Response.json({ blocks })

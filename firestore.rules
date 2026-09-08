@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All application reads and writes go through the server (Firebase
+    // Admin SDK via Next.js API routes), which bypasses these rules
+    // entirely. The client SDK (lib/firebase/client.ts) is used only for
+    // Firebase Authentication sign-in — never for direct Firestore access.
+    // Deny the client path outright so a leaked or misconfigured client
+    // config can never be used to read or write data directly.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

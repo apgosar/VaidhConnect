@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -13,11 +14,13 @@ interface DoctorSidebarProps {
   clinicName: string
   specialty: string
   themeColor: string
+  logoUrl?: string | null
 }
 
 const navItems = [
   { href: '/doctor/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/doctor/calendar', icon: Calendar, label: 'Calendar' },
+  { href: '/doctor/blocked-slots', icon: CalendarOff, label: 'Block Schedule' },
   { href: '/doctor/patients', icon: Users, label: 'Patients' },
   { href: '/doctor/whatsapp-logs', icon: MessageSquare, label: 'WhatsApp Logs' },
   { href: '/doctor/settings', icon: Settings, label: 'Settings' },
@@ -52,7 +55,7 @@ function SidebarBotanical() {
   )
 }
 
-export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarProps) {
+export default function DoctorSidebar({ doctorName, clinicName, logoUrl }: DoctorSidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -78,12 +81,22 @@ export default function DoctorSidebar({ doctorName, clinicName }: DoctorSidebarP
         style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
         <div className="flex items-center gap-3">
-          {/* Leaf emblem mark */}
+          {/* Clinic logo, falling back to the leaf emblem when none is set */}
           <div
-            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0 overflow-hidden"
             style={{ background: 'rgba(201,161,93,0.15)', border: '1px solid rgba(201,161,93,0.25)' }}
           >
-            🌿
+            {logoUrl ? (
+              <Image
+                src={logoUrl}
+                alt={`${clinicName} logo`}
+                width={40}
+                height={40}
+                className="w-full h-full object-contain bg-white"
+              />
+            ) : (
+              '🌿'
+            )}
           </div>
           <div className="min-w-0">
             <p

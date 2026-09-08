@@ -1,15 +1,27 @@
 import { adminDb } from '@/lib/firebase/server'
+import { getSession } from '@/lib/auth/session'
+import { getPatientSession } from '@/lib/auth/patientSession'
 
+// POST — patient self-registration from the public booking portal.
+// Requires a verified OTP session. The phone number is ALWAYS taken from
+// that session, never from the request body — so a verified caller can
+// only ever create or claim records under their own number, regardless
+// of what they put in the form.
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { phone, name, dob, medicalHistory, email } = body
-
-    if (!phone || !name || !dob) {
-      return Response.json({ error: 'Phone, name and date of birth are required' }, { status: 400 })
+    const patientSession = await getPatientSession()
+    if (!patientSession) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const normalized = phone.replace(/[\s\-()]/g, '')
+    const body = await request.json()
+    const { name, dob, medicalHistory, email } = body
+
+    if (!name || !dob) {
+      return Response.json({ error: 'Name and date of birth are required' }, { status: 400 })
+    }
+
+    const normalized = patientSession.phoneNumber.replace(/[\s\-()]/g, '')
 
     // Find or create: Check if patient with same phone, name, and DOB already exists
     const existingSnap = await adminDb.collection('patients').where('phone', '==', normalized).get()
@@ -71,8 +83,15 @@ export async function POST(request: Request) {
   }
 }
 
+// PUT — edit a patient's record. Doctor-only: there is currently no
+// caller for this from the public patient portal.
 export async function PUT(request: Request) {
   try {
+    const session = await getSession()
+    if (!session?.uid) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { id, name, dob, medicalHistory, email } = body
 

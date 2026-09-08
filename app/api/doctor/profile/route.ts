@@ -62,7 +62,7 @@ export async function PATCH(request: Request) {
         }
         const buffer = Buffer.from(await logoFile.arrayBuffer())
         const ext = logoFile.name.split('.').pop() ?? 'jpg'
-        const logoUrl = await uploadFile(buffer, `logos/${session.uid}.${ext}`, logoFile.type)
+        const logoUrl = await uploadFile(buffer, `logos/${session.uid}.${ext}`, logoFile.type, { public: true })
         await doctorRef.update({ logoUrl })
         return Response.json({ doctor: { logoUrl } })
       }
@@ -77,7 +77,7 @@ export async function PATCH(request: Request) {
         }
         const buffer = Buffer.from(await qrCodeFile.arrayBuffer())
         const ext = qrCodeFile.name.split('.').pop() ?? 'jpg'
-        const qrCodeUrl = await uploadFile(buffer, `qrcodes/${session.uid}.${ext}`, qrCodeFile.type)
+        const qrCodeUrl = await uploadFile(buffer, `qrcodes/${session.uid}.${ext}`, qrCodeFile.type, { public: true })
         
         const existingData = doctorDoc.data()
         let paymentDetails: any = existingData?.paymentDetails || {}
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
         }
         const buffer = Buffer.from(await photoFile.arrayBuffer())
         const ext = photoFile.name.split('.').pop() ?? 'jpg'
-        const photoUrl = await uploadFile(buffer, `photos/${session.uid}.${ext}`, photoFile.type)
+        const photoUrl = await uploadFile(buffer, `photos/${session.uid}.${ext}`, photoFile.type, { public: true })
         await doctorRef.update({ photoUrl })
         return Response.json({ doctor: { photoUrl } })
       }
@@ -165,7 +165,7 @@ export async function PATCH(request: Request) {
               const buffer = Buffer.from(base64Data, 'base64');
               const ext = mimeType.split('/')[1] || 'jpg';
               // We need to import uploadFile at the top of the file, it's already imported!
-              const url = await uploadFile(buffer, `products/${session.uid}_${prod.id}.${ext}`, mimeType);
+              const url = await uploadFile(buffer, `products/${session.uid}_${prod.id}.${ext}`, mimeType, { public: true });
               prod.photoUrl = url;
             }
           } catch (err) {
@@ -213,6 +213,6 @@ export async function PATCH(request: Request) {
     return Response.json({ doctor: { id: updatedDoc.id, ...updatedDoc.data() } })
   } catch (error: any) {
     console.error('[doctor-profile-patch]', error)
-    return Response.json({ error: error.message || 'Internal server error' }, { status: 500 })
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -16,10 +16,15 @@ const auth = getAuth();
 const db = getFirestore();
 
 async function seed() {
-  const email = 'vaidhconnect@gmail.com';
-  const password = 'VaidhConnect@2026';
-  const name = 'Dr. VaidhConnect';
-  
+  const email = process.env.SEED_DOCTOR_EMAIL;
+  const password = process.env.SEED_DOCTOR_PASSWORD;
+  const name = process.env.SEED_DOCTOR_NAME || 'Doctor';
+
+  if (!email || !password) {
+    console.error('SEED_DOCTOR_EMAIL and SEED_DOCTOR_PASSWORD must be set (e.g. in .env.local) before running this script.');
+    process.exit(1);
+  }
+
   let uid;
   try {
     const user = await auth.getUserByEmail(email);
@@ -46,7 +51,7 @@ async function seed() {
   await docRef.set({
     name,
     email,
-    clinicName: 'VaidhConnect Clinic',
+    clinicName: process.env.SEED_CLINIC_NAME || 'Clinic',
     specialty: 'Ayurveda',
     themeColor: '#10B981', // green for ayurveda
     slotDurationMins: 15,

@@ -12,6 +12,17 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Notice: We explicitly DO NOT ignore .env here!
-# This ensures Cloud Build receives the .env file so that Next.js 
-# can securely bake NEXT_PUBLIC_ variables into the client bundle at build-time.
+# Secrets must never enter the Cloud Build context. Runtime configuration
+# is injected via Secret Manager at deploy time (see deploy.ps1) instead
+# of being baked into the build.
+.env
+.env.*
+
+# Exception: .env.production is regenerated fresh by deploy.ps1 on every
+# run, containing ONLY the NEXT_PUBLIC_* subset. Those values aren't
+# secrets — Firebase's client config is designed to be public, and access
+# control lives in Firestore/Storage security rules, not in hiding this
+# key. They're needed at build time because Next.js inlines NEXT_PUBLIC_*
+# vars into the browser bundle at compile time; Cloud Run's runtime
+# secrets can't reach client-side code that way.
+!.env.production

@@ -39,6 +39,8 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Good Morning Dr. ${params[0] || 'Doctor'}, here is your schedule for today (${params[2] || 'Today'}). You have ${params[1] || '0'} appointment(s):\n\n${params[3] || 'No appointments'}`
     case 'daily_summary_update':
       return `Schedule Update for Dr. ${params[0] || 'Doctor'}:\nChange: ${params[1] || 'Update'}\nRemaining appointments today: ${params[2] || '0'}\n\nUpdated Schedule:\n${params[3] || 'No appointments'}`
+    case 'patient_otp_verification':
+      return `${params[0] || '000000'} is your verification code. Do not share this code with anyone. It expires in 10 minutes.`
     default:
       return params.length > 0 ? params.join('\n') : templateName
   }
@@ -67,15 +69,33 @@ async function logWhatsAppMessage(entry: {
   }
 }
 
+// Meta rejects template params containing newlines/tabs or runs of 4+
+// spaces (error 132018: "Param text cannot have new-line/tab characters
+// or more than 4 consecutive spaces"). Multi-line values built internally
+// (e.g. a schedule list joined with '\n') are flattened to a single
+// readable line instead of failing the send.
+function sanitizeTemplateParamText(text: string): string {
+  return text
+    .replace(/\r\n|\r|\n|\t/g, ' | ')
+    .replace(/ {4,}/g, '   ')
+}
+
 export async function sendWhatsAppTemplate(
   to: string,
   template: TemplateParams,
   options?: SendOptions
 ): Promise<boolean> {
-  const templateName = template.name
+  const sanitizedTemplate: TemplateParams = {
+    ...template,
+    components: template.components.map(c => ({
+      ...c,
+      parameters: c.parameters.map(p => ({ ...p, text: sanitizeTemplateParamText(p.text) })),
+    })),
+  }
+  const templateName = sanitizedTemplate.name
   const messageType = options?.messageType ?? templateName
   const recipientName = options?.recipientName ?? ''
-  const params = template.components
+  const params = sanitizedTemplate.components
     .flatMap(c => c.parameters)
     .map(p => p.text)
   const messageBody = options?.messageBody ?? constructMessageBody(templateName, params)
@@ -109,7 +129,7 @@ export async function sendWhatsAppTemplate(
         messaging_product: 'whatsapp',
         to: normalized,
         type: 'template',
-        template: template
+        template: sanitizedTemplate
       })
     })
 
@@ -266,4 +286,20 @@ export async function sendSummaryUpdate(to: string, params: {
       ]
     }]
   }, { messageType: 'Daily Summary (Update)', recipientName: params.doctorName })
+}
+
+// 6. Patient OTP Verification (`patient_otp_verification`) — Meta
+// "Authentication" category template. Must be pre-approved in Meta
+// Business Manager with exactly this name before this will send.
+export async function sendOtpCode(to: string, params: { code: string }) {
+  return sendWhatsAppTemplate(to, {
+    name: 'patient_otp_verification',
+    language: { code: 'en' },
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: params.code },
+      ]
+    }]
+  }, { messageType: 'OTP Verification', recipientName: 'Patient' })
 }
