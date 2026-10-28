@@ -1,6 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 
 // GET blocked slots
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     let query: any = db.col('blocked_slots').where('doctorId', '==', tenant.clinicId)
 
     // This needs an OVERLAP query ("covers some part of [from, to]"), not
-    // "starts within [from, to]" â€” otherwise a multi-day block that
+    // "starts within [from, to]" — otherwise a multi-day block that
     // started before `from` (e.g. last week, still running) silently
     // disappears from this week's view. Firestore only allows an
     // inequality filter on one field, so we filter startTime <= to here
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST â€” create a blocked slot
+// POST — create a blocked slot
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE â€” remove a blocked slot
+// DELETE — remove a blocked slot
 export async function DELETE(request: Request) {
   try {
     const tenant = await getTenant()

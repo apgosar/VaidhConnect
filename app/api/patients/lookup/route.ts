@@ -1,9 +1,9 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getPatientSession } from '@/lib/auth/patientSession'
 
-// GET /api/patients/lookup â€” returns every patient record linked to the
+// GET /api/patients/lookup — returns every patient record linked to the
 // CALLER'S OWN verified phone number (family members share a number).
 // No phone parameter is accepted: the number always comes from the
 // verified OTP session, never from client input.

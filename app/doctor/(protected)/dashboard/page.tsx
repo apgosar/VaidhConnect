@@ -1,4 +1,4 @@
-﻿import { getSession } from '@/lib/auth/session'
+import { getSession } from '@/lib/auth/session'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
@@ -133,7 +133,7 @@ export default async function DoctorDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* â”€â”€ Greeting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Greeting ─────────────────────────────────────── */}
       <div style={{ borderBottom: '1px solid var(--color-sage-border)', paddingBottom: '20px' }}>
         <div className="flex items-center gap-4">
           {doctorProfile?.logoUrl && (
@@ -155,7 +155,7 @@ export default async function DoctorDashboard() {
               className="text-2xl md:text-3xl font-bold leading-tight"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
             >
-              Good {greeting}, Dr. {firstName}&nbsp;ðŸŒ¿
+              Good {greeting}, Dr. {firstName}&nbsp;🌿
             </h1>
             <p
               className="mt-1 text-sm font-tabular"
@@ -167,11 +167,11 @@ export default async function DoctorDashboard() {
         </div>
       </div>
 
-      {/* â”€â”€ Stat Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Stat Cards ───────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map(({ label, value, icon: Icon }) => (
           <div key={label} className="card-data p-4">
-            {/* Icon â€” single tone-on-tone forest green palette */}
+            {/* Icon — single tone-on-tone forest green palette */}
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
               style={{ background: 'var(--color-primary-bg)' }}
@@ -191,7 +191,7 @@ export default async function DoctorDashboard() {
         ))}
       </div>
 
-      {/* â”€â”€ Today's Schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Today's Schedule ─────────────────────────────── */}
       <div className="card-data overflow-hidden">
         <div
           className="flex justify-between items-center px-5 py-4"
@@ -229,7 +229,7 @@ export default async function DoctorDashboard() {
                 }}
               >
                 <div className="flex items-center gap-3">
-                  {/* Avatar â€” forest green, white initial */}
+                  {/* Avatar — forest green, white initial */}
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                     style={{ background: 'var(--color-forest)' }}
@@ -241,7 +241,7 @@ export default async function DoctorDashboard() {
                       {appt.patient?.name ?? 'Unknown'}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
-                      {appt.patient?.dob ? computeAge(appt.patient.dob) : '?'} yrs Â· {appt.patient?.phone ?? ''}
+                      {appt.patient?.dob ? computeAge(appt.patient.dob) : '?'} yrs · {appt.patient?.phone ?? ''}
                     </p>
                   </div>
                 </div>
@@ -271,7 +271,7 @@ export default async function DoctorDashboard() {
         )}
       </div>
 
-      {/* â”€â”€ Blocked Today â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Blocked Today ─────────────────────────────────── */}
       {blockedToday.length > 0 && (
         <div className="card-data overflow-hidden">
           <div
@@ -308,7 +308,7 @@ export default async function DoctorDashboard() {
                   </p>
                   {isMultiDayBlock(block) && (
                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-sage)' }}>
-                      Multi-day: {formatDateOnly(block.startTime)} â€“ {formatDateOnly(block.endTime)}
+                      Multi-day: {formatDateOnly(block.startTime)} – {formatDateOnly(block.endTime)}
                     </p>
                   )}
                 </div>
@@ -321,7 +321,7 @@ export default async function DoctorDashboard() {
         </div>
       )}
 
-      {/* â”€â”€ Upcoming appointments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Upcoming appointments ────────────────────────── */}
       {upcomingAppts.length > 0 && (
         <div className="card-data overflow-hidden">
           <div
@@ -332,7 +332,7 @@ export default async function DoctorDashboard() {
               className="font-semibold text-base"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
             >
-              Upcoming â€” Next 7 Days
+              Upcoming — Next 7 Days
             </h2>
           </div>
           <div>

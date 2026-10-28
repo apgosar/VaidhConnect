@@ -1,6 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { type NextRequest } from 'next/server'
 
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const total = allPatients.length
     const pageSlice = allPatients.slice(skip, skip + limit)
 
-    // Aggregation count query, not a full fetch â€” cheap even with many
+    // Aggregation count query, not a full fetch — cheap even with many
     // appointments, and only run for the page actually being returned.
     const paginatedPatients = await Promise.all(pageSlice.map(async (p: any) => {
       const countSnap = await db.col('appointments').where('patientId', '==', p.id).count().get()

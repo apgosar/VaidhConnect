@@ -1,6 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { generateAvailableSlots, getWorkingWindowsForDay } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
 import { startOfDay, endOfDay, format } from 'date-fns'
@@ -73,10 +73,10 @@ export async function GET(request: NextRequest) {
       // *why* fewer slots are available that day, instead of blocked
       // time just silently vanishing from the list. Each period is
       // clipped to the overlap with an actual clinic working-hour
-      // window â€” never the raw (possibly multi-day) block boundaries,
+      // window — never the raw (possibly multi-day) block boundaries,
       // which would show a nonsensical/backwards-looking time range once
       // only their time-of-day is displayed (e.g. a block from 12:00 PM
-      // one day to 10:14 AM three days later becoming "12:00 PM â€“ 10:14
+      // one day to 10:14 AM three days later becoming "12:00 PM – 10:14
       // AM" on screen).
       const workingWindows = getWorkingWindowsForDay(targetDate, doctor.timings as unknown as WeeklyTimings)
       const blockedPeriods: Array<{ startTime: string; endTime: string; reason: string | null }> = []
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/appointments â€” book an appointment
+// POST /api/appointments — book an appointment
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
@@ -287,7 +287,7 @@ export async function POST(request: Request) {
           notificationTasks.push(
             sendEmail({
               to: patient.email,
-              subject: `Reminder: Upcoming Appointment â€” ${clinicName}`,
+              subject: `Reminder: Upcoming Appointment — ${clinicName}`,
               html: appointmentReminderHtml({
                 patientName: patient.name,
                 doctorName: doctor.name || 'Doctor',

@@ -1,12 +1,12 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { getPatientSession } from '@/lib/auth/patientSession'
 
-// POST â€” patient self-registration from the public booking portal.
+// POST — patient self-registration from the public booking portal.
 // Requires a verified OTP session. The phone number is ALWAYS taken from
-// that session, never from the request body â€” so a verified caller can
+// that session, never from the request body — so a verified caller can
 // only ever create or claim records under their own number, regardless
 // of what they put in the form.
 export async function POST(request: Request) {
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT â€” edit a patient's record. Doctor-only: there is currently no
+// PUT — edit a patient's record. Doctor-only: there is currently no
 // caller for this from the public patient portal.
 export async function PUT(request: Request) {
   try {

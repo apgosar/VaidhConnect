@@ -1,12 +1,12 @@
 import { featureGate } from '@/lib/tenant/features'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { uploadFile } from '@/lib/storage'
 import { sendEmail } from '@/lib/email'
 
-// POST â€” log a payment
+// POST — log a payment
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT â€” upload receipt PDF
+// PUT — upload receipt PDF
 export async function PUT(request: Request) {
   try {
     const tenant = await getTenant()

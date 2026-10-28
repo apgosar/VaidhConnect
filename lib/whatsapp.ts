@@ -1,4 +1,4 @@
-﻿// WhatsApp Cloud API Integration
+// WhatsApp Cloud API Integration
 
 const API_VERSION = 'v19.0'
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
@@ -291,7 +291,7 @@ export async function sendSummaryUpdate(to: string, params: {
   }, { messageType: 'Daily Summary (Update)', recipientName: params.doctorName })
 }
 
-// 6. Patient OTP Verification (`patient_otp_verification`) â€” Meta
+// 6. Patient OTP Verification (`patient_otp_verification`) — Meta
 // "Authentication" category template. Must be pre-approved in Meta
 // Business Manager with exactly this name before this will send.
 export async function sendOtpCode(to: string, params: { code: string }) {

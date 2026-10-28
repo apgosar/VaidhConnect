@@ -1,11 +1,11 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { sendEmail, appointmentReminderHtml } from '@/lib/email'
+import { sendEmail, appointmentReminderHtml } from '@/lib/email'
 import { sendReminder } from '@/lib/whatsapp'
 import { formatDate } from '@/lib/slots'
 import { addHours, subHours } from 'date-fns'
 
-// POST /api/cron/reminders â€” called by a cron job every 15 minutes
+// POST /api/cron/reminders — called by a cron job every 15 minutes
 // Secured with a secret token. No fallback: if CRON_SECRET is unset, every
 // request is rejected rather than silently accepting a value published in
 // this repository's source.
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         if (patient.email) {
           await sendEmail({
             to: patient.email,
-            subject: 'Reminder: Appointment in ' + hoursBeforeAppt + ' hour(s) â€” ' + doctor.clinicName,
+            subject: 'Reminder: Appointment in ' + hoursBeforeAppt + ' hour(s) — ' + doctor.clinicName,
             html: appointmentReminderHtml({
               ...msgParams,
               clinicAddress: doctor.address ?? undefined,

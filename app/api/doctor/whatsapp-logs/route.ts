@@ -1,6 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { adminDb } from '@/lib/firebase/server'
+import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { constructMessageBody } from '@/lib/whatsapp'
 import { type NextRequest } from 'next/server'

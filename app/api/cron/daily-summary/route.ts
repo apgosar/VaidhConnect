@@ -1,6 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-﻿import { sendDailySummary } from '@/lib/whatsapp'
+import { sendDailySummary } from '@/lib/whatsapp'
 import { startOfDay, endOfDay, format } from 'date-fns'
 
 // POST /api/cron/daily-summary
