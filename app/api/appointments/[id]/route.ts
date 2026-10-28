@@ -1,16 +1,17 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb, type TenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { getPatientSession } from '@/lib/auth/patientSession'
 import { sendCancellation, sendSummaryUpdate } from '@/lib/whatsapp'
 import { sendEmail } from '@/lib/email'
 import { format, startOfDay, endOfDay } from 'date-fns'
 
-async function sendDoctorScheduleUpdate(doctorId: string, changeType: 'new_booking' | 'cancellation', patientName: string) {
+async function sendDoctorScheduleUpdate(db: TenantDb, doctorId: string, changeType: 'new_booking' | 'cancellation', patientName: string) {
   const now = new Date()
   const todayStart = startOfDay(now)
   const todayEnd = endOfDay(now)
 
-  const doctorDoc = await adminDb.collection('doctors').doc(doctorId).get()
+  const doctorDoc = await db.profile().get()
   if (!doctorDoc.exists) return
   const doctor = doctorDoc.data() as any
 
@@ -20,7 +21,7 @@ async function sendDoctorScheduleUpdate(doctorId: string, changeType: 'new_booki
   const notifyPhone = doctor.whatsappPhone?.trim() || doctor.phone?.trim()
   if (!notifyPhone) return
 
-  const remainingSnap = await adminDb.collection('appointments')
+  const remainingSnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'BOOKED')
     .where('startTime', '>=', todayStart)
@@ -32,7 +33,7 @@ async function sendDoctorScheduleUpdate(doctorId: string, changeType: 'new_booki
   for (const doc of remainingSnap.docs) {
     const rApt = doc.data()
     if (rApt.patientId) {
-      const pDoc = await adminDb.collection('patients').doc(rApt.patientId).get()
+      const pDoc = await db.col('patients').doc(rApt.patientId).get()
       const pName = pDoc.data()?.name || 'Unknown'
       const pPhone = pDoc.data()?.phone || ''
       scheduleList += format(rApt.startTime.toDate(), 'p') + ' - ' + pName + ' - ' + pPhone + '\n'
@@ -56,6 +57,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -63,7 +67,7 @@ export async function GET(
 
     const { id } = await params
 
-    const appointmentRef = adminDb.collection('appointments').doc(id)
+    const appointmentRef = db.col('appointments').doc(id)
     const appointmentDoc = await appointmentRef.get()
 
     if (!appointmentDoc.exists) {
@@ -79,7 +83,7 @@ export async function GET(
     }
 
     if (aptData.patientId) {
-      const patientDoc = await adminDb.collection('patients').doc(aptData.patientId).get()
+      const patientDoc = await db.col('patients').doc(aptData.patientId).get()
       if (patientDoc.exists) {
         const pd = patientDoc.data() as any
         appointment.patient = {
@@ -90,13 +94,13 @@ export async function GET(
       }
     }
 
-    const prescriptionSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', id).get()
+    const prescriptionSnap = await db.col('prescriptions').where('appointmentId', '==', id).get()
     if (!prescriptionSnap.empty) {
       const pDoc = prescriptionSnap.docs[0]
       appointment.prescription = { id: pDoc.id, ...pDoc.data() }
     }
 
-    const paymentSnap = await adminDb.collection('payments').where('appointmentId', '==', id).get()
+    const paymentSnap = await db.col('payments').where('appointmentId', '==', id).get()
     if (!paymentSnap.empty) {
       const payDoc = paymentSnap.docs[0]
       appointment.payment = { id: payDoc.id, ...payDoc.data() }
@@ -114,11 +118,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const { id } = await params
     const body = await request.json()
     const { status, chiefComplaint, consultationNotes } = body
 
-    const appointmentRef = adminDb.collection('appointments').doc(id)
+    const appointmentRef = db.col('appointments').doc(id)
     const appointmentDoc = await appointmentRef.get()
 
     if (!appointmentDoc.exists) {
@@ -143,7 +150,7 @@ export async function PATCH(
     if (!authorized && isBareCancellation && existingData.patientId) {
       const patientSession = await getPatientSession()
       if (patientSession) {
-        const patientDoc = await adminDb.collection('patients').doc(existingData.patientId).get()
+        const patientDoc = await db.col('patients').doc(existingData.patientId).get()
         const patientPhone = patientDoc.exists ? patientDoc.data()?.phone : null
         if (patientPhone && patientPhone === patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
           authorized = true
@@ -172,7 +179,7 @@ export async function PATCH(
     } as any
 
     if (aptData.patientId) {
-      const patientDoc = await adminDb.collection('patients').doc(aptData.patientId).get()
+      const patientDoc = await db.col('patients').doc(aptData.patientId).get()
       if (patientDoc.exists) {
         const pd = patientDoc.data() as any
         appointment.patient = { name: pd.name, phone: pd.phone, email: pd.email }
@@ -180,7 +187,7 @@ export async function PATCH(
     }
 
     if (aptData.doctorId) {
-      const doctorDoc = await adminDb.collection('doctors').doc(aptData.doctorId).get()
+      const doctorDoc = await db.profile().get()
       if (doctorDoc.exists) {
         appointment.doctor = {
           clinicName: doctorDoc.data()?.clinicName,
@@ -216,7 +223,7 @@ export async function PATCH(
       const now = new Date()
       if (appointment.startTime.toDateString() === now.toDateString()) {
         tasks.push(
-          sendDoctorScheduleUpdate(aptData.doctorId, 'cancellation', appointment.patient.name)
+          sendDoctorScheduleUpdate(db, aptData.doctorId, 'cancellation', appointment.patient.name)
             .catch(err => console.error('[DoctorScheduleUpdate Error]', err))
         )
       }
@@ -227,7 +234,7 @@ export async function PATCH(
     if (status === 'BOOKED' && appointment.patient) {
       const now = new Date()
       if (appointment.startTime.toDateString() === now.toDateString()) {
-        sendDoctorScheduleUpdate(aptData.doctorId, 'new_booking', appointment.patient.name)
+        sendDoctorScheduleUpdate(db, aptData.doctorId, 'new_booking', appointment.patient.name)
           .catch(err => console.error('[DoctorScheduleUpdate Error]', err))
       }
     }

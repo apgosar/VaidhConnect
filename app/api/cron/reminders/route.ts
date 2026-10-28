@@ -1,15 +1,19 @@
-import { adminDb } from '@/lib/firebase/server'
-import { sendEmail, appointmentReminderHtml } from '@/lib/email'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { sendEmail, appointmentReminderHtml } from '@/lib/email'
 import { sendReminder } from '@/lib/whatsapp'
 import { formatDate } from '@/lib/slots'
 import { addHours, subHours } from 'date-fns'
 
-// POST /api/cron/reminders — called by a cron job every 15 minutes
+// POST /api/cron/reminders â€” called by a cron job every 15 minutes
 // Secured with a secret token. No fallback: if CRON_SECRET is unset, every
 // request is rejected rather than silently accepting a value published in
 // this repository's source.
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
@@ -17,12 +21,10 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-    if (doctorsSnap.empty) {
+    const doctorDoc = await db.profile().get()
+    if (!doctorDoc.exists) {
       return Response.json({ message: 'No doctor configured' })
     }
-    
-    const doctorDoc = doctorsSnap.docs[0]
     const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
     const intervals = (doctor.reminderIntervals as number[]) ?? [24, 1]
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
 
       const field = hoursBeforeAppt >= 12 ? 'reminderSent24h' : 'reminderSent1h'
 
-      const appointmentsSnap = await adminDb.collection('appointments')
+      const appointmentsSnap = await db.col('appointments')
         .where('doctorId', '==', doctor.id)
         .where('status', '==', 'BOOKED')
         .where('startTime', '>=', windowStart)
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
       for (const appt of appointments) {
         let patient: any = null
         if (appt.patientId) {
-          const pDoc = await adminDb.collection('patients').doc(appt.patientId).get()
+          const pDoc = await db.col('patients').doc(appt.patientId).get()
           if (pDoc.exists) patient = pDoc.data()
         }
 
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
         if (patient.email) {
           await sendEmail({
             to: patient.email,
-            subject: 'Reminder: Appointment in ' + hoursBeforeAppt + ' hour(s) — ' + doctor.clinicName,
+            subject: 'Reminder: Appointment in ' + hoursBeforeAppt + ' hour(s) â€” ' + doctor.clinicName,
             html: appointmentReminderHtml({
               ...msgParams,
               clinicAddress: doctor.address ?? undefined,
@@ -92,7 +94,7 @@ export async function POST(request: Request) {
           directionsUrl: doctor.mapsUrl || 'Contact clinic for directions'
         })
 
-        await adminDb.collection('appointments').doc(appt.id).update({
+        await db.col('appointments').doc(appt.id).update({
           [field]: true,
           updatedAt: new Date(),
         })

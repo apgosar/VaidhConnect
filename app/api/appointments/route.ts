@@ -1,4 +1,6 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { generateAvailableSlots, getWorkingWindowsForDay } from '@/lib/slots'
 import { type NextRequest } from 'next/server'
 import { startOfDay, endOfDay, format } from 'date-fns'
@@ -10,16 +12,18 @@ import { getPatientSession } from '@/lib/auth/patientSession'
 // GET /api/appointments?date=2024-01-15&patientPhone=xxx
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const date = request.nextUrl.searchParams.get('date')
     const patientId = request.nextUrl.searchParams.get('patientId')
     const mode = request.nextUrl.searchParams.get('mode') // 'slots' | 'patient'
 
     // Get doctor (single-doctor app)
-    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-    if (doctorsSnap.empty) {
+    const doctorDoc = await db.profile().get()
+    if (!doctorDoc.exists) {
       return Response.json({ error: 'Clinic not configured' }, { status: 503 })
     }
-    const doctorDoc = doctorsSnap.docs[0]
     const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
     if (mode === 'slots' && date) {
@@ -34,10 +38,10 @@ export async function GET(request: NextRequest) {
       // block still shows up on every day it actually covers, not just
       // the day it started on.
       const [blockedSlotsSnap, bookedSlotsSnap] = await Promise.all([
-        adminDb.collection('blocked_slots')
+        db.col('blocked_slots')
           .where('startTime', '<=', dayEnd)
           .get(),
-        adminDb.collection('appointments')
+        db.col('appointments')
           .where('startTime', '>=', dayStart)
           .where('startTime', '<=', dayEnd)
           .get(),
@@ -69,10 +73,10 @@ export async function GET(request: NextRequest) {
       // *why* fewer slots are available that day, instead of blocked
       // time just silently vanishing from the list. Each period is
       // clipped to the overlap with an actual clinic working-hour
-      // window — never the raw (possibly multi-day) block boundaries,
+      // window â€” never the raw (possibly multi-day) block boundaries,
       // which would show a nonsensical/backwards-looking time range once
       // only their time-of-day is displayed (e.g. a block from 12:00 PM
-      // one day to 10:14 AM three days later becoming "12:00 PM – 10:14
+      // one day to 10:14 AM three days later becoming "12:00 PM â€“ 10:14
       // AM" on screen).
       const workingWindows = getWorkingWindowsForDay(targetDate, doctor.timings as unknown as WeeklyTimings)
       const blockedPeriods: Array<{ startTime: string; endTime: string; reason: string | null }> = []
@@ -100,7 +104,7 @@ export async function GET(request: NextRequest) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      const patientDoc = await adminDb.collection('patients').doc(patientId).get()
+      const patientDoc = await db.col('patients').doc(patientId).get()
       if (!patientDoc.exists) {
         return Response.json({ appointments: [] })
       }
@@ -114,14 +118,14 @@ export async function GET(request: NextRequest) {
       }
 
       // Find all duplicate patient IDs with same phone and name
-      const dupSnap = await adminDb.collection('patients').where('phone', '==', pData.phone).get()
+      const dupSnap = await db.col('patients').where('phone', '==', pData.phone).get()
       const patientIds = dupSnap.docs
         .filter(d => d.data().name?.trim().toLowerCase() === pData.name?.trim().toLowerCase())
         .map(d => d.id)
 
       // Fetch all appointments for these IDs, filter in memory to avoid composite index
       const promises = patientIds.map(id => 
-        adminDb.collection('appointments').where('patientId', '==', id).get()
+        db.col('appointments').where('patientId', '==', id).get()
       )
       const snaps = await Promise.all(promises)
       
@@ -156,9 +160,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/appointments — book an appointment
+// POST /api/appointments â€” book an appointment
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const patientSession = await getPatientSession()
     if (!patientSession) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -174,23 +181,22 @@ export async function POST(request: Request) {
     // Ownership check: a verified caller may only book on behalf of a
     // patient record under their own number (themselves or a family
     // member registered under the same verified phone).
-    const ownerCheckDoc = await adminDb.collection('patients').doc(patientId).get()
+    const ownerCheckDoc = await db.col('patients').doc(patientId).get()
     if (!ownerCheckDoc.exists || ownerCheckDoc.data()?.phone !== patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-    if (doctorsSnap.empty) {
+    const doctorDoc = await db.profile().get()
+    if (!doctorDoc.exists) {
       return Response.json({ error: 'Clinic not configured' }, { status: 503 })
     }
-    const doctorDoc = doctorsSnap.docs[0]
     const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
     const start = new Date(startTime)
     const end = new Date(endTime)
 
     // Check for conflicts
-    const conflictSnap = await adminDb.collection('appointments')
+    const conflictSnap = await db.col('appointments')
       .where('doctorId', '==', doctor.id)
       .where('status', '==', 'BOOKED')
       .where('startTime', '>=', startOfDay(start))
@@ -212,7 +218,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'This slot is no longer available' }, { status: 409 })
     }
 
-    const newAppointmentRef = adminDb.collection('appointments').doc()
+    const newAppointmentRef = db.col('appointments').doc()
     const now = new Date()
     const diffHours = (start.getTime() - now.getTime()) / (1000 * 60 * 60)
 
@@ -238,7 +244,7 @@ export async function POST(request: Request) {
     await newAppointmentRef.set(appointmentData)
 
     // Fire & Forget notifications
-    const patientDoc = await adminDb.collection('patients').doc(patientId).get()
+    const patientDoc = await db.col('patients').doc(patientId).get()
     const patient = patientDoc.data() as any
 
     if (patient) {
@@ -281,7 +287,7 @@ export async function POST(request: Request) {
           notificationTasks.push(
             sendEmail({
               to: patient.email,
-              subject: `Reminder: Upcoming Appointment — ${clinicName}`,
+              subject: `Reminder: Upcoming Appointment â€” ${clinicName}`,
               html: appointmentReminderHtml({
                 patientName: patient.name,
                 doctorName: doctor.name || 'Doctor',
@@ -305,7 +311,7 @@ export async function POST(request: Request) {
         const notifyPhone = (doctor.whatsappPhone as string | undefined)?.trim() || (doctor.phone as string | undefined)?.trim()
         if (notifyPhone) {
           const { sendSummaryUpdate } = await import('@/lib/whatsapp')
-          const remainingSnap = await adminDb.collection('appointments')
+          const remainingSnap = await db.col('appointments')
             .where('doctorId', '==', doctor.id)
             .where('status', '==', 'BOOKED')
             .where('startTime', '>=', startOfDay(now))
@@ -317,7 +323,7 @@ export async function POST(request: Request) {
           for (const doc of remainingSnap.docs) {
             const rApt = doc.data()
             if (rApt.patientId) {
-              const pDoc = await adminDb.collection('patients').doc(rApt.patientId).get()
+              const pDoc = await db.col('patients').doc(rApt.patientId).get()
               const pName = pDoc.data()?.name || 'Unknown'
               const pPhone = pDoc.data()?.phone || ''
               scheduleList += `${format(rApt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`

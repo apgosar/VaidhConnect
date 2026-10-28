@@ -1,4 +1,6 @@
-import { adminDb, adminAuth } from '@/lib/firebase/server'
+import { adminAuth } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { uploadFile } from '@/lib/storage'
 // bcrypt is no longer used since Firebase handles password auth
@@ -13,7 +15,9 @@ export async function GET() {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const doctorDoc = await adminDb.collection('doctors').doc(session.uid).get()
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const doctorDoc = await tenantDb(tenant).profile().get()
     
     if (!doctorDoc.exists) {
       return Response.json({ error: 'Doctor not found' }, { status: 404 })
@@ -34,7 +38,9 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const doctorRef = adminDb.collection('doctors').doc(session.uid)
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const doctorRef = tenantDb(tenant).profile()
     const doctorDoc = await doctorRef.get()
     
     if (!doctorDoc.exists) {

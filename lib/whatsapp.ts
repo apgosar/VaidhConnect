@@ -1,4 +1,4 @@
-// WhatsApp Cloud API Integration
+﻿// WhatsApp Cloud API Integration
 
 const API_VERSION = 'v19.0'
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
@@ -58,8 +58,11 @@ async function logWhatsAppMessage(entry: {
 }) {
   try {
     // Lazy-import to avoid bundling server-only firebase-admin in edge contexts
-    const { adminDb } = await import('@/lib/firebase/server')
-    await adminDb.collection('whatsapp_logs').add({
+    const { getTenant } = await import('@/lib/tenant/resolve')
+    const { tenantDb } = await import('@/lib/db/tenant')
+    const tenant = await getTenant()
+    if (!tenant) throw new Error('no tenant in request scope')
+    await tenantDb(tenant).col('whatsapp_logs').add({
       ...entry,
       sentAt: new Date(),
     })
@@ -288,7 +291,7 @@ export async function sendSummaryUpdate(to: string, params: {
   }, { messageType: 'Daily Summary (Update)', recipientName: params.doctorName })
 }
 
-// 6. Patient OTP Verification (`patient_otp_verification`) — Meta
+// 6. Patient OTP Verification (`patient_otp_verification`) â€” Meta
 // "Authentication" category template. Must be pre-approved in Meta
 // Business Manager with exactly this name before this will send.
 export async function sendOtpCode(to: string, params: { code: string }) {

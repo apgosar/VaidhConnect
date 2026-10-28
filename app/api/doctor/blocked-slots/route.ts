@@ -1,9 +1,14 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 
 // GET blocked slots
 export async function GET(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -13,10 +18,10 @@ export async function GET(request: Request) {
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
-    let query: any = adminDb.collection('blocked_slots').where('doctorId', '==', session.uid)
+    let query: any = db.col('blocked_slots').where('doctorId', '==', session.uid)
 
     // This needs an OVERLAP query ("covers some part of [from, to]"), not
-    // "starts within [from, to]" — otherwise a multi-day block that
+    // "starts within [from, to]" â€” otherwise a multi-day block that
     // started before `from` (e.g. last week, still running) silently
     // disappears from this week's view. Firestore only allows an
     // inequality filter on one field, so we filter startTime <= to here
@@ -51,9 +56,12 @@ export async function GET(request: Request) {
   }
 }
 
-// POST — create a blocked slot
+// POST â€” create a blocked slot
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,7 +73,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'startTime and endTime are required' }, { status: 400 })
     }
 
-    const newBlockRef = adminDb.collection('blocked_slots').doc()
+    const newBlockRef = db.col('blocked_slots').doc()
     const blockData = {
       doctorId: session.uid,
       startTime: new Date(startTime),
@@ -83,9 +91,12 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE — remove a blocked slot
+// DELETE â€” remove a blocked slot
 export async function DELETE(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -96,7 +107,7 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'Block ID required' }, { status: 400 })
     }
 
-    const blockRef = adminDb.collection('blocked_slots').doc(id)
+    const blockRef = db.col('blocked_slots').doc(id)
     const blockDoc = await blockRef.get()
 
     if (!blockDoc.exists || blockDoc.data()?.doctorId !== session.uid) {

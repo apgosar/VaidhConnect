@@ -1,11 +1,16 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { uploadFile } from '@/lib/storage'
 import { sendEmail } from '@/lib/email'
 
-// POST — log a payment
+// POST â€” log a payment
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -17,7 +22,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'appointmentId, patientId, amount and mode are required' }, { status: 400 })
     }
 
-    const paySnap = await adminDb.collection('payments')
+    const paySnap = await db.col('payments')
       .where('appointmentId', '==', appointmentId)
       .limit(1)
       .get()
@@ -36,7 +41,7 @@ export async function POST(request: Request) {
     if (paySnap.empty) {
       paymentData.createdAt = new Date()
       paymentData.updatedAt = new Date()
-      const newRef = adminDb.collection('payments').doc()
+      const newRef = db.col('payments').doc()
       await newRef.set(paymentData)
       paymentId = newRef.id
     } else {
@@ -53,9 +58,12 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT — upload receipt PDF
+// PUT â€” upload receipt PDF
 export async function PUT(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -72,7 +80,7 @@ export async function PUT(request: Request) {
     const buffer = Buffer.from(await pdfFile.arrayBuffer())
     const receiptPdfPath = await uploadFile(buffer, `receipts/${paymentId}.pdf`, 'application/pdf')
 
-    const payRef = adminDb.collection('payments').doc(paymentId)
+    const payRef = db.col('payments').doc(paymentId)
     await payRef.update({ receiptPdfPath, updatedAt: new Date() })
 
     const updated = await payRef.get()

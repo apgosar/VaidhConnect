@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers';
-import { adminAuth, adminDb } from '../firebase/server';
+import { adminAuth } from '../firebase/server';
+import { getTenant } from '../tenant/resolve';
+import { tenantDb } from '../db/tenant';
 
 export async function createSessionCookie(idToken: string) {
   const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
@@ -38,8 +40,16 @@ export async function getSession() {
 
   try {
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const doctorDoc = await adminDb.collection('doctors').doc(decodedClaims.uid).get();
-    if (!doctorDoc.exists) return null;
+    // A session is only valid on the clinic it belongs to. Clinics provisioned
+    // with a clinicId claim must match the host's tenant exactly; legacy
+    // single-clinic accounts are identified by uid === clinicId.
+    const tenant = await getTenant();
+    if (!tenant) return null;
+    const claimedClinic = (decodedClaims as any).clinicId as string | undefined;
+    const belongs = claimedClinic ? claimedClinic === tenant.clinicId : decodedClaims.uid === tenant.clinicId;
+    if (!belongs) return null;
+    const profile = await tenantDb(tenant).profile().get();
+    if (!profile.exists) return null;
     return decodedClaims;
   } catch (error) {
     return null;

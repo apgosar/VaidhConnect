@@ -1,5 +1,7 @@
-import { getSession } from '@/lib/auth/session'
-import { adminDb } from '@/lib/firebase/server'
+﻿import { getSession } from '@/lib/auth/session'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+import { notFound } from 'next/navigation'
 import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
@@ -15,6 +17,9 @@ export default async function DoctorDashboard() {
   const session = await getSession()
   const doctorId = session?.uid
   if (!doctorId) return null
+  const tenant = await getTenant()
+  if (!tenant) notFound()
+  const db = tenantDb(tenant)
 
   const today = new Date()
   const todayStart = startOfDay(today)
@@ -22,14 +27,14 @@ export default async function DoctorDashboard() {
   const weekEnd = endOfDay(addDays(today, 7))
 
   // Run queries
-  const todayApptsSnap = await adminDb.collection('appointments')
+  const todayApptsSnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'BOOKED')
     .where('startTime', '>=', todayStart)
     .orderBy('startTime', 'asc')
     .get()
 
-  const upcomingApptsSnap = await adminDb.collection('appointments')
+  const upcomingApptsSnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'BOOKED')
     .where('startTime', '>', todayEnd)
@@ -37,7 +42,7 @@ export default async function DoctorDashboard() {
     .limit(10)
     .get()
 
-  const completedTodaySnap = await adminDb.collection('appointments')
+  const completedTodaySnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'COMPLETED')
     .where('startTime', '>=', todayStart)
@@ -46,13 +51,13 @@ export default async function DoctorDashboard() {
   // Firestore only allows an inequality filter on one field, so blocks
   // starting before today (but still running into it, e.g. an overnight
   // block) are caught by filtering endTime in memory below.
-  const blockedTodaySnap = await adminDb.collection('blocked_slots')
+  const blockedTodaySnap = await db.col('blocked_slots')
     .where('doctorId', '==', doctorId)
     .where('startTime', '<=', todayEnd)
     .get()
 
-  const patientsCountSnap = await adminDb.collection('patients').count().get()
-  const doctorDoc = await adminDb.collection('doctors').doc(doctorId).get()
+  const patientsCountSnap = await db.col('patients').count().get()
+  const doctorDoc = await db.profile().get()
 
   // Process today's appointments (filter out beyond todayEnd, manually join relations)
   const todayApptsDocs = todayApptsSnap.docs
@@ -65,19 +70,19 @@ export default async function DoctorDashboard() {
     let payment = null
 
     if (apt.patientId) {
-      const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
+      const pDoc = await db.col('patients').doc(apt.patientId).get()
       if (pDoc.exists) {
         const pd = pDoc.data() as any
         patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate() }
       }
     }
 
-    const rxSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
+    const rxSnap = await db.col('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
     if (!rxSnap.empty) {
       prescription = { id: rxSnap.docs[0].id }
     }
 
-    const paySnap = await adminDb.collection('payments').where('appointmentId', '==', apt.id).limit(1).get()
+    const paySnap = await db.col('payments').where('appointmentId', '==', apt.id).limit(1).get()
     if (!paySnap.empty) {
       payment = { id: paySnap.docs[0].id }
     }
@@ -93,7 +98,7 @@ export default async function DoctorDashboard() {
   const upcomingAppts = await Promise.all(upcomingApptsDocs.map(async (apt: any) => {
     let patient = null
     if (apt.patientId) {
-      const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
+      const pDoc = await db.col('patients').doc(apt.patientId).get()
       if (pDoc.exists) patient = { id: pDoc.id, name: pDoc.data()?.name }
     }
     return { ...apt, patient }
@@ -128,7 +133,7 @@ export default async function DoctorDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ── Greeting ─────────────────────────────────────── */}
+      {/* â”€â”€ Greeting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div style={{ borderBottom: '1px solid var(--color-sage-border)', paddingBottom: '20px' }}>
         <div className="flex items-center gap-4">
           {doctorProfile?.logoUrl && (
@@ -150,7 +155,7 @@ export default async function DoctorDashboard() {
               className="text-2xl md:text-3xl font-bold leading-tight"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
             >
-              Good {greeting}, Dr. {firstName}&nbsp;🌿
+              Good {greeting}, Dr. {firstName}&nbsp;ðŸŒ¿
             </h1>
             <p
               className="mt-1 text-sm font-tabular"
@@ -162,11 +167,11 @@ export default async function DoctorDashboard() {
         </div>
       </div>
 
-      {/* ── Stat Cards ───────────────────────────────────── */}
+      {/* â”€â”€ Stat Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map(({ label, value, icon: Icon }) => (
           <div key={label} className="card-data p-4">
-            {/* Icon — single tone-on-tone forest green palette */}
+            {/* Icon â€” single tone-on-tone forest green palette */}
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
               style={{ background: 'var(--color-primary-bg)' }}
@@ -186,7 +191,7 @@ export default async function DoctorDashboard() {
         ))}
       </div>
 
-      {/* ── Today's Schedule ─────────────────────────────── */}
+      {/* â”€â”€ Today's Schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="card-data overflow-hidden">
         <div
           className="flex justify-between items-center px-5 py-4"
@@ -224,7 +229,7 @@ export default async function DoctorDashboard() {
                 }}
               >
                 <div className="flex items-center gap-3">
-                  {/* Avatar — forest green, white initial */}
+                  {/* Avatar â€” forest green, white initial */}
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
                     style={{ background: 'var(--color-forest)' }}
@@ -236,7 +241,7 @@ export default async function DoctorDashboard() {
                       {appt.patient?.name ?? 'Unknown'}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
-                      {appt.patient?.dob ? computeAge(appt.patient.dob) : '?'} yrs · {appt.patient?.phone ?? ''}
+                      {appt.patient?.dob ? computeAge(appt.patient.dob) : '?'} yrs Â· {appt.patient?.phone ?? ''}
                     </p>
                   </div>
                 </div>
@@ -266,7 +271,7 @@ export default async function DoctorDashboard() {
         )}
       </div>
 
-      {/* ── Blocked Today ─────────────────────────────────── */}
+      {/* â”€â”€ Blocked Today â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {blockedToday.length > 0 && (
         <div className="card-data overflow-hidden">
           <div
@@ -303,7 +308,7 @@ export default async function DoctorDashboard() {
                   </p>
                   {isMultiDayBlock(block) && (
                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-sage)' }}>
-                      Multi-day: {formatDateOnly(block.startTime)} – {formatDateOnly(block.endTime)}
+                      Multi-day: {formatDateOnly(block.startTime)} â€“ {formatDateOnly(block.endTime)}
                     </p>
                   )}
                 </div>
@@ -316,7 +321,7 @@ export default async function DoctorDashboard() {
         </div>
       )}
 
-      {/* ── Upcoming appointments ────────────────────────── */}
+      {/* â”€â”€ Upcoming appointments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {upcomingAppts.length > 0 && (
         <div className="card-data overflow-hidden">
           <div
@@ -327,7 +332,7 @@ export default async function DoctorDashboard() {
               className="font-semibold text-base"
               style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
             >
-              Upcoming — Next 7 Days
+              Upcoming â€” Next 7 Days
             </h2>
           </div>
           <div>

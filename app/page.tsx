@@ -1,4 +1,5 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { FieldValue } from 'firebase-admin/firestore'
 import type { Metadata } from 'next'
 import PatientPortal from '@/components/patient/PatientPortal'
@@ -7,8 +8,9 @@ import type { WeeklyTimings } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-  const doctor = doctorsSnap.empty ? null : doctorsSnap.docs[0].data() as any
+  const tenant = await getTenant()
+  const profileDoc = tenant ? await tenantDb(tenant).profile().get() : null
+  const doctor = profileDoc?.exists ? profileDoc.data() as any : null
   const appUrl = process.env.NEXTAUTH_URL ?? 'https://vaidhconnect-893037849130.asia-south1.run.app'
   const iconUrl = `${appUrl}/api/clinic-icon`
   const title = doctor?.clinicName ?? 'Clinic'
@@ -33,9 +35,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+  const tenant = await getTenant()
+  const doctorDoc = tenant ? await tenantDb(tenant).profile().get() : null
 
-  if (doctorsSnap.empty) {
+  if (!tenant || !doctorDoc?.exists) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8">
@@ -46,11 +49,10 @@ export default async function HomePage() {
     )
   }
 
-  const doctorDoc = doctorsSnap.docs[0]
   const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
   // Increment page views in background
-  adminDb.collection('doctors').doc(doctor.id).update({ 
+  tenantDb(tenant).profile().update({ 
     pageViews: FieldValue.increment(1) 
   }).catch(e => console.error('Failed to increment page views', e))
 

@@ -1,14 +1,19 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { getPatientSession } from '@/lib/auth/patientSession'
 
-// POST — patient self-registration from the public booking portal.
+// POST â€” patient self-registration from the public booking portal.
 // Requires a verified OTP session. The phone number is ALWAYS taken from
-// that session, never from the request body — so a verified caller can
+// that session, never from the request body â€” so a verified caller can
 // only ever create or claim records under their own number, regardless
 // of what they put in the form.
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const patientSession = await getPatientSession()
     if (!patientSession) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,7 +29,7 @@ export async function POST(request: Request) {
     const normalized = patientSession.phoneNumber.replace(/[\s\-()]/g, '')
 
     // Find or create: Check if patient with same phone, name, and DOB already exists
-    const existingSnap = await adminDb.collection('patients').where('phone', '==', normalized).get()
+    const existingSnap = await db.col('patients').where('phone', '==', normalized).get()
     
     let existingPatient = null
     const targetDobStr = new Date(dob).toISOString().split('T')[0]
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
       }
       
       if (Object.keys(updateData).length > 1) {
-        await adminDb.collection('patients').doc(existingPatient.id).update(updateData)
+        await db.col('patients').doc(existingPatient.id).update(updateData)
       }
       
       return Response.json({ patient: existingPatient }, { status: 200 })
@@ -68,7 +73,7 @@ export async function POST(request: Request) {
       updatedAt: new Date(),
     }
 
-    const newPatientRef = adminDb.collection('patients').doc()
+    const newPatientRef = db.col('patients').doc()
     await newPatientRef.set(patientData)
 
     const patient = {
@@ -83,10 +88,13 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT — edit a patient's record. Doctor-only: there is currently no
+// PUT â€” edit a patient's record. Doctor-only: there is currently no
 // caller for this from the public patient portal.
 export async function PUT(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -99,7 +107,7 @@ export async function PUT(request: Request) {
       return Response.json({ error: 'Patient ID required' }, { status: 400 })
     }
 
-    const patientRef = adminDb.collection('patients').doc(id)
+    const patientRef = db.col('patients').doc(id)
     const patientDoc = await patientRef.get()
 
     if (!patientDoc.exists) {

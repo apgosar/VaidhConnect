@@ -1,4 +1,6 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { constructMessageBody } from '@/lib/whatsapp'
 import { type NextRequest } from 'next/server'
@@ -6,6 +8,9 @@ import { type NextRequest } from 'next/server'
 // GET /api/doctor/whatsapp-logs?limit=50&before=<ISO>
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -14,8 +19,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') ?? '50'), 100)
     const before = request.nextUrl.searchParams.get('before')
 
-    let query: any = adminDb
-      .collection('whatsapp_logs')
+    let query: any = db.col('whatsapp_logs')
       .orderBy('sentAt', 'desc')
       .limit(limit)
 

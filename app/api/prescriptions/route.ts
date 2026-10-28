@@ -1,10 +1,15 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+﻿import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { uploadFile } from '@/lib/storage'
 
-// POST — save/update prescription + generate PDF
+// POST â€” save/update prescription + generate PDF
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -17,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     // Upsert prescription
-    const rxSnap = await adminDb.collection('prescriptions')
+    const rxSnap = await db.col('prescriptions')
       .where('appointmentId', '==', appointmentId)
       .limit(1)
       .get()
@@ -35,7 +40,7 @@ export async function POST(request: Request) {
     if (rxSnap.empty) {
       prescriptionData.createdAt = new Date()
       prescriptionData.updatedAt = new Date()
-      const newRef = adminDb.collection('prescriptions').doc()
+      const newRef = db.col('prescriptions').doc()
       await newRef.set(prescriptionData)
       prescriptionId = newRef.id
     } else {
@@ -52,9 +57,12 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT — store PDF path after client generates it
+// PUT â€” store PDF path after client generates it
 export async function PUT(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -71,7 +79,7 @@ export async function PUT(request: Request) {
     const buffer = Buffer.from(await pdfFile.arrayBuffer())
     const pdfPath = await uploadFile(buffer, `prescriptions/${prescriptionId}.pdf`, 'application/pdf')
 
-    const rxRef = adminDb.collection('prescriptions').doc(prescriptionId)
+    const rxRef = db.col('prescriptions').doc(prescriptionId)
     await rxRef.update({ pdfPath, updatedAt: new Date() })
 
     const updated = await rxRef.get()
