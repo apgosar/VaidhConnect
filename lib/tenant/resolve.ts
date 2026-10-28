@@ -1,6 +1,7 @@
 import { headers } from 'next/headers'
 import { adminDb } from '../firebase/server'
 import type { Tenant } from './types'
+import { currentTenant } from './context'
 
 const CACHE_TTL_MS = 60_000
 const cache = new Map<string, { tenant: Tenant | null; at: number }>()
@@ -46,6 +47,9 @@ export async function resolveTenantForHost(rawHost: string | null): Promise<Tena
 
 /** Resolve the tenant for the current request from its Host header. */
 export async function getTenant(): Promise<Tenant | null> {
+  // Background work (cron) runs inside runWithTenant and has no Host header.
+  const ctx = currentTenant()
+  if (ctx) return ctx
   const h = await headers()
   return resolveTenantForHost(h.get('x-forwarded-host') ?? h.get('host'))
 }

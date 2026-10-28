@@ -1,74 +1,12 @@
-import { getTenant } from '@/lib/tenant/resolve'
-import { tenantDb } from '@/lib/db/tenant'
-import { sendDailySummary } from '@/lib/whatsapp'
-import { startOfDay, endOfDay, format } from 'date-fns'
+import { cronAuthorized, runForAllClinics } from '@/lib/cron'
+import { processDailySummary } from '@/lib/modules/dailySummary'
 
-// POST /api/cron/daily-summary
-// Secured with a secret token. Called every hour by a cron scheduler.
-// No fallback: if CRON_SECRET is unset, every request is rejected rather
-// than silently accepting a value published in this repository's source.
+// POST /api/cron/daily-summary — called hourly by Cloud Scheduler.
+// Each clinic decides for itself, in its own timezone, whether it is due.
 export async function POST(request: Request) {
-  try {
-    const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
-
-    if (!cronSecret || authHeader !== 'Bearer ' + cronSecret) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const doctorDoc = await db.profile().get()
-    if (!doctorDoc.exists) {
-      return Response.json({ message: 'No doctor configured' })
-    }
-    const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
-
-    const notifyPhone = (doctor.whatsappPhone as string | undefined)?.trim() || (doctor.phone as string | undefined)?.trim()
-    if (!notifyPhone) {
-      return Response.json({ message: 'Doctor phone number not configured' })
-    }
-
-    const summaryHour: number = typeof doctor.summaryHour === 'number' ? doctor.summaryHour : 10
-    const now = new Date()
-    if (now.getHours() !== summaryHour) {
-      return Response.json({ message: 'Not summary time yet. Configured hour: ' + summaryHour + ', current hour: ' + now.getHours() })
-    }
-
-    const start = startOfDay(now)
-    const end = endOfDay(now)
-
-    const appointmentsSnap = await db.col('appointments')
-      .where('doctorId', '==', doctor.id)
-      .where('status', '==', 'BOOKED')
-      .where('startTime', '>=', start)
-      .where('startTime', '<=', end)
-      .orderBy('startTime', 'asc')
-      .get()
-
-    let scheduleList = ''
-    for (const doc of appointmentsSnap.docs) {
-      const apt = doc.data()
-      if (apt.patientId) {
-        const pDoc = await db.col('patients').doc(apt.patientId).get()
-        const pName = pDoc.data()?.name || 'Unknown'
-        const pPhone = pDoc.data()?.phone || ''
-        scheduleList += format(apt.startTime.toDate(), 'p') + ' - ' + pName + ' - ' + pPhone + '\n'
-      }
-    }
-    if (!scheduleList) scheduleList = 'No appointments scheduled for today.'
-
-    await sendDailySummary(notifyPhone, {
-      doctorName: doctor.name || 'Doctor',
-      appointmentCount: appointmentsSnap.size.toString(),
-      date: format(now, 'PPP'),
-      scheduleList: scheduleList.trim()
-    })
-
-    return Response.json({ message: 'Sent daily summary to doctor with ' + appointmentsSnap.size + ' appointments.' })
-  } catch (error) {
-    console.error('[cron-daily-summary]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  if (!cronAuthorized(request)) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const summary = await runForAllClinics(tenant => processDailySummary(tenant))
+  return Response.json(summary, { status: summary.failed ? 207 : 200 })
 }
