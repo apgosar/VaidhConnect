@@ -47,6 +47,7 @@ export default function BookPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [slots, setSlots] = useState<TimeSlot[]>([])
   const [blockedPeriods, setBlockedPeriods] = useState<BlockedPeriod[]>([])
+  const [slotDurationMins, setSlotDurationMins] = useState<number | null>(null)
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
   const [step, setStep] = useState<'select' | 'confirm' | 'success'>('select')
@@ -82,6 +83,7 @@ export default function BookPage() {
       const data = await res.json()
       setSlots(data.slots ?? [])
       setBlockedPeriods(data.blockedPeriods ?? [])
+      setSlotDurationMins(data.slotDurationMins ?? null)
     } catch {
       // silent fail
     } finally {
@@ -411,6 +413,12 @@ export default function BookPage() {
             <Clock size={15} style={{ color: 'var(--color-sage)' }} />
             Available Slots — {format(selectedDate, 'EEEE, dd MMM')}
           </h3>
+
+          {slotDurationMins != null && (
+            <p className="text-xs mb-3" style={{ color: 'var(--color-sage-light)' }}>
+              Each appointment is {slotDurationMins} minutes
+            </p>
+          )}
 
           {!loadingSlots && blockedPeriods.length > 0 && (
             <div

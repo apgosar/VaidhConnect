@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return Response.json({ slots, blockedPeriods })
+      return Response.json({ slots, blockedPeriods, slotDurationMins: doctor.slotDurationMins })
     }
 
     // Patient's appointments

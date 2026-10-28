@@ -7,6 +7,7 @@ import { Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronU
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
+import SiteFooter from '@/components/SiteFooter'
 
 interface DoctorProfile {
   id: string
@@ -784,9 +785,9 @@ END:VCARD`
             </div>
           </div>
         )}
-        <p className="text-center text-xs pb-24" style={{ color: 'var(--color-sage)' }}>
-          Each appointment is {doctor.slotDurationMins} minutes
-        </p>
+        <div className="pb-24">
+          <SiteFooter />
+        </div>
       </div>
 
       {/* ── Sticky Bottom Navigation ── */}
