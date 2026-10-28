@@ -1,3 +1,4 @@
+import { featureGate } from '@/lib/tenant/features'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 ﻿import { adminDb } from '@/lib/firebase/server'
@@ -11,6 +12,8 @@ export async function POST(request: Request) {
     const tenant = await getTenant()
     if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
     const db = tenantDb(tenant)
+    const gated = await featureGate(db, 'payments')
+    if (gated) return gated
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -64,6 +67,8 @@ export async function PUT(request: Request) {
     const tenant = await getTenant()
     if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
     const db = tenantDb(tenant)
+    const gated = await featureGate(db, 'payments')
+    if (gated) return gated
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })

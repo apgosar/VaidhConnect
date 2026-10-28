@@ -14,7 +14,7 @@ export async function GET() {
 
     if (!doctor?.logoUrl) {
       // Redirect to static default favicon if no logo is set
-      return NextResponse.redirect(new URL('/favicon.ico', process.env.NEXTAUTH_URL ?? 'http://localhost:3001'))
+      return new NextResponse(null, { status: 404 })
     }
 
     const logoUrl = doctor.logoUrl
@@ -35,7 +35,7 @@ export async function GET() {
     // If the logo is an external URL (e.g. GCS), proxy it
     const imageRes = await fetch(logoUrl)
     if (!imageRes.ok) {
-      return NextResponse.redirect(new URL('/favicon.ico', process.env.NEXTAUTH_URL ?? 'http://localhost:3001'))
+      return new NextResponse(null, { status: 404 })
     }
     const contentType = imageRes.headers.get('content-type') ?? 'image/png'
     const buffer = Buffer.from(await imageRes.arrayBuffer())
@@ -47,6 +47,6 @@ export async function GET() {
       },
     })
   } catch {
-    return NextResponse.redirect(new URL('/favicon.ico', process.env.NEXTAUTH_URL ?? 'http://localhost:3001'))
+    return new NextResponse(null, { status: 404 })
   }
 }

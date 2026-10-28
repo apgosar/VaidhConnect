@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function DoctorDashboard() {
   const session = await getSession()
-  const doctorId = session?.uid
+  const doctorId = session ? (await getTenant())?.clinicId : undefined
   if (!doctorId) return null
   const tenant = await getTenant()
   if (!tenant) notFound()

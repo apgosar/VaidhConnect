@@ -1,38 +1,10 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { FieldValue } from 'firebase-admin/firestore'
-import type { Metadata } from 'next'
 import PatientPortal from '@/components/patient/PatientPortal'
 import type { WeeklyTimings } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
-
-export async function generateMetadata(): Promise<Metadata> {
-  const tenant = await getTenant()
-  const profileDoc = tenant ? await tenantDb(tenant).profile().get() : null
-  const doctor = profileDoc?.exists ? profileDoc.data() as any : null
-  const appUrl = process.env.NEXTAUTH_URL ?? 'https://vaidhconnect-893037849130.asia-south1.run.app'
-  const iconUrl = `${appUrl}/api/clinic-icon`
-  const title = doctor?.clinicName ?? 'Clinic'
-  const description = `Book appointments at ${title}${doctor?.address ? ` — ${doctor.address}` : ''}`
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: 'website',
-      url: appUrl,
-      images: [{ url: iconUrl, width: 512, height: 512, alt: `${title} logo` }],
-    },
-    twitter: {
-      card: 'summary',
-      title,
-      description,
-      images: [iconUrl],
-    },
-  }
-}
 
 export default async function HomePage() {
   const tenant = await getTenant()

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
-    let query: any = db.col('appointments').where('doctorId', '==', session.uid)
+    let query: any = db.col('appointments').where('doctorId', '==', tenant.clinicId)
 
     if (from) {
       query = query.where('startTime', '>=', new Date(from))

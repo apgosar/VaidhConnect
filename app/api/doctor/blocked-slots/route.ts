@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
-    let query: any = db.col('blocked_slots').where('doctorId', '==', session.uid)
+    let query: any = db.col('blocked_slots').where('doctorId', '==', tenant.clinicId)
 
     // This needs an OVERLAP query ("covers some part of [from, to]"), not
     // "starts within [from, to]" â€” otherwise a multi-day block that
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 
     const newBlockRef = db.col('blocked_slots').doc()
     const blockData = {
-      doctorId: session.uid,
+      doctorId: tenant.clinicId,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
       reason: reason?.trim() || null,
@@ -110,7 +110,7 @@ export async function DELETE(request: Request) {
     const blockRef = db.col('blocked_slots').doc(id)
     const blockDoc = await blockRef.get()
 
-    if (!blockDoc.exists || blockDoc.data()?.doctorId !== session.uid) {
+    if (!blockDoc.exists || blockDoc.data()?.doctorId !== tenant.clinicId) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
