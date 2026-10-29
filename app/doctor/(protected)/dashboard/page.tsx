@@ -1,5 +1,8 @@
 import { getSession } from '@/lib/auth/session'
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+import { notFound } from 'next/navigation'
+import { dayBoundsInTz } from '@/lib/time'
 import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
@@ -13,23 +16,25 @@ export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function DoctorDashboard() {
   const session = await getSession()
-  const doctorId = session?.uid
+  const doctorId = session ? (await getTenant())?.clinicId : undefined
   if (!doctorId) return null
+  const tenant = await getTenant()
+  if (!tenant) notFound()
+  const db = tenantDb(tenant)
 
   const today = new Date()
-  const todayStart = startOfDay(today)
-  const todayEnd = endOfDay(today)
-  const weekEnd = endOfDay(addDays(today, 7))
+  const { start: todayStart, end: todayEnd } = dayBoundsInTz(today, tenant.timezone)
+  const weekEnd = dayBoundsInTz(new Date(today.getTime() + 7 * 86_400_000), tenant.timezone).end
 
   // Run queries
-  const todayApptsSnap = await adminDb.collection('appointments')
+  const todayApptsSnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'BOOKED')
     .where('startTime', '>=', todayStart)
     .orderBy('startTime', 'asc')
     .get()
 
-  const upcomingApptsSnap = await adminDb.collection('appointments')
+  const upcomingApptsSnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'BOOKED')
     .where('startTime', '>', todayEnd)
@@ -37,7 +42,7 @@ export default async function DoctorDashboard() {
     .limit(10)
     .get()
 
-  const completedTodaySnap = await adminDb.collection('appointments')
+  const completedTodaySnap = await db.col('appointments')
     .where('doctorId', '==', doctorId)
     .where('status', '==', 'COMPLETED')
     .where('startTime', '>=', todayStart)
@@ -46,13 +51,13 @@ export default async function DoctorDashboard() {
   // Firestore only allows an inequality filter on one field, so blocks
   // starting before today (but still running into it, e.g. an overnight
   // block) are caught by filtering endTime in memory below.
-  const blockedTodaySnap = await adminDb.collection('blocked_slots')
+  const blockedTodaySnap = await db.col('blocked_slots')
     .where('doctorId', '==', doctorId)
     .where('startTime', '<=', todayEnd)
     .get()
 
-  const patientsCountSnap = await adminDb.collection('patients').count().get()
-  const doctorDoc = await adminDb.collection('doctors').doc(doctorId).get()
+  const patientsCountSnap = await db.col('patients').count().get()
+  const doctorDoc = await db.profile().get()
 
   // Process today's appointments (filter out beyond todayEnd, manually join relations)
   const todayApptsDocs = todayApptsSnap.docs
@@ -65,19 +70,19 @@ export default async function DoctorDashboard() {
     let payment = null
 
     if (apt.patientId) {
-      const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
+      const pDoc = await db.col('patients').doc(apt.patientId).get()
       if (pDoc.exists) {
         const pd = pDoc.data() as any
         patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate() }
       }
     }
 
-    const rxSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
+    const rxSnap = await db.col('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
     if (!rxSnap.empty) {
       prescription = { id: rxSnap.docs[0].id }
     }
 
-    const paySnap = await adminDb.collection('payments').where('appointmentId', '==', apt.id).limit(1).get()
+    const paySnap = await db.col('payments').where('appointmentId', '==', apt.id).limit(1).get()
     if (!paySnap.empty) {
       payment = { id: paySnap.docs[0].id }
     }
@@ -93,7 +98,7 @@ export default async function DoctorDashboard() {
   const upcomingAppts = await Promise.all(upcomingApptsDocs.map(async (apt: any) => {
     let patient = null
     if (apt.patientId) {
-      const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
+      const pDoc = await db.col('patients').doc(apt.patientId).get()
       if (pDoc.exists) patient = { id: pDoc.id, name: pDoc.data()?.name }
     }
     return { ...apt, patient }

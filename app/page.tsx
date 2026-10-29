@@ -1,41 +1,17 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
+import { tenantHasFeature } from '@/lib/tenant/features'
 import { FieldValue } from 'firebase-admin/firestore'
-import type { Metadata } from 'next'
 import PatientPortal from '@/components/patient/PatientPortal'
 import type { WeeklyTimings } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata(): Promise<Metadata> {
-  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-  const doctor = doctorsSnap.empty ? null : doctorsSnap.docs[0].data() as any
-  const appUrl = process.env.NEXTAUTH_URL ?? 'https://vaidhconnect-893037849130.asia-south1.run.app'
-  const iconUrl = `${appUrl}/api/clinic-icon`
-  const title = doctor?.clinicName ?? 'Clinic'
-  const description = `Book appointments at ${title}${doctor?.address ? ` — ${doctor.address}` : ''}`
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      type: 'website',
-      url: appUrl,
-      images: [{ url: iconUrl, width: 512, height: 512, alt: `${title} logo` }],
-    },
-    twitter: {
-      card: 'summary',
-      title,
-      description,
-      images: [iconUrl],
-    },
-  }
-}
-
 export default async function HomePage() {
-  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
+  const tenant = await getTenant()
+  const doctorDoc = tenant ? await tenantDb(tenant).profile().get() : null
 
-  if (doctorsSnap.empty) {
+  if (!tenant || !doctorDoc?.exists) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8">
@@ -46,18 +22,28 @@ export default async function HomePage() {
     )
   }
 
-  const doctorDoc = doctorsSnap.docs[0]
   const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
 
   // Increment page views in background
-  adminDb.collection('doctors').doc(doctor.id).update({ 
+  tenantDb(tenant).profile().update({ 
     pageViews: FieldValue.increment(1) 
   }).catch(e => console.error('Failed to increment page views', e))
 
   return (
     <PatientPortal
+      // Explicit whitelist: this crosses into a Client Component, so everything
+      // here is sent to the visitor's browser. Never spread the raw profile —
+      // it holds private fields (whatsappPhone, email, ownerUid, flags) and
+      // Firestore Timestamps, which can't be serialized.
       doctor={{
-        ...doctor,
+        id: doctor.id,
+        name: doctor.name,
+        clinicName: doctor.clinicName,
+        specialty: doctor.specialty,
+        themeColor: doctor.themeColor ?? '',
+        slotDurationMins: doctor.slotDurationMins,
+        consultationFee: doctor.consultationFee ?? null,
+        followUpFee: doctor.followUpFee ?? null,
         logoUrl: doctor.logoUrl ?? null,
         address: doctor.address ?? null,
         mapsUrl: doctor.mapsUrl ?? null,
@@ -66,8 +52,8 @@ export default async function HomePage() {
         practiceDescription: doctor.practiceDescription ?? null,
         photoUrl: doctor.photoUrl ?? null,
         registrationNumber: doctor.registrationNumber,
-        youtubeLinks: (doctor.youtubeLinks as string[]) ?? [],
-        products: (doctor.products as any[]) ?? [],
+        youtubeLinks: tenantHasFeature(tenant, 'videos') ? (doctor.youtubeLinks as string[]) ?? [] : [],
+        products: tenantHasFeature(tenant, 'products') ? (doctor.products as any[]) ?? [] : [],
         pageViews: doctor.pageViews ?? 0,
         paymentDetails: doctor.paymentDetails as any,
         timings: doctor.timings as unknown as WeeklyTimings,

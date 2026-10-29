@@ -1,5 +1,6 @@
 import { format, addMinutes, parseISO, isBefore, isAfter, isEqual, isSameDay, startOfDay, endOfDay } from 'date-fns'
 import type { WeeklyTimings, DayTiming, DayOfWeek } from './constants'
+import { dayNameOfYmd, formatSlotLabelInTz, zonedToUtc } from './time'
 
 export interface TimeSlot {
   start: string // ISO datetime string
@@ -8,107 +9,68 @@ export interface TimeSlot {
 }
 
 /**
- * The clinic's open shift(s) — as actual Date boundaries — on a given date.
- * Used to clip a (possibly multi-day) blocked period down to just the part
- * that overlaps real booking hours, so "doctor unavailable" messaging to
- * patients never shows a raw multi-day span (which reads as backwards
- * when only its time-of-day is displayed, e.g. "12:00 PM – 10:14 AM").
+ * The clinic's open shift(s) — as real UTC instants — on a given clinic-local
+ * calendar date (YYYY-MM-DD). Used to clip a (possibly multi-day) blocked
+ * period down to just the part that overlaps real booking hours.
  */
-export function getWorkingWindowsForDay(date: Date, timings: WeeklyTimings): Array<{ start: Date; end: Date }> {
-  const dayName = format(date, 'EEEE').toLowerCase() as DayOfWeek
-  const dayTiming: DayTiming = timings[dayName]
+export function getWorkingWindowsForDay(
+  ymd: string,
+  timings: WeeklyTimings,
+  timezone: string,
+): Array<{ start: Date; end: Date }> {
+  const dayTiming: DayTiming = timings[dayNameOfYmd(ymd) as DayOfWeek]
   if (!dayTiming?.open) return []
 
   const windows: Array<{ start: Date; end: Date }> = []
-  const addWindow = (shiftStart?: string, shiftEnd?: string) => {
-    if (!shiftStart || !shiftEnd) return
-    const [startHour, startMin] = shiftStart.split(':').map(Number)
-    const [endHour, endMin] = shiftEnd.split(':').map(Number)
-    const start = new Date(date)
-    start.setHours(startHour, startMin, 0, 0)
-    const end = new Date(date)
-    end.setHours(endHour, endMin, 0, 0)
-    windows.push({ start, end })
+  const add = (s?: string, e?: string) => {
+    if (!s || !e) return
+    windows.push({ start: zonedToUtc(ymd, s, timezone), end: zonedToUtc(ymd, e, timezone) })
   }
-  addWindow(dayTiming.morning?.start, dayTiming.morning?.end)
-  addWindow(dayTiming.evening?.start, dayTiming.evening?.end)
+  add(dayTiming.morning?.start, dayTiming.morning?.end)
+  add(dayTiming.evening?.start, dayTiming.evening?.end)
   return windows
 }
 
 /**
- * Generate all possible time slots for a given date based on clinic timings.
- * Then subtract blocked slots and already-booked appointments.
+ * All bookable slots on a clinic-local calendar date. Everything — shift
+ * boundaries, the "already started" cut-off, the labels — is computed in the
+ * CLINIC's timezone, never the server's, so the same code is correct for a
+ * clinic in Kolkata, Dubai or New York regardless of where it runs.
  */
 export function generateAvailableSlots({
   date,
+  timezone,
   timings,
   slotDurationMins,
   blockedSlots,
   bookedSlots,
+  now = new Date(),
 }: {
-  date: Date
+  date: string // YYYY-MM-DD in the clinic's timezone
+  timezone: string
   timings: WeeklyTimings
   slotDurationMins: number
   blockedSlots: Array<{ startTime: Date; endTime: Date }>
   bookedSlots: Array<{ startTime: Date; endTime: Date }>
+  now?: Date
 }): TimeSlot[] {
-  const dayName = format(date, 'EEEE').toLowerCase() as DayOfWeek
-  const dayTiming: DayTiming = timings[dayName]
-
-  if (!dayTiming?.open) return []
+  if (!(slotDurationMins > 0)) return []
+  const overlaps = (a: Date, b: Date, x: { startTime: Date; endTime: Date }) =>
+    a < x.endTime && b > x.startTime
 
   const slots: TimeSlot[] = []
+  const stepMs = slotDurationMins * 60_000
 
-  const addSlotsForShift = (shiftStart: string, shiftEnd: string) => {
-    const [startHour, startMin] = shiftStart.split(':').map(Number)
-    const [endHour, endMin] = shiftEnd.split(':').map(Number)
-
-    const dayStart = new Date(date)
-    dayStart.setHours(startHour, startMin, 0, 0)
-
-    const dayEnd = new Date(date)
-    dayEnd.setHours(endHour, endMin, 0, 0)
-
-    let current = new Date(dayStart)
-
-    while (isBefore(current, dayEnd)) {
-      const slotEnd = addMinutes(current, slotDurationMins)
-      if (isAfter(slotEnd, dayEnd)) break
-
-      const slotStart = new Date(current)
-
-      // Check if slot conflicts with any blocked or booked slot
-      const isBlocked = blockedSlots.some(block =>
-        !(isEqual(slotEnd, block.startTime) || isBefore(slotEnd, block.startTime)) &&
-        !(isEqual(slotStart, block.endTime) || isAfter(slotStart, block.endTime))
-      )
-
-      const isBooked = bookedSlots.some(booked =>
-        !(isEqual(slotEnd, booked.startTime) || isBefore(slotEnd, booked.startTime)) &&
-        !(isEqual(slotStart, booked.endTime) || isAfter(slotStart, booked.endTime))
-      )
-
-      const isPast = isBefore(slotStart, new Date())
-
-      if (!isBlocked && !isBooked && !isPast) {
-        slots.push({
-          start: slotStart.toISOString(),
-          end: slotEnd.toISOString(),
-          label: format(slotStart, 'hh:mm a'),
-        })
-      }
-
-      current = addMinutes(current, slotDurationMins)
+  for (const window of getWorkingWindowsForDay(date, timings, timezone)) {
+    for (let t = window.start.getTime(); t + stepMs <= window.end.getTime(); t += stepMs) {
+      const start = new Date(t)
+      const end = new Date(t + stepMs)
+      if (start < now) continue
+      if (blockedSlots.some(x => overlaps(start, end, x))) continue
+      if (bookedSlots.some(x => overlaps(start, end, x))) continue
+      slots.push({ start: start.toISOString(), end: end.toISOString(), label: formatSlotLabelInTz(start, timezone) })
     }
   }
-
-  if (dayTiming.morning?.start && dayTiming.morning?.end) {
-    addSlotsForShift(dayTiming.morning.start, dayTiming.morning.end)
-  }
-  if (dayTiming.evening?.start && dayTiming.evening?.end) {
-    addSlotsForShift(dayTiming.evening.start, dayTiming.evening.end)
-  }
-
   return slots
 }
 

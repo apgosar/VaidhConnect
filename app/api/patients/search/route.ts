@@ -1,13 +1,20 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'patients:manage')
+    if (denied) return denied
 
     const q = request.nextUrl.searchParams.get('q')
     const page = parseInt(request.nextUrl.searchParams.get('page') ?? '1')
@@ -15,7 +22,7 @@ export async function GET(request: NextRequest) {
     const limit = limitParam ? parseInt(limitParam) : 20
     const skip = (page - 1) * limit
 
-    const patientsSnap = await adminDb.collection('patients').orderBy('createdAt', 'desc').get()
+    const patientsSnap = await db.col('patients').orderBy('createdAt', 'desc').get()
     
     let allPatients = patientsSnap.docs.map((doc: any) => {
       const data = doc.data()
@@ -43,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Aggregation count query, not a full fetch — cheap even with many
     // appointments, and only run for the page actually being returned.
     const paginatedPatients = await Promise.all(pageSlice.map(async (p: any) => {
-      const countSnap = await adminDb.collection('appointments').where('patientId', '==', p.id).count().get()
+      const countSnap = await db.col('appointments').where('patientId', '==', p.id).count().get()
       return { ...p, _count: { appointments: countSnap.data().count } }
     }))
 

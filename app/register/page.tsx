@@ -1,11 +1,13 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import RegisterClient from '@/components/patient/RegisterClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RegisterPage() {
-  const doctorsSnap = await adminDb.collection('doctors').limit(1).get()
-  const doctorData = doctorsSnap.empty ? {} : doctorsSnap.docs[0].data()
+  const tenant = await getTenant()
+  const doctorDoc = tenant ? await tenantDb(tenant).profile().get() : null
+  const doctorData = doctorDoc?.exists ? doctorDoc.data()! : {}
 
   const config = {
     enableChiefComplaint: doctorData.enableChiefComplaint ?? true,

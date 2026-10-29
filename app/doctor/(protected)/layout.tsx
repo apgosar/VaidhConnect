@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth/session'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import DoctorSidebar from '@/components/doctor/DoctorSidebar'
 import SiteFooter from '@/components/SiteFooter'
 import type { Metadata } from 'next'
@@ -18,9 +20,9 @@ export default async function DoctorLayout({
     redirect('/doctor/login')
   }
 
-  const { adminDb } = await import('@/lib/firebase/server')
-  const doctorDoc = await adminDb.collection('doctors').doc(session.uid).get()
-  const doctorProfile = doctorDoc.exists ? doctorDoc.data() : null
+  const tenant = await getTenant()
+  const doctorDoc = tenant ? await tenantDb(tenant).profile().get() : null
+  const doctorProfile = doctorDoc?.exists ? doctorDoc.data() : null
 
   const rawDoctorName = doctorProfile?.name || session.name || 'Doctor'
   const doctorName = rawDoctorName.replace(/^Dr\.?\s*/i, '')
@@ -33,6 +35,7 @@ export default async function DoctorLayout({
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* Sidebar */}
       <DoctorSidebar
+        role={session.role}
         doctorName={doctorName}
         clinicName={clinicName}
         specialty={specialty}

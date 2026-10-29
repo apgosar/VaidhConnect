@@ -23,17 +23,22 @@ interface ReceiptDocProps {
   payment: { id: string; amount: string; mode: string; paidAt: string; notes?: string }
   patient: { name: string; phone: string }
   appointment: { id: string; startTime: string; chiefComplaint?: string }
-  doctor: { name: string; clinicName: string; address?: string; phone?: string }
+  doctor: { name: string; clinicName: string; address?: string; phone?: string; theme?: { primary?: string } }
 }
 
+// Clinic brand colour for the document (falls back to the original look).
+const accentOf = (theme?: { primary?: string }, fallback = '#065F46') =>
+  typeof theme?.primary === 'string' && theme.primary.length === 7 && theme.primary[0] === '#' ? theme.primary : fallback
+
 function ReceiptDocument({ payment, patient, appointment, doctor }: ReceiptDocProps) {
+  const accent = accentOf(doctor.theme)
   return (
     <Document title={`Receipt - ${patient.name}`}>
       <Page size="A5" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.clinicName}>{doctor.clinicName}</Text>
+            <Text style={[styles.clinicName, { color: accent }]}>{doctor.clinicName}</Text>
             <Text style={styles.subtitle}>Dr. {doctor.name}</Text>
             {doctor.address && <Text style={{ ...styles.subtitle, fontSize: 9 }}>{doctor.address}</Text>}
             {doctor.phone && <Text style={{ ...styles.subtitle, fontSize: 9 }}>Tel: {doctor.phone}</Text>}
@@ -50,8 +55,8 @@ function ReceiptDocument({ payment, patient, appointment, doctor }: ReceiptDocPr
 
         {/* Amount */}
         <View style={styles.receiptBox}>
-          <Text style={styles.receiptTitle}>Payment Receipt</Text>
-          <Text style={styles.receiptAmount}>₹{Number(payment.amount).toFixed(2)}</Text>
+          <Text style={[styles.receiptTitle, { color: accent }]}>Payment Receipt</Text>
+          <Text style={[styles.receiptAmount, { color: accent }]}>₹{Number(payment.amount).toFixed(2)}</Text>
         </View>
 
         {/* Details */}

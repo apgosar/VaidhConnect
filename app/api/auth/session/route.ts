@@ -3,9 +3,11 @@ import { createSessionCookie, clearSessionCookie, getSession } from '@/lib/auth/
 
 export async function GET() {
   const session = await getSession();
-  return NextResponse.json({ 
+  return NextResponse.json({
     authenticated: !!session,
-    uid: session?.uid 
+    uid: session?.uid,
+    // The patient pages use this to switch into "staff booking" mode.
+    role: session?.role ?? null,
   });
 }
 

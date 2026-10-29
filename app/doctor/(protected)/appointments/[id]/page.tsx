@@ -51,7 +51,7 @@ export default function AppointmentDetailPage() {
 
   const [showPrescriptionPDF, setShowPrescriptionPDF] = useState(false)
   const [showReceiptPDF, setShowReceiptPDF] = useState(false)
-  const [doctorInfo, setDoctorInfo] = useState<{ name: string; clinicName: string; qualifications?: string; address?: string; phone?: string } | null>(null)
+  const [doctorInfo, setDoctorInfo] = useState<{ name: string; clinicName: string; qualifications?: string; address?: string; phone?: string; theme?: { primary?: string } } | null>(null)
 
   const fetchAppt = useCallback(async () => {
     setLoading(true)

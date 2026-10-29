@@ -1,4 +1,5 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { getSignedDownloadUrl } from '@/lib/storage'
 import { NextResponse } from 'next/server'
@@ -15,8 +16,12 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const tenant = await getTenant()
+  if (!tenant) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
+  const db = tenantDb(tenant)
+
   const { id } = await params
-  const doc = await adminDb.collection('prescriptions').doc(id).get()
+  const doc = await db.col('prescriptions').doc(id).get()
   if (!doc.exists) {
     return NextResponse.json({ error: 'Prescription not found' }, { status: 404 })
   }

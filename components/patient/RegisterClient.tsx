@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
+import { getDraft, setDraft } from '@/lib/patientDevice'
 
 interface RegisterClientProps {
   config: {
@@ -14,7 +15,8 @@ interface RegisterClientProps {
 
 export default function RegisterClient({ config }: RegisterClientProps) {
   const router = useRouter()
-  const [phone, setPhone] = useState('')
+  const [countryCode, setCountryCode] = useState('+91')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [form, setForm] = useState({
     name: '',
     dob: '',
@@ -27,26 +29,13 @@ export default function RegisterClient({ config }: RegisterClientProps) {
   const [age, setAge] = useState<number | null>(null)
 
   useEffect(() => {
-    // Registration requires a verified OTP session — the phone number
-    // shown here (and the one the server will actually use) comes from
-    // that session, never from anything the client could set itself.
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch('/api/patient/session')
-        const data = await res.json()
-        if (cancelled) return
-        if (!data.authenticated) {
-          router.replace('/')
-          return
-        }
-        setPhone(data.phoneNumber || '')
-      } catch {
-        if (!cancelled) router.replace('/')
-      }
-    })()
-    return () => { cancelled = true }
-  }, [router])
+    const d = getDraft()
+    if (!d) return
+    const p = d.patient
+    const m = /^(\+\d{1,4})(\d+)$/.exec(p.phone)
+    if (m) { setCountryCode(m[1]); setPhoneNumber(m[2]) }
+    setForm({ name: p.name, dob: p.dob, medicalHistory: p.medicalHistory ?? '', email: p.email ?? '', chiefComplaint: d.chiefComplaint ?? '' })
+  }, [])
 
   useEffect(() => {
     if (form.dob) {
@@ -58,42 +47,33 @@ export default function RegisterClient({ config }: RegisterClientProps) {
     }
   }, [form.dob])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!form.name || !form.dob || (config?.enableChiefComplaint !== false && !form.chiefComplaint)) {
+
+    const digits = phoneNumber.replace(/[\s\-()]/g, '')
+    if (!form.name.trim() || !form.dob || !digits || (config?.enableChiefComplaint !== false && !form.chiefComplaint.trim())) {
       setError('Please fill in all required fields')
       return
     }
-
-    setLoading(true)
-    setError('')
-
-    try {
-      const res = await fetch('/api/patients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // No phone field — the server derives it from the verified OTP
-        // session, never from the request body.
-        body: JSON.stringify(form),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error ?? 'Registration failed')
-        return
-      }
-
-      // Store patient and redirect to booking
-      sessionStorage.setItem('patient', JSON.stringify(data.patient))
-      sessionStorage.setItem('chiefComplaint', form.chiefComplaint)
-      router.push('/book')
-    } catch {
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
+    const phone = countryCode.trim() + digits
+    if (!/^\+\d{8,15}$/.test(phone)) {
+      setError('Enter a valid mobile number, e.g. +91 98765 43210')
+      return
     }
+
+    // Nothing is sent to the clinic until the appointment is confirmed, so
+    // there's no server call here — details just move on to choosing a time.
+    setDraft({
+      patient: {
+        name: form.name.trim(),
+        phone,
+        dob: form.dob,
+        email: form.email.trim() || undefined,
+        medicalHistory: form.medicalHistory.trim() || undefined,
+      },
+      chiefComplaint: form.chiefComplaint.trim() || undefined,
+    })
+    router.push('/book')
   }
 
   return (
@@ -113,9 +93,9 @@ export default function RegisterClient({ config }: RegisterClientProps) {
             className="font-bold text-white text-base leading-snug"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            New Patient Registration
+            Patient details
           </h1>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>{phone}</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>Step 1 of 2 · then choose a time</p>
         </div>
       </div>
 
@@ -140,6 +120,39 @@ export default function RegisterClient({ config }: RegisterClientProps) {
                   autoComplete="name"
                 />
               </div>
+            </div>
+
+            {/* Mobile number */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="phone">
+                Mobile Number <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="form-input text-center font-medium"
+                  style={{ width: '72px' }}
+                  value={countryCode}
+                  onChange={e => setCountryCode(e.target.value)}
+                  aria-label="Country code"
+                  maxLength={5}
+                />
+                <div className="relative flex-1">
+                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />
+                  <input
+                    id="phone"
+                    type="tel"
+                    className="form-input pl-9 w-full"
+                    placeholder="98765 43210"
+                    value={phoneNumber}
+                    onChange={e => setPhoneNumber(e.target.value)}
+                    required
+                    autoComplete="tel"
+                    inputMode="numeric"
+                  />
+                </div>
+              </div>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Your confirmation and reminders are sent on WhatsApp to this number.</p>
             </div>
 
             {/* Date of Birth */}

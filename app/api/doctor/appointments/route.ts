@@ -1,19 +1,27 @@
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
 
 // GET all doctor appointments (for calendar)
 export async function GET(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'appointments:manage')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
-    let query: any = adminDb.collection('appointments').where('doctorId', '==', session.uid)
+    let query: any = db.col('appointments').where('doctorId', '==', tenant.clinicId)
 
     if (from) {
       query = query.where('startTime', '>=', new Date(from))
@@ -25,6 +33,7 @@ export async function GET(request: Request) {
     
     let appointmentsDocs = snapshot.docs.map((doc: any) => {
       const data = doc.data()
+      delete data.cancelTokenHash
       return {
         id: doc.id,
         ...data,
@@ -45,19 +54,19 @@ export async function GET(request: Request) {
       let payment = null
 
       if (apt.patientId) {
-        const pDoc = await adminDb.collection('patients').doc(apt.patientId).get()
+        const pDoc = await db.col('patients').doc(apt.patientId).get()
         if (pDoc.exists) {
           const pd = pDoc.data() as any
           patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate() }
         }
       }
 
-      const rxSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
+      const rxSnap = await db.col('prescriptions').where('appointmentId', '==', apt.id).limit(1).get()
       if (!rxSnap.empty) {
         prescription = { id: rxSnap.docs[0].id }
       }
 
-      const paySnap = await adminDb.collection('payments').where('appointmentId', '==', apt.id).limit(1).get()
+      const paySnap = await db.col('payments').where('appointmentId', '==', apt.id).limit(1).get()
       if (!paySnap.empty) {
         const pd = paySnap.docs[0].data()
         payment = { id: paySnap.docs[0].id, amount: pd.amount, mode: pd.mode }

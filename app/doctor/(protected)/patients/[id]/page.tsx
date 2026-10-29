@@ -1,6 +1,10 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
+import { getSession } from '@/lib/auth/session'
+import { audit } from '@/lib/audit'
 import Link from 'next/link'
+import PatientPinActions from '@/components/doctor/PatientPinActions'
 import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
@@ -9,16 +13,26 @@ export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
-  const patientDoc = await adminDb.collection('patients').doc(id).get()
+  const tenant = await getTenant()
+  if (!tenant) return { title: 'Patient' }
+  const db = tenantDb(tenant)
+  const patientDoc = await db.col('patients').doc(id).get()
   return { title: patientDoc.exists ? patientDoc.data()?.name : 'Patient' }
 }
 
 export default async function PatientHistoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const patientDoc = await adminDb.collection('patients').doc(id).get()
+  const tenant = await getTenant()
+  if (!tenant) notFound()
+  const db = tenantDb(tenant)
+  const patientDoc = await db.col('patients').doc(id).get()
 
   if (!patientDoc.exists) notFound()
-  
+
+  // Opening a patient's full history is itself recorded.
+  const session = await getSession()
+  if (session) await audit(tenant, session, 'patient.view', `patients/${id}`)
+
   const patientData = patientDoc.data() as any
   const patient = {
     id: patientDoc.id,
@@ -28,7 +42,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
 
   // Firestore composite index (patientId + startTime) may not exist in all environments.
   // Fetching without orderBy and sorting in memory avoids the index requirement.
-  const appointmentsSnap = await adminDb.collection('appointments')
+  const appointmentsSnap = await db.col('appointments')
     .where('patientId', '==', id)
     .get()
 
@@ -42,7 +56,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
     } as any
 
     // Fetch related prescription
-    const rxSnap = await adminDb.collection('prescriptions').where('appointmentId', '==', doc.id).limit(1).get()
+    const rxSnap = await db.col('prescriptions').where('appointmentId', '==', doc.id).limit(1).get()
     if (!rxSnap.empty) {
       const rx = rxSnap.docs[0].data()
       apt.prescription = { id: rxSnap.docs[0].id, diagnosis: rx.diagnosis, pdfPath: rx.pdfPath }
@@ -51,7 +65,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
     }
 
     // Fetch related payment
-    const paySnap = await adminDb.collection('payments').where('appointmentId', '==', doc.id).limit(1).get()
+    const paySnap = await db.col('payments').where('appointmentId', '==', doc.id).limit(1).get()
     if (!paySnap.empty) {
       const pay = paySnap.docs[0].data()
       apt.payment = { id: paySnap.docs[0].id, amount: pay.amount, mode: pay.mode, paidAt: pay.paidAt?.toDate() }
@@ -103,6 +117,8 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           </div>
         </div>
       </div>
+
+      <PatientPinActions phone={patient.phone} />
 
       {/* Medical History */}
       {patient.medicalHistory && (

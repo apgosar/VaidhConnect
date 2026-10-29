@@ -1,128 +1,76 @@
-import { adminDb } from '@/lib/firebase/server'
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
-import { getPatientSession } from '@/lib/auth/patientSession'
+import { forbid } from '@/lib/auth/access'
+import { patientDetailsSchema, parseBody } from '@/lib/validation'
+import { audit } from '@/lib/audit'
 
-// POST — patient self-registration from the public booking portal.
-// Requires a verified OTP session. The phone number is ALWAYS taken from
-// that session, never from the request body — so a verified caller can
-// only ever create or claim records under their own number, regardless
-// of what they put in the form.
+// POST — staff register a patient (e.g. at the front desk). Public patient
+// self-registration no longer exists: patients are created as part of a
+// booking (see /api/appointments), which never reveals existing records.
 export async function POST(request: Request) {
   try {
-    const patientSession = await getPatientSession()
-    if (!patientSession) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const session = await getSession()
+    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const denied = forbid(session, 'patients:manage')
+    if (denied) return denied
+
+    const parsed = await parseBody(request, patientDetailsSchema)
+    if ('error' in parsed) return parsed.error
+    const d = parsed.data
+    const db = tenantDb(tenant)
+
+    const dup = (await db.col('patients').where('phone', '==', d.phone).get()).docs.find(x => {
+      const p = x.data()
+      return p.name?.trim().toLowerCase() === d.name.trim().toLowerCase() && p.dob?.toDate().toISOString().slice(0, 10) === d.dob
+    })
+    if (dup) return Response.json({ patient: { id: dup.id, ...dup.data(), dob: dup.data().dob?.toDate() } })
+
+    const now = new Date()
+    const data = {
+      phone: d.phone, name: d.name.trim(), dob: new Date(`${d.dob}T00:00:00Z`),
+      medicalHistory: d.medicalHistory || null, email: d.email || null,
+      createdAt: now, updatedAt: now, createdBy: `staff:${session.uid}`,
     }
-
-    const body = await request.json()
-    const { name, dob, medicalHistory, email } = body
-
-    if (!name || !dob) {
-      return Response.json({ error: 'Name and date of birth are required' }, { status: 400 })
-    }
-
-    const normalized = patientSession.phoneNumber.replace(/[\s\-()]/g, '')
-
-    // Find or create: Check if patient with same phone, name, and DOB already exists
-    const existingSnap = await adminDb.collection('patients').where('phone', '==', normalized).get()
-    
-    let existingPatient = null
-    const targetDobStr = new Date(dob).toISOString().split('T')[0]
-    const targetNameStr = name.trim().toLowerCase()
-
-    for (const doc of existingSnap.docs) {
-      const data = doc.data()
-      const docNameStr = data.name?.trim().toLowerCase()
-      const docDobStr = data.dob?.toDate().toISOString().split('T')[0]
-      
-      if (docNameStr === targetNameStr && docDobStr === targetDobStr) {
-        existingPatient = { id: doc.id, ...data }
-        break
-      }
-    }
-
-    if (existingPatient) {
-      // Update medical history if provided and return existing patient
-      const updateData: any = { updatedAt: new Date() }
-      if (medicalHistory !== undefined && medicalHistory.trim() !== '') {
-        updateData.medicalHistory = medicalHistory.trim()
-      }
-      if (email !== undefined && email.trim() !== '') {
-        updateData.email = email.trim()
-      }
-      
-      if (Object.keys(updateData).length > 1) {
-        await adminDb.collection('patients').doc(existingPatient.id).update(updateData)
-      }
-      
-      return Response.json({ patient: existingPatient }, { status: 200 })
-    }
-
-    const patientData = {
-      phone: normalized,
-      name: name.trim(),
-      dob: new Date(dob),
-      medicalHistory: medicalHistory?.trim() || null,
-      email: email?.trim() || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-
-    const newPatientRef = adminDb.collection('patients').doc()
-    await newPatientRef.set(patientData)
-
-    const patient = {
-      id: newPatientRef.id,
-      ...patientData
-    }
-
-    return Response.json({ patient }, { status: 201 })
+    const ref = db.col('patients').doc()
+    await ref.set(data)
+    await audit(tenant, session, 'patient.create', `patients/${ref.id}`)
+    return Response.json({ patient: { id: ref.id, ...data } }, { status: 201 })
   } catch (error) {
-    console.error('[patient-register]', error)
+    console.error('[patient-create]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// PUT — edit a patient's record. Doctor-only: there is currently no
-// caller for this from the public patient portal.
+// PUT — edit a patient's record (clinic users only).
 export async function PUT(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
     const session = await getSession()
-    if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const denied = forbid(session, 'patients:manage')
+    if (denied) return denied
 
-    const body = await request.json()
-    const { id, name, dob, medicalHistory, email } = body
+    const parsed = await parseBody(request, patientDetailsSchema.partial().extend({ id: patientDetailsSchema.shape.name.min(1) }))
+    if ('error' in parsed) return parsed.error
+    const { id, name, dob, medicalHistory, email } = parsed.data
 
-    if (!id) {
-      return Response.json({ error: 'Patient ID required' }, { status: 400 })
-    }
+    const ref = tenantDb(tenant).col('patients').doc(id)
+    if (!(await ref.get()).exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
 
-    const patientRef = adminDb.collection('patients').doc(id)
-    const patientDoc = await patientRef.get()
+    const update: Record<string, unknown> = { updatedAt: new Date() }
+    if (name) update.name = name.trim()
+    if (dob) update.dob = new Date(`${dob}T00:00:00Z`)
+    if (medicalHistory !== undefined) update.medicalHistory = medicalHistory || null
+    if (email !== undefined) update.email = email || null
+    await ref.update(update)
+    await audit(tenant, session, 'patient.update', `patients/${id}`)
 
-    if (!patientDoc.exists) {
-      return Response.json({ error: 'Patient not found' }, { status: 404 })
-    }
-
-    const updateData: any = { updatedAt: new Date() }
-    if (name) updateData.name = name.trim()
-    if (dob) updateData.dob = new Date(dob)
-    if (medicalHistory !== undefined) updateData.medicalHistory = medicalHistory?.trim() || null
-    if (email !== undefined) updateData.email = email?.trim() || null
-
-    await patientRef.update(updateData)
-
-    const updatedDoc = await patientRef.get()
-    const pData = updatedDoc.data() as any
-    const patient = {
-      id: updatedDoc.id,
-      ...pData,
-      dob: pData.dob?.toDate(),
-    }
-
-    return Response.json({ patient })
+    const p = (await ref.get()).data() as any
+    return Response.json({ patient: { id, ...p, dob: p.dob?.toDate() } })
   } catch (error) {
     console.error('[patient-update]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })

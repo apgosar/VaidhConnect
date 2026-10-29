@@ -72,3 +72,12 @@ export async function deleteFile(filePathOrUrl: string): Promise<void> {
     // Ignore not found errors
   }
 }
+
+/**
+ * Object paths are namespaced per clinic so one clinic files can be listed,
+ * exported or deleted without touching another. The original single clinic
+ * (legacy) keeps its existing un-prefixed paths so nothing already stored moves.
+ */
+export function tenantPath(tenant: { clinicId: string; storage: "legacy" | "scoped" }, path: string): string {
+  return tenant.storage === "legacy" ? path : `clinics/${tenant.clinicId}/${path}`;
+}

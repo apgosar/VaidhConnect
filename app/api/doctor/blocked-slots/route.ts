@@ -1,19 +1,35 @@
+import { getTenant } from '@/lib/tenant/resolve'
+import { tenantDb } from '@/lib/db/tenant'
 import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
+import { z } from 'zod'
+import { parseBody } from '@/lib/validation'
+
+const blockSchema = z.object({
+  startTime: z.string().datetime({ offset: true }),
+  endTime: z.string().datetime({ offset: true }),
+  reason: z.string().trim().max(200).optional().nullable(),
+})
 
 // GET blocked slots
 export async function GET(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'blocked:manage')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
-    let query: any = adminDb.collection('blocked_slots').where('doctorId', '==', session.uid)
+    let query: any = db.col('blocked_slots').where('doctorId', '==', tenant.clinicId)
 
     // This needs an OVERLAP query ("covers some part of [from, to]"), not
     // "starts within [from, to]" — otherwise a multi-day block that
@@ -54,20 +70,26 @@ export async function GET(request: Request) {
 // POST — create a blocked slot
 export async function POST(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'blocked:manage')
+    if (denied) return denied
 
-    const { startTime, endTime, reason } = await request.json()
-
-    if (!startTime || !endTime) {
-      return Response.json({ error: 'startTime and endTime are required' }, { status: 400 })
+    const parsed = await parseBody(request, blockSchema)
+    if ('error' in parsed) return parsed.error
+    const { startTime, endTime, reason } = parsed.data
+    if (new Date(endTime) <= new Date(startTime)) {
+      return Response.json({ error: 'End time must be after start time' }, { status: 400 })
     }
 
-    const newBlockRef = adminDb.collection('blocked_slots').doc()
+    const newBlockRef = db.col('blocked_slots').doc()
     const blockData = {
-      doctorId: session.uid,
+      doctorId: tenant.clinicId,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
       reason: reason?.trim() || null,
@@ -86,20 +108,25 @@ export async function POST(request: Request) {
 // DELETE — remove a blocked slot
 export async function DELETE(request: Request) {
   try {
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'blocked:manage')
+    if (denied) return denied
 
     const { id } = await request.json()
     if (!id) {
       return Response.json({ error: 'Block ID required' }, { status: 400 })
     }
 
-    const blockRef = adminDb.collection('blocked_slots').doc(id)
+    const blockRef = db.col('blocked_slots').doc(id)
     const blockDoc = await blockRef.get()
 
-    if (!blockDoc.exists || blockDoc.data()?.doctorId !== session.uid) {
+    if (!blockDoc.exists || blockDoc.data()?.doctorId !== tenant.clinicId) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
