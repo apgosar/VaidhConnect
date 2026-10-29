@@ -73,7 +73,7 @@ export default function RegisterClient({ config }: RegisterClientProps) {
       },
       chiefComplaint: form.chiefComplaint.trim() || undefined,
     })
-    router.push('/book')
+    router.replace('/book')
   }
 
   return (
@@ -83,7 +83,7 @@ export default function RegisterClient({ config }: RegisterClientProps) {
         className="px-4 py-4 flex items-center gap-3"
         style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <button onClick={() => router.back()} className="btn btn-ghost p-2 -ml-2" aria-label="Go back"
+        <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" aria-label="Back to home"
           style={{ color: 'rgba(255,255,255,0.70)' }}
         >
           <ArrowLeft size={20} />
@@ -255,6 +255,10 @@ export default function RegisterClient({ config }: RegisterClientProps) {
               ) : (
                 'Continue to Book Appointment'
               )}
+            </button>
+
+            <button type="button" onClick={() => router.push('/')} className="btn btn-outline w-full">
+              Back to home
             </button>
           </form>
         </div>
