@@ -1,20 +1,9 @@
-import { z } from 'zod'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminAuth, adminDb } from '@/lib/firebase/server'
 import { getPlatformAdmin } from '@/lib/auth/platform'
 import { parseBody } from '@/lib/validation'
-import { FEATURES } from '@/lib/tenant/features'
+import { patchClinicSchema as patchSchema } from '@/lib/adminSchemas'
 import { isUsablePrimary } from '@/lib/tenant/theme'
-
-const patchSchema = z.object({
-  status: z.enum(['active', 'suspended']).optional(),
-  features: z.record(z.enum(FEATURES), z.boolean()).optional(),
-  theme: z.object({ primary: z.string().max(7).nullable() }).optional(),
-  timezone: z.string().trim().max(60).optional(),
-  addDomain: z.string().trim().toLowerCase().min(3).max(200).optional(),
-  removeDomain: z.string().trim().toLowerCase().min(3).max(200).optional(),
-  resetOwnerPassword: z.boolean().optional(),
-})
 
 const deny = () => Response.json({ error: 'Not found' }, { status: 404 })
 

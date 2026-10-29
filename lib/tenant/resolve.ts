@@ -4,7 +4,7 @@ import type { Tenant } from './types'
 import { currentTenant } from './context'
 import { tenantDb } from '../db/tenant'
 
-const CACHE_TTL_MS = 60_000
+const CACHE_TTL_MS = 20_000
 // A host with no clinic is cached only briefly, so a newly provisioned clinic
 // goes live within seconds instead of after a full TTL.
 const MISS_TTL_MS = 5_000

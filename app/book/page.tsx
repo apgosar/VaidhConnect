@@ -6,7 +6,7 @@ import { ArrowLeft, Calendar, Clock, CheckCircle2, ChevronRight, Download } from
 import { computeAge } from '@/lib/slots'
 import { addDaysYmd, describeYmd, formatDateTimeInTz, formatSlotLabelInTz } from '@/lib/time'
 import { createGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar'
-import { getDraft, saveBooking, savePatient, type BookingDraft } from '@/lib/patientDevice'
+import { getDraft, saveBooking, savePatient, setDraft, type BookingDraft } from '@/lib/patientDevice'
 import SiteFooter from '@/components/SiteFooter'
 
 interface TimeSlot { start: string; end: string; label: string }
@@ -90,6 +90,7 @@ export default function BookPage() {
       // Keep the details for next time, and the secret that lets this device
       // view or cancel this one appointment.
       savePatient(draft.patient)
+      setDraft(null) // the details now live in the saved profile; don't leave a copy in this tab
       if (data.cancelToken) {
         saveBooking({ id: data.appointment.id, token: data.cancelToken, patientName: draft.patient.name, startTime: data.appointment.startTime })
       }

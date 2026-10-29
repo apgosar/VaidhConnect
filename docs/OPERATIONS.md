@@ -27,7 +27,7 @@
 | Task | How |
 |---|---|
 | Onboard a clinic | `/admin` → New clinic (or `scripts/provision-clinic.ts`) |
-| Suspend / reactivate | `/admin` → Suspend. Site and APIs stop resolving, jobs skip it, owner sessions are revoked. Takes effect within ~1 min |
+| Suspend / reactivate | `/admin` → Suspend. Site and APIs stop resolving, jobs skip it, owner sessions are revoked. Takes effect within ~20 seconds |
 | Change plan flags | `/admin` → tick/untick a flag |
 | Reset an owner's password | `/admin` → Reset owner password (one-time link) |
 | Make someone an operator | `npx tsx --env-file=.env scripts/make-platform-admin.ts --email x@y` (they must sign in again) |
@@ -61,5 +61,5 @@ and change nothing:
   thousands of patients per clinic; move to indexed search when that grows.
 - Cron runs all clinics in one request (concurrency 5). Move to per-clinic
   queued tasks at ~100 clinics.
-- The tenant lookup is cached ~60 s per instance, so status/flag/hostname
-  changes are not instantaneous.
+- The tenant lookup is cached ~20 s per instance, so status/flag/hostname
+  changes are not instantaneous (a mapping that did not exist yet is retried after 5 s).

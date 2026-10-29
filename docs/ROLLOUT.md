@@ -55,13 +55,28 @@ clinics never need this.
    npx tsx --env-file=.env scripts/migrate-legacy-to-scoped.ts --clinic <doctorUid> --domain HOST --execute
    ```
    Check the "verified in target" counts match.
-3. **Cut over** during the quiet window: re-run step 2 once more, then in the
-   Firestore console set `domains/HOST` → `storage: "scoped"`.
-   (Changes reach live traffic within ~1 minute.)
-4. Smoke-test as in step 2. **Rollback:** set `storage` back to `"legacy"`.
-   Anything booked *after* cut-over lives only in the scoped copy, so roll back
-   promptly if you must, and re-copy later.
+3. **Cut over** using the maintenance sequence below, in the quiet window. Each
+   running instance caches which storage a hostname uses for up to ~20 seconds,
+   so for a moment two instances could disagree about where to write. Taking the
+   clinic offline first removes any chance of a booking landing in the wrong copy:
+
+   1. Operator console → **Suspend** the clinic (or set `status: "suspended"` on its
+      `doctors/<id>` document). The site and APIs now answer "Clinic not found".
+   2. **Wait ~30 seconds** so every instance has noticed.
+   3. Run the copy once more (`--execute`) — it is idempotent — and check the counts.
+   4. In the Firestore console set `domains/HOST` → `storage: "scoped"`.
+   5. **Wait ~30 seconds.**
+   6. **Reactivate**: set `status: "active"` on the *scoped* document
+      `clinics/<id>` (the console does this for you once the scoped copy exists).
+4. Smoke-test as in step 2 (book, cancel, doctor login, calendar).
+   **Rollback:** repeat the sequence in reverse — suspend, wait, set `storage` back
+   to `"legacy"`, wait, set `status: "active"` on `doctors/<id>`, wait. Anything booked
+   *after* cut-over exists only in the scoped copy, so roll back promptly and re-copy
+   before trying again.
 5. Keep the legacy collections for at least a week before removing them.
+
+> This whole sequence is exercised end-to-end, with synthetic data, by
+> `scripts/rehearse-migration.ts` on staging. Run it before doing this for real.
 
 ## 5. Turn the fallback off
 Once every real hostname has a `domains/<host>` mapping (the operator console

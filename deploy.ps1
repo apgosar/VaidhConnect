@@ -4,7 +4,10 @@ param (
     [ValidateSet("production", "staging")]
     [string]$Environment = "production",
     [string]$Region = "asia-south1",
-    [string]$ServiceName
+    [string]$ServiceName,
+    # Staging only: extra hostnames for the same service (one per test clinic). After a
+    # deploy, each tag is re-pointed at the new revision (tags otherwise stay on the old one).
+    [string[]]$Tags = @()
 )
 
 Write-Host "Deploying to Google Cloud Run ($Environment)..." -ForegroundColor Cyan
@@ -143,6 +146,12 @@ try {
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Deployment successful!" -ForegroundColor Green
+        if ($Tags.Count -gt 0) {
+            $latest = gcloud run services describe $ServiceName --project $ProjectId --region $Region --format="value(status.latestReadyRevisionName)"
+            $pairs = ($Tags | ForEach-Object { "$_=$latest" }) -join ","
+            Write-Host "Pointing tags ($($Tags -join ', ')) at $latest..." -ForegroundColor Cyan
+            gcloud run services update-traffic $ServiceName --project $ProjectId --region $Region --update-tags $pairs --quiet
+        }
     } else {
         Write-Host "Deployment failed. Ensure you have run 'gcloud auth login' and 'gcloud config set project $ProjectId'." -ForegroundColor Red
     }

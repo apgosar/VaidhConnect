@@ -1,20 +1,9 @@
-import { z } from 'zod'
 import { adminAuth, adminDb } from '@/lib/firebase/server'
 import { getPlatformAdmin } from '@/lib/auth/platform'
 import { parseBody } from '@/lib/validation'
+import { createClinicSchema as createSchema } from '@/lib/adminSchemas'
 import { provisionClinic, ProvisionError } from '@/lib/modules/provisioning'
 import { FEATURES } from '@/lib/tenant/features'
-
-const createSchema = z.object({
-  id: z.string().trim().min(2).max(41),
-  name: z.string().trim().min(1).max(120),
-  doctor: z.string().trim().min(1).max(100),
-  email: z.string().trim().email().max(120),
-  domain: z.string().trim().min(3).max(200),
-  timezone: z.string().trim().max(60).optional(),
-  specialty: z.string().trim().max(60).optional(),
-  primary: z.string().trim().max(7).optional(),
-})
 
 const deny = () => Response.json({ error: 'Not found' }, { status: 404 })
 
