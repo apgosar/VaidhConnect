@@ -11,6 +11,7 @@ export const SPECIALTIES = [
   { value: 'Ophthalmologist', color: '#10B981', icon: '👁️' },
   { value: 'Homeopathy', color: '#22C55E', icon: '🌿' },
   { value: 'Ayurvedic', color: '#F97316', icon: '🌾' },
+  { value: 'Home Healthcare', color: '#0EA5E9', icon: '🏠' },
 ] as const
 
 export type Specialty = typeof SPECIALTIES[number]['value']
