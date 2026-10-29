@@ -6,6 +6,7 @@ import { sessionOwnsAppointment } from '@/lib/modules/patientAccess'
 import { renderPrescriptionPdf } from '@/lib/modules/documents'
 import { rateLimit } from '@/lib/ratelimit'
 import { pdfResponse } from '@/lib/pdfHttp'
+import { apiError } from '@/lib/errors'
 
 export const runtime = 'nodejs'
 
@@ -18,8 +19,8 @@ const DOWNLOADS_PER_HOUR = 30
 export async function GET(_request: Request, { params }: { params: Promise<{ appointmentId: string }> }) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    if (featureGate(tenant, 'prescriptions')) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
+    if (featureGate(tenant, 'prescriptions')) return apiError('NOT_FOUND')
     const session = await getPatientSession(tenant)
     if (!session) return Response.json({ error: 'Please sign in with your PIN' }, { status: 401 })
 
@@ -31,16 +32,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ app
     const { appointmentId } = await params
     const apptSnap = await db.col('appointments').doc(appointmentId).get()
     const appt = apptSnap.data() as any
-    if (!apptSnap.exists || appt.status === 'CANCELLED') return Response.json({ error: 'Not found' }, { status: 404 })
+    if (!apptSnap.exists || appt.status === 'CANCELLED') return apiError('NOT_FOUND')
 
     const patient = (await db.col('patients').doc(String(appt.patientId)).get()).data() as { phone?: string } | undefined
-    if (!sessionOwnsAppointment(session, appt, patient?.phone ?? null)) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (!sessionOwnsAppointment(session, appt, patient?.phone ?? null)) return apiError('NOT_FOUND')
 
     const rx = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
-    if (rx.empty) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (rx.empty) return apiError('NOT_FOUND')
 
     const pdf = await renderPrescriptionPdf(tenant, rx.docs[0].id)
-    if (!pdf) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (!pdf) return apiError('NOT_FOUND')
     return pdfResponse(pdf.buffer, pdf.filename)
   } catch (error) {
     console.error('[patient-prescription-pdf]', error)

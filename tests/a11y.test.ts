@@ -72,7 +72,8 @@ describe('forms', () => {
         if (/type=["'](hidden|file)["']/.test(tag)) continue
         const before = s.slice(Math.max(0, m.index - 250), m.index)
         const wrapped = /<label[^>]*>(?![\s\S]*<\/label>)/.test(before)
-        if (!(/\bid=|aria-label|aria-labelledby/.test(tag) || wrapped)) unnamed.push(`${rel(file)}:${s.slice(0, m.index).split('\n').length}`)
+        // {...control} is the id and aria props that <Field> hands to its control
+        if (!(/\bid=|aria-label|aria-labelledby|\{\.\.\.control\}/.test(tag) || wrapped)) unnamed.push(`${rel(file)}:${s.slice(0, m.index).split('\n').length}`)
       }
     }
     expect(unnamed).toEqual([])
@@ -103,7 +104,8 @@ describe('text and targets', () => {
 
   it('every page that the skip link can land on has a main-content target', () => {
     const pages = ['app/appointments/page.tsx', 'app/book/page.tsx', 'components/patient/PatientPortal.tsx', 'components/patient/RegisterClient.tsx', 'app/doctor/login/page.tsx', 'app/admin/login/page.tsx', 'app/doctor/(protected)/layout.tsx']
-    const missing = pages.filter(p => !fs.readFileSync(path.join(root, p), 'utf8').includes('id="main-content"'))
+    // <PageShell> renders <main id="main-content">
+    const missing = pages.filter(p => { const src = fs.readFileSync(path.join(root, p), 'utf8'); return !src.includes('id="main-content"') && !src.includes('<PageShell') })
     expect(missing).toEqual([])
   })
 })

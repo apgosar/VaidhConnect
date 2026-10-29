@@ -4,8 +4,9 @@ import { getPlatformAdmin } from '@/lib/auth/platform'
 import { parseBody } from '@/lib/validation'
 import { patchClinicSchema as patchSchema } from '@/lib/adminSchemas'
 import { isUsablePrimary } from '@/lib/tenant/theme'
+import { apiError } from '@/lib/errors'
 
-const deny = () => Response.json({ error: 'Not found' }, { status: 404 })
+const deny = () => apiError('NOT_FOUND')
 
 // PATCH — suspend/activate, change plan flags or theme, manage hostnames,
 // or issue the owner a fresh password-reset link.
@@ -22,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const legacy = adminDb.collection('doctors').doc(id)
     const [sSnap, lSnap] = await Promise.all([scoped.get(), legacy.get()])
     const ref = sSnap.exists ? scoped : lSnap.exists ? legacy : null
-    if (!ref) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!ref) return apiError('CLINIC_NOT_FOUND')
     const profile = ((sSnap.exists ? sSnap : lSnap).data() ?? {}) as any
 
     const update: Record<string, unknown> = {}
@@ -63,6 +64,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ ok: true, ...(link ? { passwordResetLink: link } : {}) })
   } catch (e) {
     console.error('[admin-clinic-patch]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

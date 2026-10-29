@@ -2,13 +2,14 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { NextResponse } from 'next/server'
 import { ymdInTz } from '@/lib/time'
+import { apiError } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     const tenant = await getTenant()
-    if (!tenant) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const doctorDoc = await tenantDb(tenant).profile().get()
 
     if (!doctorDoc.exists) {
@@ -29,6 +30,6 @@ export async function GET() {
     return NextResponse.json({ config: publicConfig })
   } catch (error) {
     console.error('[public-config-get]', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

@@ -7,6 +7,7 @@ import { parseBody, phoneSchema } from '@/lib/validation'
 import { pinFail } from '@/lib/pinHttp'
 import { staffResetPin, staffSetPin } from '@/lib/modules/patientAccess'
 import { audit } from '@/lib/audit'
+import { apiError } from '@/lib/errors'
 
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reset'), phone: phoneSchema }),
@@ -21,9 +22,9 @@ const schema = z.discriminatedUnion('action', [
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'patients:manage')
     if (denied) return denied
 
@@ -40,6 +41,6 @@ export async function POST(request: Request) {
   } catch (e) {
     const r = pinFail(e); if (r) return r
     console.error('[patient-pin-staff]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

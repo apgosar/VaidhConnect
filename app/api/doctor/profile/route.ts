@@ -8,6 +8,7 @@ import { forbid } from '@/lib/auth/access'
 import { audit } from '@/lib/audit'
 import { isUsablePrimary } from '@/lib/tenant/theme'
 import { FieldValue } from 'firebase-admin/firestore'
+import { apiError } from '@/lib/errors'
 
 // SVG is deliberately not accepted: it can carry script, and these files are
 // served from our storage domain. Only raster formats, verified by signature.
@@ -27,11 +28,11 @@ export async function GET() {
   try {
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
 
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const doctorDoc = await tenantDb(tenant).profile().get()
     
     if (!doctorDoc.exists) {
@@ -41,7 +42,7 @@ export async function GET() {
     return Response.json({ doctor: { id: doctorDoc.id, ...doctorDoc.data() } })
   } catch (error) {
     console.error('[doctor-profile-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -50,13 +51,13 @@ export async function PATCH(request: Request) {
   try {
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'settings:manage')
     if (denied) return denied
 
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const doctorRef = tenantDb(tenant).profile()
     const doctorDoc = await doctorRef.get()
     
@@ -298,6 +299,6 @@ export async function PATCH(request: Request) {
     return Response.json({ doctor: { id: updatedDoc.id, ...updatedDoc.data() } })
   } catch (error: any) {
     console.error('[doctor-profile-patch]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

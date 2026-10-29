@@ -2,6 +2,7 @@ import { parseBody } from '@/lib/validation'
 import { loginBody, pinFail, pinPreamble } from '@/lib/pinHttp'
 import { verifyPin } from '@/lib/modules/patientAccess'
 import { startPatientSession, endPatientSession } from '@/lib/auth/patientPin'
+import { apiError } from '@/lib/errors'
 
 // POST /api/patient/pin/login — { phone, pin } — starts a 30-minute session.
 // Wrong guesses are counted per phone number with escalating lockouts, on top of
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   } catch (e) {
     const r = pinFail(e); if (r) return r
     console.error('[pin-login]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 

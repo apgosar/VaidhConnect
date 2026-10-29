@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Copy, Check, LogOut } from 'lucide-react'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Clinic {
   id: string; storage: 'legacy' | 'scoped'; clinicName: string; doctor: string | null; email: string | null
@@ -56,7 +57,7 @@ export default function AdminPage() {
 
   const signOut = async () => { await fetch('/api/admin/session', { method: 'DELETE' }); router.replace('/admin/login') }
 
-  if (!clinics) return <div className="flex justify-center py-20"><div className="spinner" /></div>
+  if (!clinics) return <LoadingBlock className="py-20" />
 
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: 'var(--color-linen)' }}>

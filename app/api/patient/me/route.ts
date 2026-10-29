@@ -1,6 +1,7 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { getPatientSession } from '@/lib/auth/patientPin'
 import { listMyAppointments } from '@/lib/modules/patientAccess'
+import { apiError } from '@/lib/errors'
 
 // GET /api/patient/me — the signed-in (PIN) patient's upcoming appointments.
 // Which appointments appear depends on whether their PIN is verified; see
@@ -8,7 +9,7 @@ import { listMyAppointments } from '@/lib/modules/patientAccess'
 export async function GET() {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const session = await getPatientSession(tenant)
     if (!session) return Response.json({ authenticated: false }, { status: 401 })
 
@@ -20,6 +21,6 @@ export async function GET() {
     })
   } catch (e) {
     console.error('[patient-me]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

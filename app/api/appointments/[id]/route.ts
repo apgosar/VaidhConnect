@@ -7,6 +7,7 @@ import { parseBody } from '@/lib/validation'
 import { cancelAppointment, reopenAppointment, BookingError } from '@/lib/modules/booking'
 import { audit } from '@/lib/audit'
 import { getPatientSession } from '@/lib/auth/patientPin'
+import { apiError } from '@/lib/errors'
 
 const STATUSES = ['BOOKED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const
 
@@ -25,11 +26,11 @@ export async function GET(
 ) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
 
     const denied = forbid(session, 'appointments:manage')
@@ -81,7 +82,7 @@ export async function GET(
     return Response.json({ appointment })
   } catch (error) {
     console.error('[appointment-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -91,7 +92,7 @@ export async function PATCH(
 ) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const { id } = await params
 
@@ -106,7 +107,7 @@ export async function PATCH(
       // owns. Everything else needs a signed-in clinic user.
       const patient = await getPatientSession(tenant)
       const bareCancel = status === 'CANCELLED' && chiefComplaint === undefined && consultationNotes === undefined
-      if (!patient || !bareCancel) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      if (!patient || !bareCancel) return apiError('UNAUTHORIZED')
       await cancelAppointment(tenant, id, { kind: 'patient', session: patient })
       return Response.json({ ok: true })
     }
@@ -138,6 +139,6 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof BookingError) return Response.json({ error: error.message }, { status: error.status })
     console.error('[appointment-patch]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

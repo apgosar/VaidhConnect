@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Plus, Trash2, Calendar, Clock } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface BlockedSlot {
   id: string
@@ -58,8 +60,10 @@ export default function BlockedSlotsPage() {
     }
   }
 
+  const { confirm, dialog } = useConfirm()
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Remove this blocked slot?')) return
+    if (!(await confirm({ title: 'Remove this blocked slot?', message: 'Patients will be able to book that time again.', confirmLabel: 'Remove', danger: true }))) return
     await fetch('/api/doctor/blocked-slots', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -70,6 +74,7 @@ export default function BlockedSlotsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl animate-fade-in">
+      {dialog}
       <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Block Schedule</h1>
 
       {/* Create form */}
@@ -114,7 +119,7 @@ export default function BlockedSlotsPage() {
       <div>
         <h2 className="font-semibold text-slate-800 mb-3">Blocked Periods</h2>
         {loading ? (
-          <div className="flex justify-center py-8"><div className="spinner" /></div>
+          <LoadingBlock className="py-8" />
         ) : blocks.length === 0 ? (
           <div className="card p-8 text-center">
             <Clock size={32} className="mx-auto mb-2 text-slate-300" />

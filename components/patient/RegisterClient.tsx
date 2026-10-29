@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Home, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
+import { Home, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
 import { getDraft, setDraft } from '@/lib/patientDevice'
 import { splitPhone } from '@/lib/phoneSplit'
+import { PageShell, Container } from '@/components/ui/PageShell'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
 
 interface RegisterClientProps {
   config: {
@@ -78,29 +82,10 @@ export default function RegisterClient({ config }: RegisterClientProps) {
   }
 
   return (
-    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
-      {/* Header */}
-      <div
-        className="px-4 py-4 flex items-center gap-3"
-        style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
-      >
-        <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home"
-          style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}
-        >
-          <ArrowLeft size={16} /> Home
-        </button>
-        <div>
-          <h1
-            className="font-bold text-white text-base leading-snug"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Patient details
-          </h1>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>Step 1 of 2 · then choose a time</p>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader title="Patient details" subtitle="Step 1 of 2 · then choose a time" />
 
-      <div className="page-container-sm py-6">
+      <Container>
         <div className="card p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
@@ -237,33 +222,18 @@ export default function RegisterClient({ config }: RegisterClientProps) {
               </div>
             </div>
 
-            {error && (
-              <div
-                className="rounded-lg px-4 py-3 text-sm"
-                style={{ background: 'rgba(181,74,60,0.08)', border: '1px solid rgba(181,74,60,0.20)', color: '#B54A3C' }}
-              >
-                {error}
-              </div>
-            )}
+            {error && <Alert>{error}</Alert>}
 
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg w-full"
-              disabled={loading}
-            >
-              {loading ? (
-                <><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Saving...</span></>
-              ) : (
-                'Continue to Book Appointment'
-              )}
-            </button>
+            <Button type="submit" size="lg" block loading={loading}>
+              {loading ? 'Saving...' : 'Continue to Book Appointment'}
+            </Button>
 
-            <button type="button" onClick={() => router.push('/')} className="btn btn-outline btn-lg w-full font-semibold" style={{ borderWidth: 2, borderColor: 'var(--color-forest)', color: 'var(--color-forest)' }}>
-              <Home size={18} /> Back to home
-            </button>
+            <Button variant="outline" size="lg" block className="font-semibold" style={{ borderWidth: 2, borderColor: 'var(--color-forest)', color: 'var(--color-forest)' }} onClick={() => router.push('/')}>
+              <Home size={18} aria-hidden="true" /> Back to home
+            </Button>
           </form>
         </div>
-      </div>
-    </div>
+      </Container>
+    </PageShell>
   )
 }

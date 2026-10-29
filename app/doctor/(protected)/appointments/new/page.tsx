@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Search, UserPlus, CheckCircle2, Clock, X } from 'lucide-react'
 import { addDaysYmd, describeYmd } from '@/lib/time'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface PatientHit { id: string; name: string; phone: string; dob?: string }
 interface Slot { start: string; end: string; label: string }
@@ -86,7 +87,7 @@ export default function NewAppointmentPage() {
     if (config) setDate(config.today)
   }
 
-  if (!config) return <div className="flex justify-center py-20"><div className="spinner" /></div>
+  if (!config) return <LoadingBlock className="py-20" />
 
   if (booked) {
     return (
@@ -162,7 +163,7 @@ export default function NewAppointmentPage() {
             )
           })}
         </div>
-        {loadingSlots ? <div className="flex justify-center py-6"><div className="spinner" /></div>
+        {loadingSlots ? <LoadingBlock className="py-6" label="Loading times" />
           : slots.length === 0 ? <p className="text-sm flex items-center gap-2" style={{ color: 'var(--color-sage)' }}><Clock size={15} /> No open slots on this day.</p>
           : (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">

@@ -7,6 +7,7 @@ import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
 import { PAYMENT_MODES } from '@/lib/constants'
+import { apiError } from '@/lib/errors'
 
 const paymentSchema = z.object({
   appointmentId: z.string().min(1).max(128),
@@ -19,11 +20,11 @@ const paymentSchema = z.object({
 
 async function authorize() {
   const tenant = await getTenant()
-  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) }
+  if (!tenant) return { error: apiError('CLINIC_NOT_FOUND') }
   const gated = featureGate(tenant, 'payments')
   if (gated) return { error: gated }
   const session = await getSession()
-  if (!session?.uid) return { error: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
+  if (!session?.uid) return { error: apiError('UNAUTHORIZED') }
   const denied = forbid(session, 'payments:manage')
   if (denied) return { error: denied }
   return { tenant, session, db: tenantDb(tenant) }
@@ -69,6 +70,6 @@ export async function POST(request: Request) {
     return Response.json({ payment: { id: paymentId, ...paymentData } }, { status: 201 })
   } catch (error) {
     console.error('[payment-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

@@ -4,8 +4,9 @@ import { parseBody } from '@/lib/validation'
 import { createClinicSchema as createSchema } from '@/lib/adminSchemas'
 import { provisionClinic, ProvisionError } from '@/lib/modules/provisioning'
 import { FEATURES } from '@/lib/tenant/features'
+import { apiError } from '@/lib/errors'
 
-const deny = () => Response.json({ error: 'Not found' }, { status: 404 })
+const deny = () => apiError('NOT_FOUND')
 
 // GET — every clinic on the platform, with its hostnames and plan flags
 export async function GET() {
@@ -36,7 +37,7 @@ export async function GET() {
     return Response.json({ clinics, features: FEATURES })
   } catch (e) {
     console.error('[admin-clinics-get]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -51,6 +52,6 @@ export async function POST(request: Request) {
   } catch (e) {
     if (e instanceof ProvisionError) return Response.json({ error: e.message }, { status: e.status })
     console.error('[admin-clinics-post]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

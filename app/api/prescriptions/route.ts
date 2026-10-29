@@ -9,6 +9,7 @@ import { audit } from '@/lib/audit'
 import { MAX_TAPER_STEPS, taperTotalDays } from '@/lib/taper'
 import { addDaysYmd, isValidYmd, ymdInTz } from '@/lib/time'
 import { rememberMedicines } from '@/lib/modules/medicineCatalog'
+import { apiError } from '@/lib/errors'
 
 const text = (max: number) => z.string().trim().max(max)
 const taperStepSchema = z.object({
@@ -36,11 +37,11 @@ const prescriptionSchema = z.object({
 
 async function authorize() {
   const tenant = await getTenant()
-  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) }
+  if (!tenant) return { error: apiError('CLINIC_NOT_FOUND') }
   const gated = featureGate(tenant, 'prescriptions')
   if (gated) return { error: gated }
   const session = await getSession()
-  if (!session?.uid) return { error: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
+  if (!session?.uid) return { error: apiError('UNAUTHORIZED') }
   const denied = forbid(session, 'prescriptions:manage')
   if (denied) return { error: denied }
   return { tenant, session, db: tenantDb(tenant) }
@@ -100,6 +101,6 @@ export async function POST(request: Request) {
     return Response.json({ prescription: { id, ...data } }, { status: 201 })
   } catch (error) {
     console.error('[prescription-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

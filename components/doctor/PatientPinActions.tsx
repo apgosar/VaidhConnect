@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Desk tools for a patient's 4-digit PIN.
@@ -15,6 +16,7 @@ export default function PatientPinActions({ phone }: { phone: string }) {
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const { confirm, dialog } = useConfirm()
 
   const send = async (body: object, done: string) => {
     setBusy(true); setMsg(null)
@@ -30,6 +32,7 @@ export default function PatientPinActions({ phone }: { phone: string }) {
 
   return (
     <div className="card-data p-4 space-y-3">
+      {dialog}
       <div className="flex items-center gap-2">
         <KeyRound size={15} style={{ color: 'var(--color-sage)' }} />
         <h3 className="font-semibold text-sm" style={{ color: 'var(--color-charcoal)' }}>Patient PIN</h3>
@@ -39,7 +42,11 @@ export default function PatientPinActions({ phone }: { phone: string }) {
         <div className="flex flex-wrap gap-2">
           <button
             className="btn btn-outline btn-sm" disabled={busy}
-            onClick={() => { if (confirm('Reset this patient\'s PIN? They will be signed out and choose a new one on their next booking.')) send({ action: 'reset', phone }, 'PIN reset. The patient will choose a new one on their next booking.') }}
+            onClick={async () => {
+              if (await confirm({ title: "Reset this patient's PIN?", message: 'They will be signed out and choose a new one on their next booking.', confirmLabel: 'Reset PIN', danger: true })) {
+                send({ action: 'reset', phone }, 'PIN reset. The patient will choose a new one on their next booking.')
+              }
+            }}
           >Reset PIN</button>
           <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setMsg(null); setMode('set') }}>Set PIN at desk</button>
         </div>

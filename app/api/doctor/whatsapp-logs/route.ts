@@ -5,16 +5,17 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { constructMessageBody } from '@/lib/whatsapp'
 import { type NextRequest } from 'next/server'
+import { apiError } from '@/lib/errors'
 
 // GET /api/doctor/whatsapp-logs?limit=50&before=<ISO>
 export async function GET(request: NextRequest) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'logs:view')
     if (denied) return denied
@@ -54,6 +55,6 @@ export async function GET(request: NextRequest) {
     return Response.json({ logs })
   } catch (error) {
     console.error('[whatsapp-logs-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

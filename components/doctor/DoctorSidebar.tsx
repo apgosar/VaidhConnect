@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import {
   Menu, X, CalendarOff, MessageSquare, CalendarPlus, UserCog, ScrollText
 } from 'lucide-react'
 import { can, type Role, type Permission } from '@/lib/auth/access'
+import { useFocusTrap } from '@/components/ui/useFocusTrap'
 
 interface DoctorSidebarProps {
   doctorName: string
@@ -65,6 +66,10 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const router = useRouter()
+  const drawer = useRef<HTMLElement>(null)
+
+  // Escape closes the menu, Tab stays inside it while open, and focus returns to the hamburger afterwards.
+  useFocusTrap(drawer, mobileOpen, () => setMobileOpen(false))
 
   const handleSignOut = async () => {
     try {
@@ -184,6 +189,8 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
         }}
         onClick={() => setMobileOpen(true)}
         aria-label="Open menu"
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-menu"
       >
         <Menu size={20} />
       </button>
@@ -197,6 +204,11 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
             onClick={() => setMobileOpen(false)}
           />
           <aside
+            id="mobile-menu"
+            ref={drawer}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
             className="lg:hidden fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col"
             style={{ background: 'var(--color-forest)' }}
           >

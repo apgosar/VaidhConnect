@@ -8,6 +8,7 @@ import { rateLimit } from '@/lib/ratelimit'
 import { renderPrescriptionPdf } from '@/lib/modules/documents'
 import { getSignedDownloadUrl, uploadFile } from '@/lib/storage'
 import { sendPrescription } from '@/lib/whatsapp'
+import { apiError } from '@/lib/errors'
 
 export const runtime = 'nodejs'
 
@@ -22,13 +23,13 @@ const mask = (phone: string) => (phone.length > 6 ? `${phone.slice(0, 3)}${'*'.r
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     for (const feature of ['prescriptions', 'whatsapp'] as const) {
       const gated = featureGate(tenant, feature)
       if (gated) return gated
     }
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'prescriptions:manage')
     if (denied) return denied
 

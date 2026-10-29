@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import { auth } from '@/lib/firebase/client'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Alert } from '@/components/ui/Alert'
 
 export default function DoctorLoginPage() {
   const router = useRouter()
@@ -139,14 +140,7 @@ export default function DoctorLoginPage() {
                   </div>
                 </div>
 
-                {error && (
-                  <div
-                    className="rounded-lg px-4 py-3 text-sm"
-                    style={{ background: 'rgba(181,74,60,0.08)', border: '1px solid rgba(181,74,60,0.20)', color: '#B54A3C' }}
-                  >
-                    {error}
-                  </div>
-                )}
+                {error && <Alert>{error}</Alert>}
 
                 <button
                   type="submit"
@@ -197,14 +191,7 @@ export default function DoctorLoginPage() {
                     </div>
                   </div>
                   
-                  {error && (
-                    <div
-                      className="rounded-lg px-4 py-3 text-sm"
-                      style={{ background: 'rgba(181,74,60,0.08)', border: '1px solid rgba(181,74,60,0.20)', color: '#B54A3C' }}
-                    >
-                      {error}
-                    </div>
-                  )}
+                  {error && <Alert>{error}</Alert>}
 
                   <button type="submit" className="btn btn-primary w-full" disabled={forgotLoading}>
                     {forgotLoading ? 'Sending...' : 'Send Reset Link'}

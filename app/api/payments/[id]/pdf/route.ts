@@ -5,6 +5,7 @@ import { forbid } from '@/lib/auth/access'
 import { audit } from '@/lib/audit'
 import { renderReceiptPdf } from '@/lib/modules/documents'
 import { pdfResponse } from '@/lib/pdfHttp'
+import { apiError } from '@/lib/errors'
 
 export const runtime = 'nodejs'
 
@@ -13,11 +14,11 @@ export const runtime = 'nodejs'
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const gated = featureGate(tenant, 'payments')
     if (gated) return gated
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'payments:manage')
     if (denied) return denied
 

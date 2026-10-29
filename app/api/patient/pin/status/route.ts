@@ -1,6 +1,7 @@
 import { parseBody } from '@/lib/validation'
 import { phoneBody, pinFail, pinPreamble } from '@/lib/pinHttp'
 import { hasPin } from '@/lib/modules/patientAccess'
+import { apiError } from '@/lib/errors'
 
 // POST /api/patient/pin/status — { phone } -> { hasPin }
 // Lets the booking page word its prompt ("Enter your PIN" vs "Choose a PIN").
@@ -15,6 +16,6 @@ export async function POST(request: Request) {
   } catch (e) {
     const r = pinFail(e); if (r) return r
     console.error('[pin-status]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

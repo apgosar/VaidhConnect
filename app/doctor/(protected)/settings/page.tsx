@@ -5,7 +5,11 @@ import { Save, Upload, X, Check, Palette, Copy } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK, DEFAULT_TIMINGS } from '@/lib/constants'
 import type { WeeklyTimings, DayTiming } from '@/lib/constants'
 import Image from 'next/image'
+import { Alert } from '@/components/ui/Alert'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { failureText, networkFailureText } from '@/lib/clientErrors'
 import { DEFAULT_MARGINS, MARGIN_LIMITS, type PrintMargins } from '@/lib/pdf/layout'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
@@ -44,6 +48,9 @@ function SettingsPageContent() {
   const [qrFile, setQrFile] = useState<File | null>(null)
   const qrInputRef = useRef<HTMLInputElement>(null)
   const [sameAsWhatsapp, setSameAsWhatsapp] = useState(false)
+  // Messages that used to be browser pop-ups: they now show on the page where they can be read and announced.
+  const [notice, setNotice] = useState<string | null>(null)
+  const { confirm, dialog } = useConfirm()
 
   // Prescription printing: letterhead upload happens on its own (not with Save), spacing saves with the rest.
   const letterheadInputRef = useRef<HTMLInputElement>(null)
@@ -104,7 +111,7 @@ function SettingsPageContent() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -112,7 +119,7 @@ function SettingsPageContent() {
   const handleQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setQrFile(file)
     setQrPreview(URL.createObjectURL(file))
   }
@@ -120,7 +127,7 @@ function SettingsPageContent() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
   }
@@ -177,7 +184,7 @@ function SettingsPageContent() {
   const handleProductPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 1024 * 1024) { alert('Product photo must be under 1MB'); return }
+    if (file.size > 1024 * 1024) { setNotice('Product photo must be under 1MB'); return }
     const reader = new FileReader()
     reader.onload = (ev) => {
       handleProductChange(index, 'photoUrl', ev.target?.result as string)
@@ -202,7 +209,7 @@ function SettingsPageContent() {
   }
 
   const removeLetterhead = async () => {
-    if (!confirm('Remove the letterhead? Prescriptions will go back to the standard header.')) return
+    if (!(await confirm({ title: 'Remove the letterhead?', message: 'Prescriptions will go back to the standard header.', confirmLabel: 'Remove', danger: true }))) return
     setLetterheadBusy(true); setLetterheadError('')
     try {
       const res = await fetch('/api/doctor/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLetterhead: true }) })
@@ -220,6 +227,7 @@ function SettingsPageContent() {
   const handleSave = async () => {
     if (!doctor) return
     setSaving(true)
+    setNotice(null)
     try {
       let updatedPaymentDetails = { ...doctor.paymentDetails }
       
@@ -289,14 +297,14 @@ function SettingsPageContent() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        alert('Failed to save settings: ' + (errData.error || 'Server error'));
+        setNotice(failureText(errData, 'Failed to save settings'));
         return;
       }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e: any) {
-      alert('Error saving settings: ' + e.message);
+      setNotice(networkFailureText());
     } finally {
       setSaving(false)
     }
@@ -321,7 +329,7 @@ function SettingsPageContent() {
     setTimeout(() => { window.location.href = '/doctor/login' }, 1500)
   }
 
-  if (loading) return <div className="flex justify-center py-20"><div className="spinner" /></div>
+  if (loading) return <LoadingBlock className="py-20" />
   if (!doctor) return null
 
   return (
@@ -332,6 +340,8 @@ function SettingsPageContent() {
           {saved ? <><Check size={16} /> Saved!</> : saving ? 'Saving...' : <><Save size={16} /> Save Changes</>}
         </button>
       </div>
+      {notice && <Alert>{notice}</Alert>}
+      {dialog}
 
       {/* Clinic Branding */}
       <div className="card p-6 space-y-5">

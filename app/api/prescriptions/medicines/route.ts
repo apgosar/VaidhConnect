@@ -4,6 +4,7 @@ import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { searchMedicines } from '@/lib/modules/medicineCatalog'
+import { apiError } from '@/lib/errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,11 +13,11 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const gated = featureGate(tenant, 'prescriptions')
     if (gated) return gated
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'prescriptions:manage')
     if (denied) return denied
 
@@ -24,6 +25,6 @@ export async function GET(request: Request) {
     return Response.json({ medicines: await searchMedicines(tenantDb(tenant), q.slice(0, 100)) })
   } catch (error) {
     console.error('[medicine-suggest]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

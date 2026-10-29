@@ -223,7 +223,7 @@ describe('patient prescriptions', () => {
     for (const id of ['theirs', 'cancelled', 'norx', 'nope']) {
       const res = await download(id)
       expect(res.status, id).toBe(404)
-      expect(await res.json()).toEqual({ error: 'Not found' })
+      expect(await res.json()).toEqual({ error: 'Not found', code: 'NOT_FOUND' })
     }
     expect(h.rendered).toEqual([])
   })
