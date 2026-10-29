@@ -229,6 +229,28 @@ async function main() {
     const sharedFiles = await db.collection('clinics').doc(a).collection('audit_logs').where('action', 'in', ['prescription.share', 'prescription.share_failed']).get()
     check('the attempt is recorded in the activity log', shareTry.status === 422 || sharedFiles.size >= 1)
 
+    // ── follow-up date, medicine suggestions, patient prescription download ──
+    const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
+    check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)
+    const fuBad = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, medicines: [], followUpDate: '2020-01-01' } })
+    check('a follow-up date before the visit is refused', fuBad.status === 400, `(${fuBad.status})`)
+    cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('medicine_catalog').get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
+    const sug = await http(aHost, '/api/prescriptions/medicines?q=zz+para', { cookie: ownerCookie })
+    check('medicines already prescribed are suggested', sug.status === 200 && sug.body?.medicines?.[0]?.name === 'ZZ Paracetamol' && sug.body.medicines[0].dosage === '500 mg', `(${sug.status})`)
+    check('suggestions are private to the clinic', (await http(aHost, '/api/prescriptions/medicines?q=zz+para')).status === 401 && (await staff('/api/prescriptions/medicines?q=zz+para')).status === 403 && ((await http(bHost, '/api/prescriptions/medicines?q=zz+para', { cookie: ownerCookie })).status === 401))
+    const bSug = await http(bHost, '/api/prescriptions/medicines?q=zz', { cookie: await cookieForUid((await db.collection('clinics').doc(b).get()).data()!.ownerUid as string, bHost, '/api/auth/session', 'session') })
+    check('another clinic does not see them', bSug.status === 200 && bSug.body.medicines.length === 0)
+
+    const pdl = (host: string, cookie?: string) => fetch(`https://${host}/api/patient/prescriptions/${rxApptId}/pdf`, { headers: cookie ? { cookie } : {} })
+    check('a prescription download needs the patient PIN', (await pdl(aHost)).status === 401)
+    const own = await pdl(aHost, pinCookie)
+    check('the patient downloads their own prescription', own.status === 200 && own.headers.get('content-type') === 'application/pdf' && Buffer.from(await own.arrayBuffer()).subarray(0, 5).toString() === '%PDF-', `(${own.status})`)
+    check('a PIN session does not work on another clinic', (await pdl(bHost, pinCookie)).status === 401)
+    const otherPhone = await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: '+919800000098', pin: '5738' } })
+    const stranger = otherPhone.res.headers.getSetCookie().map(c => c.split(';')[0]).find(c => c.startsWith('pp_session='))
+    check('another patient cannot download it', !stranger || (await pdl(aHost, stranger)).status === 404)
+    check('the patient prescription list needs the PIN too', (await http(aHost, '/api/patient/prescriptions')).status === 401 && (await http(aHost, '/api/patient/prescriptions', { cookie: pinCookie })).status === 200)
+
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)
 

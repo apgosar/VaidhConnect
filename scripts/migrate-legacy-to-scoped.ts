@@ -16,7 +16,7 @@ import { db, arg, flag } from './_admin'
 // Everything the app keeps per clinic (see COLLECTIONS in lib/tenant/types.ts) except rate_limits,
 // which are short-lived counters. Missing patient_access would silently reset every patient's PIN;
 // missing slot_locks would drop the double-booking guard on already-booked slots.
-const COLLECTIONS = ['patients', 'appointments', 'prescriptions', 'payments', 'blocked_slots', 'whatsapp_logs', 'slot_locks', 'audit_logs', 'users', 'patient_access']
+const COLLECTIONS = ['patients', 'appointments', 'prescriptions', 'payments', 'blocked_slots', 'whatsapp_logs', 'slot_locks', 'audit_logs', 'users', 'patient_access', 'medicine_catalog']
 
 async function main() {
   const clinicId = arg('clinic'), domain = arg('domain')?.toLowerCase()

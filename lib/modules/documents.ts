@@ -110,6 +110,7 @@ export async function renderPrescriptionPdf(tenant: Tenant, prescriptionId: stri
       diagnosis: rxData.diagnosis,
       medicines: (rxData.medicines ?? []) as Medicine[],
       notes: rxData.notes,
+      followUpText: rxData.followUpDate ? formatDateShortInTz(new Date(`${rxData.followUpDate}T00:00:00Z`), 'UTC') : undefined,
     },
     patient: {
       name: String(patient.name ?? ''),

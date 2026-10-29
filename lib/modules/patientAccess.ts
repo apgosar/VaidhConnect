@@ -283,6 +283,47 @@ export async function listMyAppointments(tenant: Tenant, session: PatientSession
   return [...out.values()].sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 
+export interface MyVisit { appointmentId: string; prescriptionId: string; startTime: Date; patientName: string | null }
+
+const MAX_VISITS = 30
+
+/**
+ * Past visits for which the clinic wrote a prescription, newest first. Same scope rule as
+ * listMyAppointments: a verified PIN sees every visit on the number, an unverified one only
+ * visits booked under it. Only dates and names are returned; the document itself is fetched
+ * separately and re-checked.
+ */
+export async function listMyPrescriptions(tenant: Tenant, session: PatientSession, now = new Date()): Promise<MyVisit[]> {
+  const db = tenantDb(tenant)
+  const appts = new Map<string, any>()
+
+  const names = new Map<string, string>()
+  const patients = await db.col('patients').where('phone', '==', session.phone).get()
+  patients.docs.forEach(d => names.set(d.id, d.data().name))
+
+  if (session.verified) {
+    for (const p of patients.docs) {
+      const s = await db.col('appointments').where('patientId', '==', p.id).get()
+      s.docs.forEach(d => appts.set(d.id, d.data()))
+    }
+  }
+  const own = await db.col('appointments').where('accessId', '==', session.accessId).get()
+  own.docs.forEach(d => appts.set(d.id, d.data()))
+
+  const newest = [...appts.entries()]
+    .filter(([, a]) => a.status !== 'CANCELLED' && a.startTime.toDate() <= now)
+    .sort((x, y) => y[1].startTime.toDate().getTime() - x[1].startTime.toDate().getTime())
+    .slice(0, MAX_VISITS)
+
+  const visits: MyVisit[] = []
+  for (const [id, a] of newest) {
+    const rx = await db.col('prescriptions').where('appointmentId', '==', id).limit(1).get()
+    if (rx.empty) continue
+    visits.push({ appointmentId: id, prescriptionId: rx.docs[0].id, startTime: a.startTime.toDate(), patientName: names.get(a.patientId) ?? null })
+  }
+  return visits
+}
+
 /** May this PIN session cancel this appointment? (Same scope rule as listing.) */
 export function sessionOwnsAppointment(session: PatientSession, appt: { accessId?: string }, patientPhone: string | null): boolean {
   if (appt.accessId && appt.accessId === session.accessId) return true

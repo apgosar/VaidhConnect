@@ -49,3 +49,11 @@ export async function forEachLimited<T>(
     while (i < items.length) await fn(items[i++])
   }))
 }
+
+/** The public address patients use for a clinic: a custom domain if it has one, otherwise the first mapped host. */
+export async function clinicBookingUrl(clinicId: string): Promise<string | null> {
+  const snap = await adminDb.collection('domains').where('clinicId', '==', clinicId).get()
+  const hosts = snap.docs.map(d => d.id).sort()
+  const host = hosts.find(h => !h.endsWith('.run.app')) ?? hosts[0]
+  return host ? `https://${host}` : null
+}

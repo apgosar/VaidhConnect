@@ -27,6 +27,7 @@ environment: a permanent system-user token, never the 24-hour test token.
 | `daily_summary_update` | Utility | Doctor | Same-day booking or cancellation made after the summary hour |
 | `patient_pin_reset` | Authentication | Patient | Patient asks to reset their PIN |
 | `prescription_share` | Utility | Patient | The doctor taps the WhatsApp button on a prescription |
+| `followup_reminder` | Utility | Patient | The day before the follow-up date set on a prescription (cron) |
 
 ### 1. `appt_booking_confirmation`
 ```
@@ -74,6 +75,15 @@ How it is sent: the server renders the PDF, stores it privately at `shares/<clin
 gcloud storage buckets update gs://<bucket> --lifecycle-file=scripts/storage-lifecycle.json
 ```
 At most 5 sends an hour per prescription. If it fails, the doctor sees WhatsApp's reason on screen and it is logged on the WhatsApp Logs page.
+
+### 8. `followup_reminder`
+Body only, language English:
+```
+Hi {{1}}, this is a gentle reminder from {{2}} that your follow-up visit with Dr. {{3}} is due on {{4}}. To book your appointment, please call the clinic on {{5}} or visit {{6}}. We hope you are feeling better.
+```
+{{1}} patient name · {{2}} clinic name · {{3}} doctor name (without "Dr.") · {{4}} follow-up date (e.g. `03 Nov 2026`) · {{5}} clinic phone · {{6}} the clinic's web address (its custom domain if it has one, otherwise its first mapped host, otherwise the website in Settings).
+
+When it goes out: the reminder job (every 15 minutes) looks for prescriptions whose follow-up date is **tomorrow in the clinic's timezone** and sends between 09:00 and 19:00 clinic time. A prescription is marked done once the message is sent. It is also marked done, with nothing sent, when the patient has no phone number or already has a booked visit in the next 4 days. A failed send is retried on the next run, but only inside that morning window. Changing the follow-up date re-arms the reminder.
 
 ## When messages go out
 

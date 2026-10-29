@@ -239,3 +239,22 @@ describe('rendering modes from saved data', () => {
     expect(sample!.filename).toBe('Print_test_preprinted.pdf')
   })
 })
+
+describe('follow-up in the PDF', () => {
+  it('renders with and without a follow-up date', async () => {
+    const withDate = baseDoc()
+    withDate.prescription.followUpText = '12 Nov 2026'
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(withDate)))).toBe(true)
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(baseDoc())))).toBe(true)
+  })
+
+  it('formats the stored follow-up date as a calendar date, whatever the server timezone', async () => {
+    const fs = new FakeFirestore()
+    h.db = fakeTenantDb(fs)
+    await h.db.profile().set({ name: 'Shah', clinicName: 'Shah Clinic' })
+    await h.db.col('patients').doc('p1').set({ name: 'Asha Rao', phone: '+919800000001' })
+    await h.db.col('appointments').doc('a1').set({ patientId: 'p1', startTime: new Date('2026-11-02T03:30:00Z') })
+    await h.db.col('prescriptions').doc('rx1').set({ appointmentId: 'a1', patientId: 'p1', medicines: [], followUpDate: '2026-11-12' })
+    expect(isPdf((await renderPrescriptionPdf(tenant, 'rx1'))!.buffer)).toBe(true)
+  })
+})

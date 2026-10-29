@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, User, Clock, FileText, CreditCard,
@@ -13,6 +13,7 @@ import type { Medicine, TaperStep } from '@/lib/constants'
 import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
 import { PAYMENT_MODES } from '@/lib/constants'
 
+interface Suggestion { name: string; dosage: string; frequency: string; duration: string; instructions?: string; taper?: Medicine['taper'] }
 interface Patient {
   id: string; name: string; phone: string; dob: string; medicalHistory?: string; email?: string
 }
@@ -20,7 +21,7 @@ interface Appointment {
   id: string; startTime: string; endTime: string; status: string;
   chiefComplaint?: string; consultationNotes?: string;
   patient: Patient;
-  prescription?: { id: string; diagnosis?: string; medicines: Medicine[]; notes?: string; pdfPath?: string }
+  prescription?: { id: string; diagnosis?: string; medicines: Medicine[]; notes?: string; followUpDate?: string | null }
   payment?: { id: string; amount: string; mode: string; paidAt: string; notes?: string; receiptPdfPath?: string }
 }
 
@@ -40,6 +41,10 @@ export default function AppointmentDetailPage() {
   const [diagnosis, setDiagnosis] = useState('')
   const [medicines, setMedicines] = useState<Medicine[]>([{ name: '', dosage: '', frequency: '', duration: '' }])
   const [prescriptionNotes, setPrescriptionNotes] = useState('')
+  const [followUpDate, setFollowUpDate] = useState('')
+  // Medicines this clinic has prescribed before, offered as the doctor types.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [savingRx, setSavingRx] = useState(false)
 
   // Payment state
@@ -78,7 +83,8 @@ export default function AppointmentDetailPage() {
         setDiagnosis(rx.diagnosis ?? '')
         setMedicines(meds)
         setPrescriptionNotes(rx.notes ?? '')
-        setSavedRx(JSON.stringify([rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '']))
+        setFollowUpDate(rx.followUpDate ?? '')
+        setSavedRx(JSON.stringify([rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
       }
       if (data.appointment?.payment) {
         const pay = data.appointment.payment
@@ -132,6 +138,7 @@ export default function AppointmentDetailPage() {
         diagnosis,
         medicines: medicines.filter(m => m.name),
         notes: prescriptionNotes,
+        followUpDate: followUpDate || null,
       }, 'Could not save the prescription.')
       if (ok) { setShare({ state: 'idle' }); fetchAppt() }
     } finally {
@@ -185,6 +192,34 @@ export default function AppointmentDetailPage() {
   const addStep = (i: number) => setSteps(i, steps => steps.length >= MAX_TAPER_STEPS ? steps : [...steps, { dose: '', frequency: steps[steps.length - 1]?.frequency ?? '', days: steps[steps.length - 1]?.days ?? 5 }])
   const removeStep = (i: number, j: number) => setSteps(i, steps => steps.length > 1 ? steps.filter((_, k) => k !== j) : steps)
   const removeMedicine = (i: number) => setMedicines(prev => prev.filter((_, idx) => idx !== i))
+  const askForSuggestions = (text: string) => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current)
+    if (text.trim().length < 2) { setSuggestions([]); return }
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/prescriptions/medicines?q=${encodeURIComponent(text.trim())}`)
+        if (res.ok) setSuggestions((await res.json()).medicines ?? [])
+      } catch { /* suggestions are a convenience; typing carries on without them */ }
+    }, 250)
+  }
+
+  // Picking a remembered medicine from the list fills in how it was prescribed last time (blank fields only).
+  const onNameChange = (i: number, value: string) => {
+    askForSuggestions(value)
+    const hit = suggestions.find(s => s.name.toLowerCase() === value.trim().toLowerCase())
+    setMedicines(prev => prev.map((m, idx) => {
+      if (idx !== i) return m
+      const next = { ...m, name: value }
+      const untouched = !m.dosage && !m.frequency && !m.duration && !m.taper
+      if (hit && untouched) {
+        next.dosage = hit.dosage; next.frequency = hit.frequency; next.duration = hit.duration
+        if (hit.instructions) next.instructions = hit.instructions
+        if (hit.taper) next.taper = hit.taper
+      }
+      return next
+    }))
+  }
+
   const updateMedicine = (i: number, field: keyof Medicine, value: string) => {
     setMedicines(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
   }
@@ -202,7 +237,8 @@ export default function AppointmentDetailPage() {
   }
 
   const age = computeAge(appt.patient.dob)
-  const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes]) !== savedRx
+  const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
+  const addDays = (n: number) => { const d = new Date(appt.startTime); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
   const sharing = share.state === 'sending'
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
@@ -271,6 +307,10 @@ export default function AppointmentDetailPage() {
           </button>
         ))}
       </div>
+
+      <datalist id="medicine-suggestions">
+        {suggestions.map(s => <option key={s.name} value={s.name} />)}
+      </datalist>
 
       {/* Tab Panels */}
       {activeTab === 'notes' && (
@@ -393,7 +433,9 @@ export default function AppointmentDetailPage() {
                         className="form-input"
                         placeholder="Medicine name"
                         value={med.name}
-                        onChange={e => updateMedicine(i, 'name', e.target.value)}
+                        list="medicine-suggestions"
+                        autoComplete="off"
+                        onChange={e => onNameChange(i, e.target.value)}
                       />
                     </div>
                     <label className="col-span-2 flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
@@ -431,6 +473,18 @@ export default function AppointmentDetailPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="followUpDate">Follow-up visit (optional)</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input id="followUpDate" type="date" className="form-input" style={{ maxWidth: '12rem' }} value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
+              {([['3 days', 3], ['1 week', 7], ['2 weeks', 14], ['1 month', 30]] as const).map(([label, n]) => (
+                <button key={label} type="button" className="btn btn-ghost btn-sm" onClick={() => setFollowUpDate(addDays(n))}>{label}</button>
+              ))}
+              {followUpDate && <button type="button" className="btn btn-ghost btn-sm text-red-500" onClick={() => setFollowUpDate('')}>Clear</button>}
+            </div>
+            <p className="text-xs text-slate-400 mt-1">Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
           </div>
 
           <div className="form-group">

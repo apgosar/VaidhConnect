@@ -46,6 +46,8 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Schedule update for Dr. ${params[0] || 'Doctor'} at ${params[1] || 'the clinic'}: ${params[2] || 'Update'}. Total appointments today: ${params[3] || '0'}. Updated schedule: ${params[4] || 'No appointments'}. Thank you.`
     case 'prescription_share':
       return `Hi ${params[0] || 'Patient'}, here is your prescription from ${params[1] || 'the clinic'} for your visit on ${params[2] || 'your visit date'}. Please follow the doctor's advice, and call the clinic on ${params[3] || 'the clinic'} if you have any questions. Wishing you good health. [Prescription PDF attached]`
+    case 'followup_reminder':
+      return `Hi ${params[0] || 'Patient'}, this is a gentle reminder from ${params[1] || 'the clinic'} that your follow-up visit with Dr. ${params[2] || 'Doctor'} is due on ${params[3] || 'the planned date'}. To book your appointment, please call the clinic on ${params[4] || 'the clinic'} or visit ${params[5] || 'our website'}. We hope you are feeling better.`
     case 'patient_pin_reset':
       return `${params[0] || '000000'} is your code to reset your appointment PIN. Do not share this code with anyone. It expires in 10 minutes.`
     default:
@@ -383,4 +385,31 @@ export async function sendPrescription(to: string, params: {
       },
     ],
   }, { messageType: 'Prescription', recipientName: params.patientName })
+}
+
+// 8. Follow-up reminder (`followup_reminder`) — body-only template, six variables, sent the day before
+// the follow-up date the doctor set on the prescription.
+export async function sendFollowUpReminder(to: string, params: {
+  patientName: string
+  clinicName: string
+  doctorName: string
+  dateText: string
+  clinicPhone: string
+  bookingUrl: string
+}): Promise<boolean> {
+  return sendWhatsAppTemplate(to, {
+    name: 'followup_reminder',
+    language: { code: 'en' },
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: params.patientName },
+        { type: 'text', text: params.clinicName },
+        { type: 'text', text: bareDoctorName(params.doctorName) },
+        { type: 'text', text: params.dateText },
+        { type: 'text', text: params.clinicPhone },
+        { type: 'text', text: params.bookingUrl },
+      ],
+    }],
+  }, { messageType: 'Follow-up Reminder', recipientName: params.patientName })
 }
