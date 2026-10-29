@@ -5,6 +5,7 @@ import { Save, Upload, X, Check, Palette, Copy } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK, DEFAULT_TIMINGS } from '@/lib/constants'
 import type { WeeklyTimings, DayTiming } from '@/lib/constants'
 import Image from 'next/image'
+import { DEFAULT_MARGINS, MARGIN_LIMITS, type PrintMargins } from '@/lib/pdf/layout'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
@@ -23,6 +24,8 @@ interface Doctor {
   consultationFee?: string | null
   followUpFee?: string | null
   summaryHour?: number
+  printSettings?: PrintMargins
+  letterheadPath?: string | null
 }
 
 export default function SettingsPage() {
@@ -41,6 +44,12 @@ function SettingsPageContent() {
   const [qrFile, setQrFile] = useState<File | null>(null)
   const qrInputRef = useRef<HTMLInputElement>(null)
   const [sameAsWhatsapp, setSameAsWhatsapp] = useState(false)
+
+  // Prescription printing: letterhead upload happens on its own (not with Save), spacing saves with the rest.
+  const letterheadInputRef = useRef<HTMLInputElement>(null)
+  const [letterheadBusy, setLetterheadBusy] = useState(false)
+  const [letterheadError, setLetterheadError] = useState('')
+  const [letterheadVersion, setLetterheadVersion] = useState(() => Date.now())
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -176,6 +185,38 @@ function SettingsPageContent() {
     reader.readAsDataURL(file)
   }
 
+  const uploadLetterhead = async (file: File) => {
+    setLetterheadBusy(true); setLetterheadError('')
+    try {
+      const fd = new FormData()
+      fd.append('letterhead', file)
+      const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setLetterheadError(data.error ?? 'Could not upload the letterhead'); return }
+      setDoctor(prev => prev ? { ...prev, letterheadPath: data.doctor?.letterheadPath ?? 'set' } : prev)
+      setLetterheadVersion(Date.now())
+    } finally {
+      setLetterheadBusy(false)
+      if (letterheadInputRef.current) letterheadInputRef.current.value = ''
+    }
+  }
+
+  const removeLetterhead = async () => {
+    if (!confirm('Remove the letterhead? Prescriptions will go back to the standard header.')) return
+    setLetterheadBusy(true); setLetterheadError('')
+    try {
+      const res = await fetch('/api/doctor/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLetterhead: true }) })
+      if (!res.ok) { setLetterheadError((await res.json().catch(() => ({}))).error ?? 'Could not remove the letterhead'); return }
+      setDoctor(prev => prev ? { ...prev, letterheadPath: null } : prev)
+    } finally {
+      setLetterheadBusy(false)
+    }
+  }
+
+  const margins: PrintMargins = { ...DEFAULT_MARGINS, ...(doctor?.printSettings ?? {}) }
+  const setMargin = (key: keyof PrintMargins, value: string) =>
+    setDoctor(prev => prev ? { ...prev, printSettings: { ...DEFAULT_MARGINS, ...(prev.printSettings ?? {}), [key]: value === '' ? 0 : Number(value) } } : prev)
+
   const handleSave = async () => {
     if (!doctor) return
     setSaving(true)
@@ -241,6 +282,7 @@ function SettingsPageContent() {
           consultationFee: doctor.consultationFee,
           followUpFee: doctor.followUpFee,
           summaryHour: doctor.summaryHour ?? 10,
+          printSettings: margins,
           theme: { primary: doctor.theme?.primary || null },
         }),
       })
@@ -751,6 +793,67 @@ function SettingsPageContent() {
             </div>
             <input ref={qrInputRef} type="file" accept="image/*" className="hidden" onChange={handleQrChange} />
           </div>
+        </div>
+      </div>
+
+      {/* Prescription printing */}
+      <div className="card p-6 space-y-5">
+        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Prescription Printing</h2>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-slate-700">Letterhead</p>
+            <p className="text-sm text-slate-500">
+              Upload your letterhead as a full A4 page image (JPG or PNG, up to 5 MB). Prescriptions, downloads and WhatsApp copies are then drawn on it.
+              Without one, the standard header with your logo and details is used.
+            </p>
+          </div>
+          {doctor?.letterheadPath ? (
+            <div className="flex items-start gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/doctor/letterhead?v=${letterheadVersion}`} alt="Your letterhead" className="w-28 rounded border border-slate-200 shadow-sm" />
+              <div className="space-y-2">
+                <button type="button" className="btn btn-outline btn-sm" disabled={letterheadBusy} onClick={() => letterheadInputRef.current?.click()}>
+                  <Upload size={14} /> {letterheadBusy ? 'Uploading...' : 'Replace'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm text-red-500 block" disabled={letterheadBusy} onClick={removeLetterhead}>
+                  <X size={14} /> Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-outline btn-sm" disabled={letterheadBusy} onClick={() => letterheadInputRef.current?.click()}>
+              <Upload size={14} /> {letterheadBusy ? 'Uploading...' : 'Upload letterhead'}
+            </button>
+          )}
+          <input ref={letterheadInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadLetterhead(f) }} />
+          {letterheadError && <p className="text-sm text-red-600" role="alert">{letterheadError}</p>}
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-slate-700">Spacing for pre-printed letterhead paper</p>
+            <p className="text-sm text-slate-500">
+              When you tick "Print on letterhead", the prescription is printed without our header or footer. These gaps (in millimetres) keep the text clear of your printed header and footer.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(['top', 'bottom', 'left', 'right'] as const).map(key => (
+              <div key={key} className="form-group">
+                <label className="form-label capitalize" htmlFor={`margin-${key}`}>{key} (mm)</label>
+                <input
+                  id={`margin-${key}`} type="number" inputMode="decimal" step="0.5"
+                  min={MARGIN_LIMITS[key][0]} max={MARGIN_LIMITS[key][1]}
+                  className="form-input" value={margins[key]} onChange={e => setMargin(key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <a href="/api/doctor/print-test?mode=preprinted" target="_blank" rel="noopener" className="btn btn-outline btn-sm">Print a test page (pre-printed paper)</a>
+            <a href="/api/doctor/print-test?mode=standard" target="_blank" rel="noopener" className="btn btn-ghost btn-sm">Preview standard layout</a>
+          </div>
+          <p className="text-xs text-slate-400">Save your changes first. The test page uses the saved spacing. Print it on your letterhead paper at 100% scale (not "fit to page") and adjust until the text sits where you want it.</p>
         </div>
       </div>
 

@@ -81,3 +81,13 @@ export async function deleteFile(filePathOrUrl: string): Promise<void> {
 export function tenantPath(tenant: { clinicId: string; storage: "legacy" | "scoped" }, path: string): string {
   return tenant.storage === "legacy" ? path : `clinics/${tenant.clinicId}/${path}`;
 }
+
+/** Read a private object into memory (letterheads, generated documents). Returns null when it does not exist. */
+export async function downloadFile(objectPath: string): Promise<Buffer | null> {
+  try {
+    const [data] = await adminStorage.bucket().file(objectPath).download();
+    return data;
+  } catch {
+    return null;
+  }
+}
