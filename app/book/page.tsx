@@ -287,7 +287,7 @@ export default function BookPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <button onClick={() => router.push('/register')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Edit patient details">
+        <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back to home">
           <ArrowLeft size={20} />
         </button>
         <div>
@@ -297,6 +297,11 @@ export default function BookPage() {
       </div>
 
       <div className="page-container-sm py-6 space-y-5">
+        <div className="flex gap-2">
+          <button onClick={() => router.push('/')} className="btn btn-outline btn-sm flex-1">Back to home</button>
+          {/* replace, not push: editing details must not add another history entry to bounce between */}
+          <button onClick={() => router.replace('/register')} className="btn btn-ghost btn-sm flex-1">Edit patient details</button>
+        </div>
         <div className="card p-5">
           <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm" style={{ color: 'var(--color-charcoal)' }}>
             <Calendar size={15} style={{ color: 'var(--color-sage)' }} /> Select Date
