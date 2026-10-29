@@ -13,7 +13,7 @@ export default async function HomePage() {
 
   if (!tenant || !doctorDoc?.exists) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div id="main-content" role="main" className="min-h-screen flex items-center justify-center">
         <div className="text-center p-8">
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Clinic Not Configured</h1>
           <p className="text-slate-500">Please contact the administrator to set up the clinic.</p>

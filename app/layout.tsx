@@ -32,7 +32,7 @@ export async function generateViewport(): Promise<Viewport> {
   return {
     width: 'device-width',
     initialScale: 1,
-    maximumScale: 1,
+    // No maximumScale: patients must be able to pinch-zoom (WCAG 1.4.4).
     themeColor: themeColorOf(clinic?.data.theme),
   }
 }
@@ -53,6 +53,7 @@ export default async function RootLayout({
         {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
       </head>
       <body className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         {children}
       </body>
     </html>

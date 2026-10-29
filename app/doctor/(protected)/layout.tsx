@@ -68,6 +68,7 @@ export default async function DoctorLayout({
         </div>
 
         <main
+          id="main-content"
           className="flex-1 p-4 md:p-6 lg:p-8"
           style={{ backgroundColor: 'var(--color-linen)' }}
         >

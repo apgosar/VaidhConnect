@@ -69,12 +69,12 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
         {link && (
           <div className="card p-4 text-sm space-y-2">
             <p className="font-medium">{link.label} — one-time link, shown once:</p>
             <div className="flex gap-2">
-              <input readOnly className="form-input text-xs" value={link.url} onFocus={e => e.currentTarget.select()} />
+              <input aria-label={link.label} readOnly className="form-input text-xs" value={link.url} onFocus={e => e.currentTarget.select()} />
               <button className="btn btn-outline btn-sm" onClick={async () => { await navigator.clipboard.writeText(link.url); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
             </div>
           </div>
@@ -84,8 +84,8 @@ export default function AdminPage() {
           <form onSubmit={create} className="card p-5 grid sm:grid-cols-3 gap-3">
             {([['id', 'Clinic id (a-z, 0-9, -)'], ['name', 'Clinic name'], ['doctor', 'Doctor name'], ['email', 'Owner email'], ['domain', 'Hostname (e.g. drshah.example.in)'], ['timezone', 'Timezone'], ['primary', 'Brand colour (optional, #RRGGBB)']] as const).map(([k, label]) => (
               <div className="form-group" key={k}>
-                <label className="form-label">{label}</label>
-                <input className="form-input" required={k !== 'primary'} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
+                <label className="form-label" htmlFor={`new-clinic-${k}`}>{label}</label>
+                <input id={`new-clinic-${k}`} className="form-input" required={k !== 'primary'} value={form[k]} onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))} />
               </div>
             ))}
             <div className="flex items-end"><button className="btn btn-primary w-full" disabled={busy}>{busy ? 'Creating…' : 'Create clinic'}</button></div>
@@ -125,7 +125,7 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <form className="flex gap-2" onSubmit={e => { e.preventDefault(); const d = newDomain[c.id]; if (d) { patch(c.id, { addDomain: d }); setNewDomain(s => ({ ...s, [c.id]: '' })) } }}>
-                  <input className="form-input text-sm" placeholder="Add hostname" value={newDomain[c.id] ?? ''} onChange={e => setNewDomain(s => ({ ...s, [c.id]: e.target.value }))} />
+                  <input aria-label={`Add a hostname to ${c.id}`} className="form-input text-sm" placeholder="Add hostname" value={newDomain[c.id] ?? ''} onChange={e => setNewDomain(s => ({ ...s, [c.id]: e.target.value }))} />
                   <button className="btn btn-outline btn-sm">Add</button>
                 </form>
               </div>

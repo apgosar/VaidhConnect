@@ -127,7 +127,7 @@ export default function NewAppointmentPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <input className="form-input" placeholder="Search by name or phone (min 2 characters)" value={query} onChange={e => setQuery(e.target.value)} />
+              <input aria-label="Search patients by name or phone" className="form-input" placeholder="Search by name or phone (min 2 characters)" value={query} onChange={e => setQuery(e.target.value)} />
               {hits.map(h => (
                 <button key={h.id} className="w-full text-left rounded-lg p-3 hover:bg-[var(--color-primary-bg)] border" style={{ borderColor: 'var(--color-sage-border)' }} onClick={() => setPatient(h)}>
                   <span className="font-medium">{h.name}</span> <span className="text-xs" style={{ color: 'var(--color-sage)' }}>{h.phone}</span>
@@ -140,10 +140,10 @@ export default function NewAppointmentPage() {
           )
         ) : (
           <div className="grid sm:grid-cols-2 gap-3">
-            <div className="form-group"><label className="form-label">Full name *</label><input className="form-input" value={fresh.name} onChange={e => setFresh(f => ({ ...f, name: e.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">Mobile (with country code) *</label><input className="form-input" inputMode="tel" value={fresh.phone} onChange={e => setFresh(f => ({ ...f, phone: e.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">Date of birth *</label><input type="date" className="form-input" value={fresh.dob} max={config.today} onChange={e => setFresh(f => ({ ...f, dob: e.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">Email (optional)</label><input type="email" className="form-input" value={fresh.email} onChange={e => setFresh(f => ({ ...f, email: e.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="full-name" className="form-label">Full name *</label><input id="full-name" className="form-input" value={fresh.name} onChange={e => setFresh(f => ({ ...f, name: e.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="mobile" className="form-label">Mobile (with country code) *</label><input id="mobile" className="form-input" inputMode="tel" value={fresh.phone} onChange={e => setFresh(f => ({ ...f, phone: e.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="date-of-birth" className="form-label">Date of birth *</label><input id="date-of-birth" type="date" className="form-input" value={fresh.dob} max={config.today} onChange={e => setFresh(f => ({ ...f, dob: e.target.value }))} /></div>
+            <div className="form-group"><label htmlFor="email" className="form-label">Email (optional)</label><input id="email" type="email" className="form-input" value={fresh.email} onChange={e => setFresh(f => ({ ...f, email: e.target.value }))} /></div>
           </div>
         )}
       </section>
@@ -179,11 +179,11 @@ export default function NewAppointmentPage() {
       {config.enableChiefComplaint && (
         <section className="card p-5 space-y-2">
           <h2 className="font-semibold">3. Reason for visit <span className="text-xs font-normal" style={{ color: 'var(--color-sage)' }}>(optional)</span></h2>
-          <textarea className="form-textarea" rows={2} maxLength={500} value={complaint} onChange={e => setComplaint(e.target.value)} />
+          <textarea aria-label="Reason for visit" className="form-textarea" rows={2} maxLength={500} value={complaint} onChange={e => setComplaint(e.target.value)} />
         </section>
       )}
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
       <button className="btn btn-primary btn-lg w-full" disabled={!canBook || saving} onClick={book}>
         {saving ? 'Booking…' : 'Book appointment'}
       </button>

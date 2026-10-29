@@ -15,9 +15,17 @@
   --color-gold-light: #F0DEB8;
   --color-charcoal: #2B2B26;
   --color-charcoal-mid: #4A4A44;
-  --color-sage: #7A8B7F;
+  --color-sage: #5C6B61;          /* muted text: 5.1:1 on linen, 5.6:1 on white (was #7A8B7F, 3.2:1) */
   --color-sage-light: #B5C2B9;
   --color-sage-border: rgba(122, 139, 127, 0.25);
+
+  /* Accessible roles. Use these instead of picking a palette colour for text or borders. */
+  --color-placeholder: #6B786F;   /* 4.6:1 on the input background */
+  --color-link: #7A5A1E;          /* gold link text: 5.7:1 on linen */
+  --color-danger: #B54A3C;        /* error text: 4.7:1 on linen */
+  --color-danger-icon: #DC2626;   /* delete icons: 4.8:1 on white */
+  --color-border-input: #7A8B7F;  /* form control outline: 3.6:1 on the field (WCAG 1.4.11 needs 3:1) */
+  --color-on-whatsapp: #0B3D2E;   /* text on the WhatsApp green: 6.1:1 */
 
   /* Semantic aliases */
   --color-primary: var(--color-forest);
@@ -126,6 +134,8 @@ body {
 
 /* ─── Buttons ───────────────────────────────────────────── */
 .btn {
+  min-height: 44px;
+  min-width: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -219,12 +229,15 @@ body {
 }
 
 .btn-lg {
+  min-height: 48px;
   padding: 14px 28px;
   font-size: 15px;
   border-radius: var(--radius);
 }
 
 .btn-sm {
+  min-height: 36px;
+  min-width: 36px;
   padding: 6px 14px;
   font-size: 12px;
   border-radius: var(--radius-xs);
@@ -251,9 +264,11 @@ body {
   .form-textarea {
     width: 100%;
     padding: 11px 14px;
-    border: 1.5px solid var(--color-sage-border);
+    min-height: 44px;
+    border: 1.5px solid var(--color-border-input);
     border-radius: var(--radius-sm);
-    font-size: 14px;
+    /* 16px: smaller text makes iOS Safari zoom the page in when a field is focused */
+    font-size: 16px;
     color: var(--color-charcoal);
     background: #FFFEF9;
     transition: border-color 0.15s, box-shadow 0.15s;
@@ -279,7 +294,7 @@ body {
 
   .form-input::placeholder,
   .form-textarea::placeholder {
-    color: var(--color-sage-light);
+    color: var(--color-placeholder);
   }
 
   .form-textarea {
@@ -289,7 +304,7 @@ body {
 
   .form-error {
     font-size: 13px;
-    color: #B54A3C;
+    color: var(--color-danger);
     margin-top: 4px;
   }
 }
@@ -488,4 +503,43 @@ body {
 select option {
   background: white;
   color: var(--color-charcoal);
+}
+/* ─── Accessibility ─────────────────────────────────────── */
+/* One visible keyboard focus indicator everywhere: a white inner ring plus a forest outer ring,
+   so it shows on both the light pages and the dark green headers. */
+:focus-visible {
+  outline: 2px solid transparent; /* keeps a ring in forced-colours mode */
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px var(--color-forest);
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -64px;
+  z-index: 100;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--color-forest);
+  color: #FFFFFF;
+  font-weight: 700;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* A text-style action ("Forgot your PIN?") that still has a comfortable tap target. */
+.link-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 8px;
+  font-weight: 600;
+  color: var(--color-link);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

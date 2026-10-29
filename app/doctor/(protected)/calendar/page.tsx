@@ -166,7 +166,7 @@ export default function CalendarPage() {
             onClick={handleToday}
             disabled={isCurrentPeriod}
             className={`text-xs mt-0.5 font-medium ${isCurrentPeriod ? 'opacity-40 cursor-default' : 'hover:underline'}`}
-            style={{ color: 'var(--color-gold-dark)' }}
+            style={{ color: 'var(--color-link)' }}
           >
             Today
           </button>
@@ -263,8 +263,8 @@ export default function CalendarPage() {
                         <div className="text-right text-xs shrink-0 ml-2">
                           <p className="font-medium font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
                           <div className="flex gap-1 justify-end mt-1">
-                            {appt.prescription && <span className="badge badge-green" style={{ fontSize: 9 }}>Rx</span>}
-                            {appt.payment && <span className="badge badge-blue" style={{ fontSize: 9 }}>Paid</span>}
+                            {appt.prescription && <span className="badge badge-green" style={{ fontSize: 12 }}>Rx</span>}
+                            {appt.payment && <span className="badge badge-blue" style={{ fontSize: 12 }}>Paid</span>}
                           </div>
                         </div>
                       </div>
@@ -312,7 +312,7 @@ export default function CalendarPage() {
                       {format(day, 'd')}
                     </div>
                     {dayAppts.length > 0 && (
-                      <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-gold-dark)' }}>{dayAppts.length} apt</p>
+                      <p className="text-xs mt-1 font-medium" style={{ color: 'var(--color-link)' }}>{dayAppts.length} apt</p>
                     )}
                     {dayBlocks.length > 0 && (
                       <p className="text-xs mt-0.5 font-medium" style={{ color: '#B54A3C' }}>{dayBlocks.length} blocked</p>

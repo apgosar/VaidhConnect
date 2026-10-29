@@ -60,8 +60,8 @@ export default function PatientsPage() {
           Patients
         </h1>
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium" style={{ color: 'var(--color-sage)' }}>Show:</label>
-          <select
+          <label htmlFor="show" className="text-sm font-medium" style={{ color: 'var(--color-sage)' }}>Show:</label>
+          <select id="show"
             value={limit}
             onChange={e => {
               setLimit(Number(e.target.value))
@@ -80,7 +80,7 @@ export default function PatientsPage() {
       {/* Search */}
       <div className="relative">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />
-        <input
+        <input aria-label="Search patients by name or phone number"
           type="text"
           className="form-input pl-10 py-3 text-base"
           placeholder="Search by name or phone number..."
@@ -125,7 +125,7 @@ export default function PatientsPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}>{patient.name}</p>
                     <span
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide"
+                      className="text-xs font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide"
                       style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
                     >
                       {formatPatientId(patient.id)}

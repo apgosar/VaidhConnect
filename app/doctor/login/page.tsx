@@ -68,6 +68,8 @@ export default function DoctorLoginPage() {
 
   return (
     <div
+      id="main-content"
+      role="main"
       className="min-h-screen flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--color-linen)' }}
     >
@@ -127,9 +129,10 @@ export default function DoctorLoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
-                      style={{ color: 'var(--color-sage)' }}
-                      aria-label="Toggle password visibility"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center"
+                      style={{ color: 'var(--color-sage)', width: 44, height: 44 }}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -160,8 +163,7 @@ export default function DoctorLoginPage() {
 
               <button
                 onClick={() => { setForgotMode(true); setForgotEmail(email) }}
-                className="mt-4 text-center w-full text-sm font-medium"
-                style={{ color: 'var(--color-gold-dark)' }}
+                className="link-action mt-2 w-full"
               >
                 Forgot password?
               </button>

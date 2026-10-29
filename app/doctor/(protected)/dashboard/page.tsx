@@ -206,7 +206,7 @@ export default async function DoctorDashboard() {
           <Link
             href="/doctor/calendar"
             className="text-sm flex items-center gap-1 font-medium"
-            style={{ color: 'var(--color-gold-dark)' }}
+            style={{ color: 'var(--color-link)' }}
           >
             Full Calendar <ChevronRight size={14} />
           </Link>
@@ -288,7 +288,7 @@ export default async function DoctorDashboard() {
             <Link
               href="/doctor/blocked-slots"
               className="text-sm flex items-center gap-1 font-medium"
-              style={{ color: 'var(--color-gold-dark)' }}
+              style={{ color: 'var(--color-link)' }}
             >
               Manage <ChevronRight size={14} />
             </Link>
