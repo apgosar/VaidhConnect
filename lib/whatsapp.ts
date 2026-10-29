@@ -101,6 +101,21 @@ export async function sendWhatsAppTemplate(
     .map(p => p.text)
   const messageBody = options?.messageBody ?? constructMessageBody(templateName, params)
 
+  // Plan flag: a clinic without WhatsApp simply doesn't send (and it's logged,
+  // so the clinic can see why nothing went out).
+  {
+    const { getTenant } = await import('@/lib/tenant/resolve')
+    const { tenantHasFeature } = await import('@/lib/tenant/features')
+    const tenant = await getTenant()
+    if (tenant && !tenantHasFeature(tenant, 'whatsapp')) {
+      await logWhatsAppMessage({
+        to, templateName, messageType, recipientName, params, messageBody,
+        status: 'failed', errorDetail: 'WhatsApp messaging is not enabled for this clinic',
+      })
+      return false
+    }
+  }
+
   if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
     console.warn('[WhatsApp] Meta Cloud API credentials not configured, skipping.')
     await logWhatsAppMessage({

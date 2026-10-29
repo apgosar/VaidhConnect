@@ -66,6 +66,7 @@ class FakeDoc {
   setNow(d: Data) { this.map.set(this.id, wrap(d)) }
   updateNow(d: Data) { this.map.set(this.id, { ...(this.map.get(this.id) ?? {}), ...wrap(d) }) }
   deleteNow() { this.map.delete(this.id) }
+  collection(name: string) { return new FakeCollection(this.firestore, `${this.path}/${this.id}/${name}`) }
   async set(d: Data) { this.setNow(d) }
   async update(d: Data) { this.updateNow(d) }
   async delete() { this.deleteNow() }

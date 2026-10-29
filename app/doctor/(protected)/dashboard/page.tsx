@@ -2,6 +2,7 @@ import { getSession } from '@/lib/auth/session'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
+import { dayBoundsInTz } from '@/lib/time'
 import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
@@ -22,9 +23,8 @@ export default async function DoctorDashboard() {
   const db = tenantDb(tenant)
 
   const today = new Date()
-  const todayStart = startOfDay(today)
-  const todayEnd = endOfDay(today)
-  const weekEnd = endOfDay(addDays(today, 7))
+  const { start: todayStart, end: todayEnd } = dayBoundsInTz(today, tenant.timezone)
+  const weekEnd = dayBoundsInTz(new Date(today.getTime() + 7 * 86_400_000), tenant.timezone).end
 
   // Run queries
   const todayApptsSnap = await db.col('appointments')

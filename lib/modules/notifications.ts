@@ -1,6 +1,7 @@
 import { tenantDb } from '../db/tenant'
 import { sendBookingConfirmation, sendCancellation, sendReminder, sendSummaryUpdate } from '../whatsapp'
 import { sendEmail, appointmentReminderHtml } from '../email'
+import { emailAccent } from '../tenant/theme'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
 import type { Tenant } from '../tenant/types'
 
@@ -43,7 +44,8 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
           subject: `Reminder: Upcoming Appointment — ${clinicName}`,
           html: appointmentReminderHtml({
             patientName: patient.name, doctorName: doctor.name || 'Doctor', clinicName, appointmentTime: when,
-            clinicPhone: doctor.phone ?? undefined, clinicAddress: doctor.address ?? undefined,
+            clinicPhone: doctor.phone ?? undefined,
+            accentColor: emailAccent(doctor as any), clinicAddress: doctor.address ?? undefined,
           }),
         }))
       }

@@ -6,6 +6,13 @@ import { NextResponse } from 'next/server'
 // Cache for 1 hour in CDN/browser, revalidate in background
 export const revalidate = 3600
 
+// This proxies a clinic-uploaded file from our own origin, so it must never be
+// able to run script even if it is not a real image (e.g. a legacy SVG).
+const INERT = {
+  'Content-Security-Policy': "default-src 'none'; sandbox",
+  'X-Content-Type-Options': 'nosniff',
+}
+
 export async function GET() {
   try {
     const tenant = await getTenant()
@@ -28,6 +35,8 @@ export async function GET() {
         headers: {
           'Content-Type': mimeType,
           'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+        ...INERT,
+          ...INERT,
         },
       })
     }
@@ -44,6 +53,7 @@ export async function GET() {
       headers: {
         'Content-Type': contentType,
         'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+        ...INERT,
       },
     })
   } catch {

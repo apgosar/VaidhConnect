@@ -14,7 +14,7 @@ interface Doctor {
   youtubeLinks: string[];
   products: { id: string; name: string; price: string; description: string; photoUrl?: string }[];
   pageViews: number;
-  specialty: string; practiceDescription?: string | null; themeColor: string; qualifications?: string | null
+  specialty: string; practiceDescription?: string | null; themeColor: string; theme?: { primary?: string }; qualifications?: string | null
   slotDurationMins: number; timings: WeeklyTimings
   paymentDetails: { upiId?: string; bankDetails?: string; qrCodeUrl?: string }
   reminderIntervals: number[]
@@ -241,6 +241,7 @@ function SettingsPageContent() {
           consultationFee: doctor.consultationFee,
           followUpFee: doctor.followUpFee,
           summaryHour: doctor.summaryHour ?? 10,
+          theme: { primary: doctor.theme?.primary || null },
         }),
       })
 
@@ -500,6 +501,31 @@ function SettingsPageContent() {
               ))}
             </div>
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label flex items-center gap-2">
+            <Palette size={14} /> Brand Colour <span className="text-slate-400 text-xs">(buttons, headers, PDFs and emails)</span>
+          </label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="color"
+              className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
+              value={doctor.theme?.primary || '#0F3D2E'}
+              onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
+            />
+            <input
+              className="form-input w-36"
+              value={doctor.theme?.primary || ''}
+              onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
+              placeholder="Default"
+            />
+            {doctor.theme?.primary && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDoctor((p: any) => p ? { ...p, theme: { primary: '' } } : p)}>
+                Reset to default
+              </button>
+            )}
+          </div>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Pick a mid-to-dark colour: white text sits on top of it. Very light colours are rejected.</p>
         </div>
       </div>
 

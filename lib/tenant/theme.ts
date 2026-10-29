@@ -52,3 +52,9 @@ export function themeColorOf(theme: unknown, fallback = '#0F3D2E'): string {
   const primary = (theme as { primary?: unknown } | null)?.primary
   return typeof primary === 'string' && HEX.test(primary) ? primary : fallback
 }
+
+/** The clinic's brand colour for emails, or undefined to keep the default. */
+export function emailAccent(profile: { theme?: { primary?: unknown } } | undefined): string | undefined {
+  const primary = profile?.theme?.primary
+  return typeof primary === 'string' && isUsablePrimary(primary) ? primary : undefined
+}

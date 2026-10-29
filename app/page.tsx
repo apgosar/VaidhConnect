@@ -1,5 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
+import { tenantHasFeature } from '@/lib/tenant/features'
 import { FieldValue } from 'firebase-admin/firestore'
 import PatientPortal from '@/components/patient/PatientPortal'
 import type { WeeklyTimings } from '@/lib/constants'
@@ -51,8 +52,8 @@ export default async function HomePage() {
         practiceDescription: doctor.practiceDescription ?? null,
         photoUrl: doctor.photoUrl ?? null,
         registrationNumber: doctor.registrationNumber,
-        youtubeLinks: (doctor.youtubeLinks as string[]) ?? [],
-        products: (doctor.products as any[]) ?? [],
+        youtubeLinks: tenantHasFeature(tenant, 'videos') ? (doctor.youtubeLinks as string[]) ?? [] : [],
+        products: tenantHasFeature(tenant, 'products') ? (doctor.products as any[]) ?? [] : [],
         pageViews: doctor.pageViews ?? 0,
         paymentDetails: doctor.paymentDetails as any,
         timings: doctor.timings as unknown as WeeklyTimings,

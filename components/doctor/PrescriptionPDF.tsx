@@ -48,10 +48,15 @@ interface PrescriptionPDFDocProps {
   prescription: PrescriptionData
   patient: { name: string; phone: string; dob: string }
   appointment: { startTime: string; chiefComplaint?: string }
-  doctor: { name: string; clinicName: string; qualifications?: string; address?: string; phone?: string }
+  doctor: { name: string; clinicName: string; qualifications?: string; address?: string; phone?: string; theme?: { primary?: string } }
 }
 
+// Clinic brand colour for the document (falls back to the original look).
+const accentOf = (theme?: { primary?: string }, fallback = '#1e40af') =>
+  typeof theme?.primary === 'string' && theme.primary.length === 7 && theme.primary[0] === '#' ? theme.primary : fallback
+
 function PrescriptionDocument({ prescription, patient, appointment, doctor }: PrescriptionPDFDocProps) {
+  const accent = accentOf(doctor.theme)
   const apptDate = format(parseISO(appointment.startTime), 'dd MMM yyyy')
   const dobDate = format(parseISO(patient.dob), 'dd MMM yyyy')
   
@@ -63,7 +68,7 @@ function PrescriptionDocument({ prescription, patient, appointment, doctor }: Pr
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.clinicName}>{doctor.clinicName}</Text>
+            <Text style={[styles.clinicName, { color: accent }]}>{doctor.clinicName}</Text>
             <Text style={styles.doctorName}>Dr. {doctor.name}</Text>
             {doctor.qualifications && <Text style={styles.qualifications}>{doctor.qualifications}</Text>}
             {doctor.address && <Text style={styles.qualifications}>{doctor.address}</Text>}
@@ -101,8 +106,8 @@ function PrescriptionDocument({ prescription, patient, appointment, doctor }: Pr
         {/* Diagnosis */}
         {prescription.diagnosis && (
           <View style={styles.diagnosisBox}>
-            <Text style={{ fontSize: 8, color: '#1e40af', marginBottom: 2 }}>DIAGNOSIS</Text>
-            <Text style={styles.diagnosisText}>{prescription.diagnosis}</Text>
+            <Text style={{ fontSize: 8, color: accent, marginBottom: 2 }}>DIAGNOSIS</Text>
+            <Text style={[styles.diagnosisText, { color: accent }]}>{prescription.diagnosis}</Text>
           </View>
         )}
 

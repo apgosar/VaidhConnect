@@ -1,6 +1,8 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
+import { getSession } from '@/lib/auth/session'
+import { audit } from '@/lib/audit'
 import Link from 'next/link'
 import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
@@ -25,7 +27,11 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
   const patientDoc = await db.col('patients').doc(id).get()
 
   if (!patientDoc.exists) notFound()
-  
+
+  // Opening a patient's full history is itself recorded.
+  const session = await getSession()
+  if (session) await audit(tenant, session, 'patient.view', `patients/${id}`)
+
   const patientData = patientDoc.data() as any
   const patient = {
     id: patientDoc.id,
