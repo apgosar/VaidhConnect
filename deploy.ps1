@@ -5,8 +5,10 @@ param (
     [string]$Environment = "production",
     [string]$Region = "asia-south1",
     [string]$ServiceName,
-    # Staging only: extra hostnames for the same service (one per test clinic). After a
-    # deploy, each tag is re-pointed at the new revision (tags otherwise stay on the old one).
+    # Extra hostnames for the same service (one per clinic reached by a tag URL such as
+    # <tag>---<service>-<hash>.a.run.app). Tags already on the service are ALWAYS re-pointed at the
+    # new revision after a deploy (otherwise they stay on the old one and serve stale code);
+    # pass -Tags only to add new ones.
     [string[]]$Tags = @()
 )
 
@@ -146,10 +148,13 @@ try {
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Deployment successful!" -ForegroundColor Green
-        if ($Tags.Count -gt 0) {
-            $latest = gcloud run services describe $ServiceName --project $ProjectId --region $Region --format="value(status.latestReadyRevisionName)"
-            $pairs = ($Tags | ForEach-Object { "$_=$latest" }) -join ","
-            Write-Host "Pointing tags ($($Tags -join ', ')) at $latest..." -ForegroundColor Cyan
+        $service = gcloud run services describe $ServiceName --project $ProjectId --region $Region --format=json | ConvertFrom-Json
+        $existingTags = @($service.status.traffic | Where-Object { $_.tag } | ForEach-Object { $_.tag })
+        $allTags = @($existingTags + $Tags | Where-Object { $_ } | Sort-Object -Unique)
+        if ($allTags.Count -gt 0) {
+            $latest = $service.status.latestReadyRevisionName
+            $pairs = ($allTags | ForEach-Object { "$_=$latest" }) -join ","
+            Write-Host "Pointing tags ($($allTags -join ', ')) at $latest..." -ForegroundColor Cyan
             gcloud run services update-traffic $ServiceName --project $ProjectId --region $Region --update-tags $pairs --quiet
         }
     } else {
