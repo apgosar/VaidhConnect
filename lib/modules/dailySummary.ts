@@ -51,6 +51,7 @@ export async function processDailySummary(tenant: Tenant, now = new Date()): Pro
 
   const ok = await sendDailySummary(notifyPhone, {
     doctorName: doctor.name || 'Doctor',
+    clinicName: doctor.clinicName || 'Clinic',
     appointmentCount: snap.size.toString(),
     date: formatDateLongInTz(now, tenant.timezone),
     scheduleList: scheduleList.trim(),

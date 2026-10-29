@@ -55,6 +55,7 @@ export async function processReminders(tenant: Tenant, now = new Date()): Promis
       }
 
       await sendReminder(patient.phone, {
+        clinicName: doctor.clinicName || 'Clinic',
         patientName: patient.name,
         doctorName: doctor.name || 'Doctor',
         appointmentTime,

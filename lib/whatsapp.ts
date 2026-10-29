@@ -30,15 +30,15 @@ interface SendOptions {
 export function constructMessageBody(templateName: string, params: string[]): string {
   switch (templateName) {
     case 'appt_booking_confirmation':
-      return `Hi ${params[0] || 'Patient'}, your appointment with ${params[1] || 'Doctor'} is confirmed for ${params[2] || 'Scheduled Time'}. For any queries or assistance, contact ${params[3] || 'Clinic'}.`
+      return `Hi ${params[0] || 'Patient'}, your appointment at ${params[1] || 'the clinic'} with Dr. ${params[2] || 'Doctor'} has been confirmed for ${params[3] || 'Scheduled Time'}. If you have any questions or need to change your booking, please call the clinic on ${params[4] || 'the clinic'}. We look forward to seeing you.`
     case 'appt_cancellation':
-      return `Hi ${params[0] || 'Patient'}, your appointment scheduled for ${params[1] || 'Scheduled Time'} has been cancelled. For queries, contact ${params[2] || 'Clinic'}.`
+      return `Hi ${params[0] || 'Patient'}, your appointment at ${params[1] || 'the clinic'} scheduled for ${params[2] || 'Scheduled Time'} has been cancelled. If you would like to book again or have any questions, please call the clinic on ${params[3] || 'the clinic'}. Thank you.`
     case 'appt_reminder':
-      return `Appointment Reminder: Hi ${params[0] || 'Patient'}, this is a reminder for your appointment with ${params[1] || 'Doctor'} on ${params[2] || 'Scheduled Time'}.${params[4] ? ` Directions: ${params[4]}.` : ''} Clinic Contact: ${params[3] || 'Clinic'}.`
+      return `Appointment reminder from ${params[0] || 'the clinic'}: Hi ${params[1] || 'Patient'}, this is a reminder for your appointment with Dr. ${params[2] || 'Doctor'} on ${params[3] || 'Scheduled Time'}. Clinic contact: ${params[4] || 'the clinic'}. Directions: ${params[5] || 'Contact clinic for directions'}. See you soon.`
     case 'daily_summary_morning':
-      return `Good Morning Dr. ${params[0] || 'Doctor'}, here is your schedule for today (${params[2] || 'Today'}). You have ${params[1] || '0'} appointment(s):\n\n${params[3] || 'No appointments'}`
+      return `Good morning Dr. ${params[0] || 'Doctor'}. Here is the schedule for ${params[1] || 'the clinic'} on ${params[2] || 'Today'}. You have ${params[3] || '0'} appointment(s): ${params[4] || 'No appointments'}. Have a great day.`
     case 'daily_summary_update':
-      return `Schedule Update for Dr. ${params[0] || 'Doctor'}:\nChange: ${params[1] || 'Update'}\nRemaining appointments today: ${params[2] || '0'}\n\nUpdated Schedule:\n${params[3] || 'No appointments'}`
+      return `Schedule update for Dr. ${params[0] || 'Doctor'} at ${params[1] || 'the clinic'}: ${params[2] || 'Update'}. Total appointments today: ${params[3] || '0'}. Updated schedule: ${params[4] || 'No appointments'}. Thank you.`
     case 'patient_pin_reset':
       return `${params[0] || '000000'} is your code to reset your appointment PIN. Do not share this code with anyone. It expires in 10 minutes.`
     default:
@@ -199,6 +199,7 @@ export async function sendWhatsAppTemplate(
 // 1. Booking Confirmation (`appt_booking_confirmation`)
 export async function sendBookingConfirmation(to: string, params: {
   patientName: string;
+  clinicName: string;
   doctorName: string;
   appointmentTime: string;
   clinicPhone: string;
@@ -210,6 +211,7 @@ export async function sendBookingConfirmation(to: string, params: {
       type: 'body',
       parameters: [
         { type: 'text', text: params.patientName },
+        { type: 'text', text: params.clinicName },
         { type: 'text', text: params.doctorName },
         { type: 'text', text: params.appointmentTime },
         { type: 'text', text: params.clinicPhone },
@@ -221,6 +223,7 @@ export async function sendBookingConfirmation(to: string, params: {
 // 2. Cancellation Notification (`appt_cancellation`)
 export async function sendCancellation(to: string, params: {
   patientName: string;
+  clinicName: string;
   appointmentTime: string;
   clinicPhone: string;
 }) {
@@ -231,6 +234,7 @@ export async function sendCancellation(to: string, params: {
       type: 'body',
       parameters: [
         { type: 'text', text: params.patientName },
+        { type: 'text', text: params.clinicName },
         { type: 'text', text: params.appointmentTime },
         { type: 'text', text: params.clinicPhone },
       ]
@@ -240,6 +244,7 @@ export async function sendCancellation(to: string, params: {
 
 // 3. Appointment Reminder (`appt_reminder`)
 export async function sendReminder(to: string, params: {
+  clinicName: string;
   patientName: string;
   doctorName: string;
   appointmentTime: string;
@@ -252,6 +257,7 @@ export async function sendReminder(to: string, params: {
     components: [{
       type: 'body',
       parameters: [
+        { type: 'text', text: params.clinicName },
         { type: 'text', text: params.patientName },
         { type: 'text', text: params.doctorName },
         { type: 'text', text: params.appointmentTime },
@@ -265,8 +271,9 @@ export async function sendReminder(to: string, params: {
 // 4. Morning Summary for Doctor (`daily_summary_morning`)
 export async function sendDailySummary(to: string, params: {
   doctorName: string;
-  appointmentCount: string;
+  clinicName: string;
   date: string;
+  appointmentCount: string;
   scheduleList: string;
 }) {
   return sendWhatsAppTemplate(to, {
@@ -276,8 +283,9 @@ export async function sendDailySummary(to: string, params: {
       type: 'body',
       parameters: [
         { type: 'text', text: params.doctorName },
-        { type: 'text', text: params.appointmentCount },
+        { type: 'text', text: params.clinicName },
         { type: 'text', text: params.date },
+        { type: 'text', text: params.appointmentCount },
         { type: 'text', text: params.scheduleList },
       ]
     }]
@@ -287,8 +295,10 @@ export async function sendDailySummary(to: string, params: {
 // 5. Updated Summary for Doctor (`daily_summary_update`)
 export async function sendSummaryUpdate(to: string, params: {
   doctorName: string;
-  cancelledPatientName: string;
-  remainingCount: string;
+  clinicName: string;
+  /** What changed, as a short phrase, e.g. "New booking by Asha Rao for 10:30 AM". */
+  change: string;
+  totalCount: string;
   scheduleList: string;
 }) {
   return sendWhatsAppTemplate(to, {
@@ -298,8 +308,9 @@ export async function sendSummaryUpdate(to: string, params: {
       type: 'body',
       parameters: [
         { type: 'text', text: params.doctorName },
-        { type: 'text', text: params.cancelledPatientName },
-        { type: 'text', text: params.remainingCount },
+        { type: 'text', text: params.clinicName },
+        { type: 'text', text: params.change },
+        { type: 'text', text: params.totalCount },
         { type: 'text', text: params.scheduleList },
       ]
     }]

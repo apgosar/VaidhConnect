@@ -26,7 +26,7 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
 
     const tasks: Promise<unknown>[] = [
       sendBookingConfirmation(patient.phone, {
-        patientName: patient.name, doctorName: doctor.name || 'Doctor', appointmentTime: when, clinicPhone,
+        patientName: patient.name, clinicName, doctorName: doctor.name || 'Doctor', appointmentTime: when, clinicPhone,
       }),
       patient.email
         ? sendEmail({ to: patient.email, subject: 'Appointment Confirmed', html: `<p>${escapeHtml(`Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${when}.`)}</p>` })
@@ -35,7 +35,7 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
 
     if (hoursAway < 1) {
       tasks.push(sendReminder(patient.phone, {
-        patientName: patient.name, doctorName: doctor.name || 'Doctor', appointmentTime: when, clinicPhone,
+        clinicName, patientName: patient.name, doctorName: doctor.name || 'Doctor', appointmentTime: when, clinicPhone,
         directionsUrl: doctor.mapsUrl || 'Contact clinic for directions',
       }))
       if (patient.email) {
@@ -51,7 +51,7 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
       }
     }
     await Promise.all(tasks)
-    await notifyDoctorScheduleUpdate(tenant, doctor, appt, `New booking: ${patient.name}`)
+    await notifyDoctorScheduleUpdate(tenant, doctor, appt, `New booking by ${patient.name} for ${formatTimeInTz(appt.startTime, tenant.timezone)}`)
   } catch (err) {
     console.error('[notifyBooked]', err)
   }
@@ -62,7 +62,7 @@ export async function notifyCancelled(tenant: Tenant, doctor: Doctor, patient: P
     const clinicName = doctor.clinicName || 'Clinic'
     const when = whenText(tenant, appt.startTime)
     const tasks: Promise<unknown>[] = [
-      sendCancellation(patient.phone, { patientName: patient.name, appointmentTime: when, clinicPhone: doctor.phone || clinicName }),
+      sendCancellation(patient.phone, { patientName: patient.name, clinicName, appointmentTime: when, clinicPhone: doctor.phone || clinicName }),
     ]
     if (patient.email) {
       tasks.push(sendEmail({
@@ -72,7 +72,7 @@ export async function notifyCancelled(tenant: Tenant, doctor: Doctor, patient: P
       }))
     }
     await Promise.all(tasks)
-    await notifyDoctorScheduleUpdate(tenant, doctor, appt, patient.name)
+    await notifyDoctorScheduleUpdate(tenant, doctor, appt, `Cancellation by ${patient.name} for ${formatTimeInTz(appt.startTime, tenant.timezone)}`)
   } catch (err) {
     console.error('[notifyCancelled]', err)
   }
@@ -109,8 +109,9 @@ export async function notifyDoctorScheduleUpdate(tenant: Tenant, doctor: Doctor,
 
   await sendSummaryUpdate(notifyPhone, {
     doctorName: doctor.name || 'Doctor',
-    cancelledPatientName: change,
-    remainingCount: snap.size.toString(),
+    clinicName: doctor.clinicName || 'Clinic',
+    change,
+    totalCount: snap.size.toString(),
     scheduleList: scheduleList.trim() || 'No remaining appointments.',
   })
 }
