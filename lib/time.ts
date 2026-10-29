@@ -116,3 +116,9 @@ export function describeYmd(ymd: string): { weekdayShort: string; weekdayLong: s
   const f = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...o }).format(dt)
   return { weekdayShort: f({ weekday: "short" }), weekdayLong: f({ weekday: "long" }), day: String(d), monthShort: f({ month: "short" }) }
 }
+
+/** "28 Oct 2026" */
+export function formatDateShortInTz(date: Date, tz: string): string {
+  const p = parts(date, tz, { day: '2-digit', month: 'short', year: 'numeric' })
+  return `${p.day} ${p.month} ${p.year}`
+}

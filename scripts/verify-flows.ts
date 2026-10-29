@@ -163,6 +163,22 @@ async function main() {
     if (staffBook.body?.appointment?.id) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(staffBook.body.appointment.id).delete() })
     cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patients').where('name', '==', `ZZ Staffbooked ${stamp}`).get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
 
+    // ── prescriptions: the PDF is built on the server ──────────────────────
+    const rxApptId = rebook.body?.appointment?.id as string
+    const rxAppt = await db.collection('clinics').doc(a).collection('appointments').doc(rxApptId).get()
+    const rxSave = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }] } })
+    check('doctor can save a prescription', rxSave.status === 201, `(${rxSave.status})`)
+    const rxId = rxSave.body?.prescription?.id as string
+    cleanup.push(async () => { if (rxId) await db.collection('clinics').doc(a).collection('prescriptions').doc(rxId).delete() })
+    const rxDl = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf`, { headers: { cookie: ownerCookie } })
+    const rxBytes = Buffer.from(await rxDl.arrayBuffer())
+    check('prescription downloads as a real PDF attachment', rxDl.status === 200 && rxDl.headers.get('content-type') === 'application/pdf' && /^attachment/.test(rxDl.headers.get('content-disposition') ?? '') && rxBytes.subarray(0, 5).toString() === '%PDF-', `(${rxDl.status}, ${rxBytes.length} bytes)`)
+    const rxInline = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf?inline=1`, { headers: { cookie: ownerCookie } })
+    check('print opens the PDF inline', rxInline.status === 200 && /^inline/.test(rxInline.headers.get('content-disposition') ?? ''))
+    check('prescription PDF needs a login', (await http(aHost, `/api/prescriptions/${rxId}/pdf`)).status === 401)
+    check('front desk cannot download prescriptions', (await staff(`/api/prescriptions/${rxId}/pdf`)).status === 403)
+    check('another clinic cannot reach it', (await http(bHost, `/api/prescriptions/${rxId}/pdf`, { cookie: ownerCookie })).status === 401)
+
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)
 

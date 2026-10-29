@@ -1,41 +1,35 @@
+import { featureGate } from '@/lib/tenant/features'
 import { getTenant } from '@/lib/tenant/resolve'
-import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
-import { getSignedDownloadUrl } from '@/lib/storage'
-import { NextResponse } from 'next/server'
+import { forbid } from '@/lib/auth/access'
+import { audit } from '@/lib/audit'
+import { renderReceiptPdf } from '@/lib/modules/documents'
+import { pdfResponse } from '@/lib/pdfHttp'
 
-// GET /api/payments/[id]/pdf — redirects to a short-lived signed URL.
-// Receipts are private (financial data); only an authenticated doctor
-// session can generate a link to view one.
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await getSession()
-  if (!session?.uid) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export const runtime = 'nodejs'
 
-  const tenant = await getTenant()
-  if (!tenant) return NextResponse.json({ error: 'Clinic not found' }, { status: 404 })
-  const db = tenantDb(tenant)
-
-  const { id } = await params
-  const doc = await db.col('payments').doc(id).get()
-  if (!doc.exists) {
-    return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
-  }
-
-  const receiptPdfPath = doc.data()?.receiptPdfPath as string | undefined
-  if (!receiptPdfPath) {
-    return NextResponse.json({ error: 'No receipt on file for this payment' }, { status: 404 })
-  }
-
+// GET /api/payments/[id]/pdf — the receipt as a PDF, built on the server from what
+// is saved. `?inline=1` opens it in the browser's viewer instead of downloading.
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const url = await getSignedDownloadUrl(receiptPdfPath)
-    return NextResponse.redirect(url)
+    const tenant = await getTenant()
+    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    const gated = featureGate(tenant, 'payments')
+    if (gated) return gated
+    const session = await getSession()
+    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const denied = forbid(session, 'payments:manage')
+    if (denied) return denied
+
+    const { id } = await params
+    const pdf = await renderReceiptPdf(tenant, id)
+    if (!pdf) return Response.json({ error: 'Payment not found' }, { status: 404 })
+
+    const inline = new URL(request.url).searchParams.get('inline') === '1'
+    await audit(tenant, session, inline ? 'payment.print' : 'payment.download', `payments/${id}`)
+    return pdfResponse(pdf.buffer, pdf.filename, inline)
   } catch (error) {
     console.error('[payment-pdf-get]', error)
-    return NextResponse.json({ error: 'Failed to generate download link' }, { status: 500 })
+    return Response.json({ error: 'Could not create the PDF' }, { status: 500 })
   }
 }
