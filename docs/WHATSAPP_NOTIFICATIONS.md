@@ -26,6 +26,7 @@ environment: a permanent system-user token, never the 24-hour test token.
 | `daily_summary_morning` | Utility | Doctor | Each morning at the doctor's chosen summary hour (cron) |
 | `daily_summary_update` | Utility | Doctor | Same-day booking or cancellation made after the summary hour |
 | `patient_pin_reset` | Authentication | Patient | Patient asks to reset their PIN |
+| `prescription_share` | Utility | Patient | The doctor taps the WhatsApp button on a prescription |
 
 ### 1. `appt_booking_confirmation`
 ```
@@ -60,6 +61,19 @@ Schedule update for Dr. {{1}} at {{2}}: {{3}}. Total appointments today: {{4}}. 
 ### 6. `patient_pin_reset`
 Authentication template with a "copy code" button. Meta fixes the wording (`{{1}} is your verification code.`), so the clinic name can't appear here. The code is sent twice, as the body variable and as the button's parameter. Choose a 10-minute expiry.
 {{1}} 6-digit code
+
+### 7. `prescription_share`
+Header type **Document** (Meta asks for a sample PDF when you submit), language English, body:
+```
+Hi {{1}}, here is your prescription from {{2}} for your visit on {{3}}. Please follow the doctor's advice, and call the clinic on {{4}} if you have any questions. Wishing you good health.
+```
+{{1}} patient name · {{2}} clinic name · {{3}} visit date (e.g. `02 Nov 2026`) · {{4}} clinic phone. The prescription itself travels as the header document.
+
+How it is sent: the server renders the PDF, stores it privately at `shares/<clinicId>/<prescriptionId>/<time>.pdf` and gives Meta a 60-minute signed link. The link is never shown to anyone or written to the logs. A storage rule deletes those copies after 7 days:
+```
+gcloud storage buckets update gs://<bucket> --lifecycle-file=scripts/storage-lifecycle.json
+```
+At most 5 sends an hour per prescription. If it fails, the doctor sees WhatsApp's reason on screen and it is logged on the WhatsApp Logs page.
 
 ## When messages go out
 

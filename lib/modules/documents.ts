@@ -11,7 +11,12 @@ import type { PdfImage } from '../pdf/common'
 import type { Tenant } from '../tenant/types'
 import type { Medicine } from '../constants'
 
-export interface RenderedPdf { buffer: Buffer; filename: string }
+export interface RenderedPdf {
+  buffer: Buffer
+  filename: string
+  /** What a message that delivers the document needs to say about it (prescriptions only). */
+  share?: { patientName: string; patientPhone: string; clinicName: string; clinicPhone: string; visitDate: string }
+}
 
 const safeName = (s: string) => s.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'Patient'
 
@@ -114,7 +119,17 @@ export async function renderPrescriptionPdf(tenant: Tenant, prescriptionId: stri
     },
     visit: { dateText, chiefComplaint: appt.chiefComplaint },
   })
-  return { buffer, filename: `Prescription_${safeName(String(patient.name ?? ''))}_${dateText.replace(/ /g, '')}.pdf` }
+  return {
+    buffer,
+    filename: `Prescription_${safeName(String(patient.name ?? ''))}_${dateText.replace(/ /g, '')}.pdf`,
+    share: {
+      patientName: String(patient.name ?? ''),
+      patientPhone: String(patient.phone ?? ''),
+      clinicName: doctor.clinicName,
+      clinicPhone: doctor.phone || doctor.clinicName,
+      visitDate: dateText,
+    },
+  }
 }
 
 /** A made-up prescription laid out with the clinic's current print settings, to test spacing on real paper. */

@@ -14,12 +14,14 @@ interface TemplateParams {
     /** Buttons only: Meta requires the kind and position of the button. */
     sub_type?: 'url';
     index?: string;
-    parameters: Array<{
-      type: 'text';
-      text: string;
-    }>;
+    parameters: TemplateParam[];
   }>;
 }
+
+type TemplateParam =
+  | { type: 'text'; text: string }
+  // A header that carries a file. Meta downloads it from `link` when it sends the message.
+  | { type: 'document'; document: { link: string; filename: string } }
 
 interface SendOptions {
   /** Human-readable label shown in the WhatsApp logs UI */
@@ -42,6 +44,8 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Good morning Dr. ${params[0] || 'Doctor'}. Here is the schedule for ${params[1] || 'the clinic'} on ${params[2] || 'Today'}. You have ${params[3] || '0'} appointment(s): ${params[4] || 'No appointments'}. Have a great day.`
     case 'daily_summary_update':
       return `Schedule update for Dr. ${params[0] || 'Doctor'} at ${params[1] || 'the clinic'}: ${params[2] || 'Update'}. Total appointments today: ${params[3] || '0'}. Updated schedule: ${params[4] || 'No appointments'}. Thank you.`
+    case 'prescription_share':
+      return `Hi ${params[0] || 'Patient'}, here is your prescription from ${params[1] || 'the clinic'} for your visit on ${params[2] || 'your visit date'}. Please follow the doctor's advice, and call the clinic on ${params[3] || 'the clinic'} if you have any questions. Wishing you good health. [Prescription PDF attached]`
     case 'patient_pin_reset':
       return `${params[0] || '000000'} is your code to reset your appointment PIN. Do not share this code with anyone. It expires in 10 minutes.`
     default:
@@ -89,16 +93,30 @@ function sanitizeTemplateParamText(text: string): string {
 // The templates already say "Dr. {{n}}", so a stored name like "Dr. Mehta" must not become "Dr. Dr. Mehta".
 const bareDoctorName = (name: string) => name.replace(/^\s*dr\.?\s+/i, '').trim() || name
 
+export interface SendResult {
+  ok: boolean
+  /** Why it failed, in words a clinic can act on. Absent on success. */
+  error?: string
+}
+
 export async function sendWhatsAppTemplate(
   to: string,
   template: TemplateParams,
   options?: SendOptions
 ): Promise<boolean> {
+  return (await sendWhatsAppTemplateDetailed(to, template, options)).ok
+}
+
+export async function sendWhatsAppTemplateDetailed(
+  to: string,
+  template: TemplateParams,
+  options?: SendOptions
+): Promise<SendResult> {
   const sanitizedTemplate: TemplateParams = {
     ...template,
     components: template.components.map(c => ({
       ...c,
-      parameters: c.parameters.map(p => ({ ...p, text: sanitizeTemplateParamText(p.text) })),
+      parameters: c.parameters.map(p => (p.type === 'text' ? { ...p, text: sanitizeTemplateParamText(p.text) } : p)),
     })),
   }
   const templateName = sanitizedTemplate.name
@@ -106,7 +124,7 @@ export async function sendWhatsAppTemplate(
   const recipientName = options?.recipientName ?? ''
   const params = sanitizedTemplate.components
     .flatMap(c => c.parameters)
-    .map(p => p.text)
+    .flatMap(p => (p.type === 'text' ? [p.text] : []))
   const messageBody = options?.messageBody ?? constructMessageBody(templateName, params)
 
   // Plan flag: a clinic without WhatsApp simply doesn't send (and it's logged,
@@ -120,7 +138,7 @@ export async function sendWhatsAppTemplate(
         to, templateName, messageType, recipientName, params, messageBody,
         status: 'failed', errorDetail: 'WhatsApp messaging is not enabled for this clinic',
       })
-      return false
+      return { ok: false, error: 'WhatsApp messaging is not enabled for this clinic' }
     }
   }
 
@@ -136,7 +154,7 @@ export async function sendWhatsAppTemplate(
       status: 'failed',
       errorDetail: 'WhatsApp credentials not configured',
     })
-    return false
+    return { ok: false, error: 'WhatsApp is not set up for this service yet' }
   }
 
   // Normalize phone number to E.164 format without '+' for WhatsApp API
@@ -172,7 +190,7 @@ export async function sendWhatsAppTemplate(
         status: 'failed',
         errorDetail
       })
-      return false
+      return { ok: false, error: (data?.error?.message as string | undefined) ?? 'WhatsApp did not accept the message' }
     }
 
     console.log('[WhatsApp] Successfully sent template:', JSON.stringify(data, null, 2))
@@ -185,7 +203,7 @@ export async function sendWhatsAppTemplate(
       messageBody,
       status: 'sent'
     })
-    return true
+    return { ok: true }
   } catch (error) {
     console.error('[WhatsApp] Network error:', error)
     await logWhatsAppMessage({
@@ -198,7 +216,7 @@ export async function sendWhatsAppTemplate(
       status: 'failed',
       errorDetail: error instanceof Error ? error.message : String(error),
     })
-    return false
+    return { ok: false, error: 'Could not reach WhatsApp. Please try again.' }
   }
 }
 
@@ -337,4 +355,32 @@ export async function sendPinResetCode(to: string, params: { code: string }) {
       { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: params.code }] },
     ]
   }, { messageType: 'PIN Reset Code', recipientName: 'Patient' })
+}
+
+// 7. Prescription (`prescription_share`) — Meta template with a DOCUMENT header (the PDF) and four
+// body variables. `pdfUrl` must be an https link Meta can fetch (a short-lived signed storage URL).
+export async function sendPrescription(to: string, params: {
+  patientName: string
+  clinicName: string
+  visitDate: string
+  clinicPhone: string
+  pdfUrl: string
+  filename: string
+}): Promise<SendResult> {
+  return sendWhatsAppTemplateDetailed(to, {
+    name: 'prescription_share',
+    language: { code: 'en' },
+    components: [
+      { type: 'header', parameters: [{ type: 'document', document: { link: params.pdfUrl, filename: params.filename } }] },
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: params.patientName },
+          { type: 'text', text: params.clinicName },
+          { type: 'text', text: params.visitDate },
+          { type: 'text', text: params.clinicPhone },
+        ],
+      },
+    ],
+  }, { messageType: 'Prescription', recipientName: params.patientName })
 }

@@ -217,6 +217,18 @@ async function main() {
     check('the letterhead can be removed', lhRemove.status === 200 && lhRemove.body?.doctor?.letterheadPath === undefined, `(${lhRemove.status})`)
     check('and then it is gone', (await fetch(`https://${aHost}/api/doctor/letterhead`, { headers: { cookie: ownerCookie } })).status === 404)
 
+    // ── sharing a prescription on WhatsApp ─────────────────────────────────
+    // The Meta template may not exist yet on a fresh account, so a clinic owner reaching Meta is judged by
+    // the answer being a clean 200 or a clean 502 with a reason, never a crash. No message is expected to land.
+    check('sharing a prescription needs a login', (await http(aHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST' })).status === 401)
+    check('front desk cannot share prescriptions', (await staff(`/api/prescriptions/${rxId}/whatsapp`, 'POST')).status === 403)
+    check('another clinic cannot share it', [401, 404].includes((await http(bHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST', cookie: ownerCookie })).status))
+    const shareTry = await http(aHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST', cookie: ownerCookie })
+    const shareText = JSON.stringify(shareTry.body)
+    check('the owner reaches WhatsApp and gets a clean answer', [200, 502, 422].includes(shareTry.status) && !shareText.includes('storage.googleapis.com') && !shareText.includes(person.phone), `(${shareTry.status} ${shareTry.body?.error ?? shareTry.body?.to ?? ''})`)
+    const sharedFiles = await db.collection('clinics').doc(a).collection('audit_logs').where('action', 'in', ['prescription.share', 'prescription.share_failed']).get()
+    check('the attempt is recorded in the activity log', shareTry.status === 422 || sharedFiles.size >= 1)
+
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)
 
