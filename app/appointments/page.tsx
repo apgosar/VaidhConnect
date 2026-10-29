@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Calendar, AlertTriangle, LogOut, Phone } from 'lucide-react'
+import { ArrowLeft, Calendar, AlertTriangle, LogOut, Phone, FileText, Download } from 'lucide-react'
 import { formatDateTimeInTz } from '@/lib/time'
 import { getSavedPatients } from '@/lib/patientDevice'
 import PinInput from '@/components/patient/PinInput'
@@ -18,6 +18,8 @@ interface Appointment {
   patientName?: string | null
 }
 
+interface PastVisit { appointmentId: string; startTime: string; patientName: string | null }
+
 // "My Appointments": sign in with the phone number and 4-digit PIN chosen when
 // booking. What appears depends on whether the PIN is verified (see
 // lib/modules/patientAccess.ts) — never any medical record.
@@ -27,6 +29,7 @@ function MyAppointments() {
   const [timezone, setTimezone] = useState('Asia/Kolkata')
   const [state, setState] = useState<'loading' | 'login' | 'reset' | 'list'>('loading')
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [visits, setVisits] = useState<PastVisit[]>([])
   const [verified, setVerified] = useState(false)
   const [phone, setPhone] = useState('')
   const [pin, setPin] = useState('')
@@ -43,6 +46,8 @@ function MyAppointments() {
     setVerified(!!data.verified)
     setPhone(data.phone ?? '')
     setState('list')
+    // Past prescriptions load after the list so a slow or missing one never delays it.
+    fetch('/api/patient/prescriptions').then(r => (r.ok ? r.json() : { visits: [] })).then(d => setVisits(d.visits ?? [])).catch(() => setVisits([]))
   }, [params])
 
   useEffect(() => {
@@ -70,7 +75,7 @@ function MyAppointments() {
 
   const logout = async () => {
     await fetch('/api/patient/pin/login', { method: 'DELETE' })
-    setPin(''); setAppointments([]); setState('login')
+    setPin(''); setAppointments([]); setVisits([]); setState('login')
   }
 
   const handleCancel = async (id: string) => {
@@ -177,6 +182,27 @@ function MyAppointments() {
                   )}
                 </div>
               ))
+            )}
+
+            {visits.length > 0 && (
+              <div className="card p-5 space-y-3">
+                <h2 className="font-semibold flex items-center gap-2" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
+                  <FileText size={16} style={{ color: 'var(--color-sage)' }} /> Your prescriptions
+                </h2>
+                <ul className="divide-y" style={{ borderColor: 'var(--color-sage-border)' }}>
+                  {visits.map(v => (
+                    <li key={v.appointmentId} className="py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{formatDateTimeInTz(new Date(v.startTime), timezone).split(',')[0]}</p>
+                        {v.patientName && <p className="text-xs text-slate-500 truncate">{v.patientName}</p>}
+                      </div>
+                      <a href={`/api/patient/prescriptions/${v.appointmentId}/pdf`} download className="btn btn-outline btn-sm shrink-0">
+                        <Download size={14} /> Download
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {!verified && (

@@ -68,6 +68,15 @@ can see or change:
 - Residual risk: someone could book under another person's *new* number and cause a
   WhatsApp confirmation to be sent to them. The limits bound this; staff can cancel.
 
+## Prescriptions
+- **PDFs are built on the server** (`lib/modules/documents.ts`), never in the browser: the browser's WebAssembly is blocked by the production CSP. Download, print, WhatsApp and the patient's copy all come from the same renderer.
+- **Fonts** for Hindi and Gujarati (and the rupee sign) are bundled in `public/fonts/pdf` (SIL Open Font License).
+- **Letterhead:** an A4 JPG/PNG a clinic uploads in Settings, kept privately under `letterheads/`. "Print on letterhead" prints content only, spaced by the clinic's top/bottom/left/right millimetres, for paper that already carries the letterhead.
+- **Shared copies:** a prescription sent on WhatsApp is stored at `shares/<clinicId>/<prescriptionId>/` and deleted after 7 days by a storage rule: `gcloud storage buckets update gs://<bucket> --lifecycle-file=scripts/storage-lifecycle.json`.
+- **Patients** download their own prescriptions from My Appointments after PIN sign-in (a verified PIN sees every visit on the number, an unverified one only visits booked under it).
+- **Medicine suggestions** come from each clinic's own history (`medicine_catalog`). To fill it from existing prescriptions: `npx tsx --env-file=.env scripts/backfill-medicine-catalog.ts --clinic <id> --execute` (dry run without `--execute`).
+- **Follow-up reminders** need the `followup_reminder` template (see WHATSAPP_NOTIFICATIONS.md).
+
 ## Known limits
 - One calendar per clinic (`doctorId` = clinic id). Extra doctors can sign in but
   share the calendar.

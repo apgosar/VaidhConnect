@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
 })
 
 export interface PrescriptionDocProps {
-  prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null }
+  prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null; /** Already formatted, e.g. "12 Nov 2026". */ followUpText?: string }
   patient: { name: string; phone: string; /** Already formatted, empty when unknown. */ dob?: string }
   visit: { /** Already formatted in the clinic's timezone. */ dateText: string; chiefComplaint?: string | null }
   doctor: {
@@ -194,6 +194,13 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
           <View style={styles.notes}>
             <Text style={{ fontSize: 8, color: '#713f12', fontWeight: 700, marginBottom: 3 }}>INSTRUCTIONS / NOTES</Text>
             <Txt style={{ fontSize: 9, color: '#713f12' }}>{prescription.notes}</Txt>
+          </View>
+        ) : null}
+
+        {prescription.followUpText ? (
+          <View style={[styles.diagnosisBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} wrap={false}>
+            <Text style={{ fontSize: 8, color: accent }}>FOLLOW-UP VISIT</Text>
+            <Text style={{ fontSize: 11, fontWeight: 700, color: accent }}>{prescription.followUpText}</Text>
           </View>
         ) : null}
 
