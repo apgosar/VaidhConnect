@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # firebase-admin 14 requires Node >= 22 (the Dockerfile still uses 20).
+      # firebase-admin 14 requires Node >= 22; the Dockerfile and .nvmrc match.
       - uses: actions/setup-node@v4
         with:
           node-version: 22

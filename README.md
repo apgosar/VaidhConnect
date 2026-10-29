@@ -33,3 +33,35 @@ Create a comprehensive digital presence to showcase your practice:
 * **Booking Confirmations**: Instantly sends patients confirmation messages with clinic details, directions, and appointment times.
 * **Reminders & Alerts**: Automated appointment reminders and instant notifications for any schedule changes or cancellations.
 * **Doctor Daily Summaries**: Delivers a daily schedule overview and real-time patient cancellation updates directly to the doctor's WhatsApp.
+
+### 🔐 Patient Access
+* **4-digit PIN**: patients choose a PIN on their first booking and use it with their mobile number to view or cancel appointments. No OTP, so it works for patients who book with a relative or at the front desk.
+* **Forgotten PIN**: reset with a WhatsApp code, or ask the clinic to reset it from the patient page.
+
+### 🏢 Many Clinics, One Codebase
+* Each clinic is reached by its own hostname and has its own data, branding, team and settings.
+* Roles per clinic: owner, doctor and front desk. An operator console manages clinics, hostnames and plan features.
+
+## Development
+
+Requires **Node 22** (see `.nvmrc`).
+
+```powershell
+npm ci --legacy-peer-deps
+copy .env.local.example .env.local   # then fill in the values
+npm run dev
+```
+
+| Command | Purpose |
+|---|---|
+| `npx tsc --noEmit` | Type-check |
+| `npm test` | Unit tests (in-memory Firestore fake) |
+| `npm run check:tenant` | Guard: all clinic data goes through the tenant-scoped accessor |
+| `npm run build` | Production build |
+| `.\deploy.ps1 [-Environment staging]` | Deploy to Cloud Run |
+
+## Documentation
+* [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — concepts, environment variables, day-to-day, background jobs
+* [`docs/ROLLOUT.md`](docs/ROLLOUT.md) — production roll-out and data migration
+* [`docs/CUSTOM_DOMAINS.md`](docs/CUSTOM_DOMAINS.md) — giving a clinic a hostname
+* [`docs/WHATSAPP_NOTIFICATIONS.md`](docs/WHATSAPP_NOTIFICATIONS.md) — messages, templates and their variables
