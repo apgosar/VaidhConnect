@@ -86,6 +86,9 @@ function sanitizeTemplateParamText(text: string): string {
     .replace(/ {4,}/g, '   ')
 }
 
+// The templates already say "Dr. {{n}}", so a stored name like "Dr. Mehta" must not become "Dr. Dr. Mehta".
+const bareDoctorName = (name: string) => name.replace(/^\s*dr\.?\s+/i, '').trim() || name
+
 export async function sendWhatsAppTemplate(
   to: string,
   template: TemplateParams,
@@ -215,7 +218,7 @@ export async function sendBookingConfirmation(to: string, params: {
       parameters: [
         { type: 'text', text: params.patientName },
         { type: 'text', text: params.clinicName },
-        { type: 'text', text: params.doctorName },
+        { type: 'text', text: bareDoctorName(params.doctorName) },
         { type: 'text', text: params.appointmentTime },
         { type: 'text', text: params.clinicPhone },
       ]
@@ -262,7 +265,7 @@ export async function sendReminder(to: string, params: {
       parameters: [
         { type: 'text', text: params.clinicName },
         { type: 'text', text: params.patientName },
-        { type: 'text', text: params.doctorName },
+        { type: 'text', text: bareDoctorName(params.doctorName) },
         { type: 'text', text: params.appointmentTime },
         { type: 'text', text: params.clinicPhone },
         { type: 'text', text: params.directionsUrl },
@@ -285,7 +288,7 @@ export async function sendDailySummary(to: string, params: {
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: params.doctorName },
+        { type: 'text', text: bareDoctorName(params.doctorName) },
         { type: 'text', text: params.clinicName },
         { type: 'text', text: params.date },
         { type: 'text', text: params.appointmentCount },
@@ -310,7 +313,7 @@ export async function sendSummaryUpdate(to: string, params: {
     components: [{
       type: 'body',
       parameters: [
-        { type: 'text', text: params.doctorName },
+        { type: 'text', text: bareDoctorName(params.doctorName) },
         { type: 'text', text: params.clinicName },
         { type: 'text', text: params.change },
         { type: 'text', text: params.totalCount },
