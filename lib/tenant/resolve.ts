@@ -4,6 +4,9 @@ import type { Tenant } from './types'
 import { currentTenant } from './context'
 
 const CACHE_TTL_MS = 60_000
+// A host with no clinic is cached only briefly, so a newly provisioned clinic
+// goes live within seconds instead of after a full TTL.
+const MISS_TTL_MS = 5_000
 const cache = new Map<string, { tenant: Tenant | null; at: number }>()
 
 function normalizeHost(raw: string | null): string {
@@ -39,7 +42,7 @@ async function lookup(host: string): Promise<Tenant | null> {
 export async function resolveTenantForHost(rawHost: string | null): Promise<Tenant | null> {
   const host = normalizeHost(rawHost)
   const hit = cache.get(host)
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.tenant
+  if (hit && Date.now() - hit.at < (hit.tenant ? CACHE_TTL_MS : MISS_TTL_MS)) return hit.tenant
   const tenant = await lookup(host)
   cache.set(host, { tenant, at: Date.now() })
   return tenant

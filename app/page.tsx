@@ -30,8 +30,19 @@ export default async function HomePage() {
 
   return (
     <PatientPortal
+      // Explicit whitelist: this crosses into a Client Component, so everything
+      // here is sent to the visitor's browser. Never spread the raw profile —
+      // it holds private fields (whatsappPhone, email, ownerUid, flags) and
+      // Firestore Timestamps, which can't be serialized.
       doctor={{
-        ...doctor,
+        id: doctor.id,
+        name: doctor.name,
+        clinicName: doctor.clinicName,
+        specialty: doctor.specialty,
+        themeColor: doctor.themeColor ?? '',
+        slotDurationMins: doctor.slotDurationMins,
+        consultationFee: doctor.consultationFee ?? null,
+        followUpFee: doctor.followUpFee ?? null,
         logoUrl: doctor.logoUrl ?? null,
         address: doctor.address ?? null,
         mapsUrl: doctor.mapsUrl ?? null,
