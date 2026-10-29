@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
+import { ArrowLeft, Home, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
 import { getDraft, setDraft } from '@/lib/patientDevice'
+import { splitPhone } from '@/lib/phoneSplit'
 
 interface RegisterClientProps {
   config: {
@@ -32,8 +33,8 @@ export default function RegisterClient({ config }: RegisterClientProps) {
     const d = getDraft()
     if (!d) return
     const p = d.patient
-    const m = /^(\+\d{1,4})(\d+)$/.exec(p.phone)
-    if (m) { setCountryCode(m[1]); setPhoneNumber(m[2]) }
+    const split = splitPhone(p.phone)
+    if (split) { setCountryCode(split.countryCode); setPhoneNumber(split.national) }
     setForm({ name: p.name, dob: p.dob, medicalHistory: p.medicalHistory ?? '', email: p.email ?? '', chiefComplaint: d.chiefComplaint ?? '' })
   }, [])
 
@@ -83,10 +84,10 @@ export default function RegisterClient({ config }: RegisterClientProps) {
         className="px-4 py-4 flex items-center gap-3"
         style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" aria-label="Back to home"
-          style={{ color: 'rgba(255,255,255,0.70)' }}
+        <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home"
+          style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={16} /> Home
         </button>
         <div>
           <h1
@@ -257,8 +258,8 @@ export default function RegisterClient({ config }: RegisterClientProps) {
               )}
             </button>
 
-            <button type="button" onClick={() => router.push('/')} className="btn btn-outline w-full">
-              Back to home
+            <button type="button" onClick={() => router.push('/')} className="btn btn-outline btn-lg w-full font-semibold" style={{ borderWidth: 2, borderColor: 'var(--color-forest)', color: 'var(--color-forest)' }}>
+              <Home size={18} /> Back to home
             </button>
           </form>
         </div>
