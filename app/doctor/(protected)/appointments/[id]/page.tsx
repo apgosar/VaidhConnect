@@ -5,14 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, User, Clock, FileText, CreditCard,
   CheckCircle2, XCircle, Edit3, Save, Pill, Plus, Trash2,
-  Download, Share2, Phone
+  Download, Printer, Phone
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
 import type { Medicine } from '@/lib/constants'
 import { PAYMENT_MODES } from '@/lib/constants'
-import PrescriptionPDF from '@/components/doctor/PrescriptionPDF'
-import ReceiptPDF from '@/components/doctor/ReceiptPDF'
 
 interface Patient {
   id: string; name: string; phone: string; dob: string; medicalHistory?: string; email?: string
@@ -49,78 +47,81 @@ export default function AppointmentDetailPage() {
   const [payNotes, setPayNotes] = useState('')
   const [savingPay, setSavingPay] = useState(false)
 
-  const [showPrescriptionPDF, setShowPrescriptionPDF] = useState(false)
-  const [showReceiptPDF, setShowReceiptPDF] = useState(false)
-  const [doctorInfo, setDoctorInfo] = useState<{ name: string; clinicName: string; qualifications?: string; address?: string; phone?: string; theme?: { primary?: string } } | null>(null)
+  const [error, setError] = useState('')
+  // What is saved on the server, to tell when the form has edits the PDF would not include.
+  const [savedRx, setSavedRx] = useState('')
+  const [savedPay, setSavedPay] = useState('')
 
   const fetchAppt = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/appointments/${id}`)
+      if (!res.ok) { setError('Could not load this appointment.'); return }
       const data = await res.json()
       setAppt(data.appointment)
       setNotes(data.appointment?.consultationNotes ?? '')
       if (data.appointment?.prescription) {
-        setDiagnosis(data.appointment.prescription.diagnosis ?? '')
-        setMedicines(data.appointment.prescription.medicines?.length ? data.appointment.prescription.medicines : [{ name: '', dosage: '', frequency: '', duration: '' }])
-        setPrescriptionNotes(data.appointment.prescription.notes ?? '')
+        const rx = data.appointment.prescription
+        const meds = rx.medicines?.length ? rx.medicines : [{ name: '', dosage: '', frequency: '', duration: '' }]
+        setDiagnosis(rx.diagnosis ?? '')
+        setMedicines(meds)
+        setPrescriptionNotes(rx.notes ?? '')
+        setSavedRx(JSON.stringify([rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '']))
       }
       if (data.appointment?.payment) {
-        setPayAmount(data.appointment.payment.amount?.toString() ?? '')
-        setPayMode(data.appointment.payment.mode ?? 'CASH')
-        setPayNotes(data.appointment.payment.notes ?? '')
+        const pay = data.appointment.payment
+        setPayAmount(pay.amount?.toString() ?? '')
+        setPayMode(pay.mode ?? 'CASH')
+        setPayNotes(pay.notes ?? '')
+        setSavedPay(JSON.stringify([String(pay.amount ?? ''), pay.mode ?? 'CASH', pay.notes ?? '']))
       }
     } finally {
       setLoading(false)
     }
   }, [id])
 
-  useEffect(() => {
-    fetchAppt()
-    // Fetch doctor info for PDF
-    fetch('/api/doctor/profile').then(r => r.json()).then(d => setDoctorInfo(d.doctor))
-  }, [fetchAppt])
+  useEffect(() => { fetchAppt() }, [fetchAppt])
+
+  // A write that failed must say so; silently carrying on made it look saved.
+  const write = async (url: string, method: string, body: unknown, failure: string) => {
+    setError('')
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error ?? failure)
+      return false
+    }
+    return true
+  }
 
   const saveNotes = async () => {
     setSavingNotes(true)
     try {
-      await fetch(`/api/appointments/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ consultationNotes: notes }),
-      })
-      setEditingNotes(false)
-      fetchAppt()
+      if (await write(`/api/appointments/${id}`, 'PATCH', { consultationNotes: notes }, 'Could not save the notes.')) {
+        setEditingNotes(false)
+        fetchAppt()
+      }
     } finally {
       setSavingNotes(false)
     }
   }
 
   const markCompleted = async () => {
-    await fetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLETED' }),
-    })
-    fetchAppt()
+    if (await write(`/api/appointments/${id}`, 'PATCH', { status: 'COMPLETED' }, 'Could not mark this appointment as done.')) fetchAppt()
   }
 
   const savePrescription = async () => {
     if (!appt) return
     setSavingRx(true)
     try {
-      await fetch('/api/prescriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId: appt.id,
-          patientId: appt.patient.id,
-          diagnosis,
-          medicines: medicines.filter(m => m.name),
-          notes: prescriptionNotes,
-        }),
-      })
-      fetchAppt()
+      const ok = await write('/api/prescriptions', 'POST', {
+        appointmentId: appt.id,
+        patientId: appt.patient.id,
+        diagnosis,
+        medicines: medicines.filter(m => m.name),
+        notes: prescriptionNotes,
+      }, 'Could not save the prescription.')
+      if (ok) fetchAppt()
     } finally {
       setSavingRx(false)
     }
@@ -130,18 +131,14 @@ export default function AppointmentDetailPage() {
     if (!appt) return
     setSavingPay(true)
     try {
-      await fetch('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId: appt.id,
-          patientId: appt.patient.id,
-          amount: parseFloat(payAmount),
-          mode: payMode,
-          notes: payNotes,
-        }),
-      })
-      fetchAppt()
+      const ok = await write('/api/payments', 'POST', {
+        appointmentId: appt.id,
+        patientId: appt.patient.id,
+        amount: parseFloat(payAmount),
+        mode: payMode,
+        notes: payNotes,
+      }, 'Could not save the payment.')
+      if (ok) fetchAppt()
     } finally {
       setSavingPay(false)
     }
@@ -166,6 +163,8 @@ export default function AppointmentDetailPage() {
   }
 
   const age = computeAge(appt.patient.dob)
+  const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes]) !== savedRx
+  const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
     { key: 'notes', label: 'Consultation Notes', icon: FileText },
     { key: 'prescription', label: 'Prescription', icon: Pill },
@@ -210,6 +209,10 @@ export default function AppointmentDetailPage() {
           </a>
         )}
       </div>
+
+      {error && (
+        <div role="alert" className="rounded-lg px-4 py-3 text-sm bg-red-50 border border-red-200 text-red-700">{error}</div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-1">
@@ -265,11 +268,19 @@ export default function AppointmentDetailPage() {
           <div className="flex justify-between items-center">
             <h3 className="font-semibold text-slate-800">Prescription</h3>
             {appt.prescription && (
-              <button onClick={() => setShowPrescriptionPDF(true)} className="btn btn-outline btn-sm">
-                <Download size={14} /> Download PDF
-              </button>
+              <div className="flex gap-2">
+                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf`} disabled={rxDirty} download>
+                  <Download size={14} /> Download PDF
+                </DocLink>
+                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1`} disabled={rxDirty}>
+                  <Printer size={14} /> Print
+                </DocLink>
+              </div>
             )}
           </div>
+          {appt.prescription && rxDirty && (
+            <p className="text-xs text-amber-700 -mt-2">You have unsaved changes. Save the prescription to download or print the latest version.</p>
+          )}
 
           <div className="form-group">
             <label className="form-label">Diagnosis</label>
@@ -378,32 +389,28 @@ export default function AppointmentDetailPage() {
           </button>
 
           {appt.payment && (
-            <button onClick={() => setShowReceiptPDF(true)} className="btn btn-outline w-full">
-              <Download size={16} /> Generate Receipt PDF
-            </button>
+            <div className="flex gap-2">
+              <DocLink href={`/api/payments/${appt.payment.id}/pdf`} disabled={payDirty} download className="flex-1 justify-center">
+                <Download size={16} /> Download receipt
+              </DocLink>
+              <DocLink href={`/api/payments/${appt.payment.id}/pdf?inline=1`} disabled={payDirty} className="flex-1 justify-center">
+                <Printer size={16} /> Print
+              </DocLink>
+            </div>
           )}
         </div>
       )}
-
-      {/* PDF Modals */}
-      {showPrescriptionPDF && appt.prescription && doctorInfo && (
-        <PrescriptionPDF
-          prescription={appt.prescription}
-          patient={appt.patient}
-          appointment={appt}
-          doctor={doctorInfo}
-          onClose={() => setShowPrescriptionPDF(false)}
-        />
-      )}
-      {showReceiptPDF && appt.payment && doctorInfo && (
-        <ReceiptPDF
-          payment={appt.payment}
-          patient={appt.patient}
-          appointment={appt}
-          doctor={doctorInfo}
-          onClose={() => setShowReceiptPDF(false)}
-        />
-      )}
     </div>
   )
+}
+
+// A PDF link styled as a button. Opens through the server, which builds the file from what is saved.
+function DocLink({ href, disabled, download, className = '', children }: {
+  href: string; disabled?: boolean; download?: boolean; className?: string; children: React.ReactNode
+}) {
+  const base = `btn btn-outline btn-sm ${className}`
+  if (disabled) return <span className={`${base} opacity-50 cursor-not-allowed`} aria-disabled="true">{children}</span>
+  return download
+    ? <a href={href} download className={base}>{children}</a>
+    : <a href={href} target="_blank" rel="noopener" className={base}>{children}</a>
 }

@@ -6,7 +6,6 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
-import { uploadFile, tenantPath } from '@/lib/storage'
 
 const text = (max: number) => z.string().trim().max(max)
 const prescriptionSchema = z.object({
@@ -69,39 +68,6 @@ export async function POST(request: Request) {
     return Response.json({ prescription: { id, ...data } }, { status: 201 })
   } catch (error) {
     console.error('[prescription-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-
-// PUT — attach the generated PDF
-export async function PUT(request: Request) {
-  try {
-    const a = await authorize()
-    if ('error' in a) return a.error
-    const { tenant, session, db } = a
-
-    const formData = await request.formData()
-    const pdfFile = formData.get('pdf')
-    const prescriptionId = formData.get('prescriptionId')
-    if (!(pdfFile instanceof File) || typeof prescriptionId !== 'string' || !prescriptionId) {
-      return Response.json({ error: 'pdf and prescriptionId are required' }, { status: 400 })
-    }
-    if (pdfFile.type !== 'application/pdf' || pdfFile.size > 5 * 1024 * 1024) {
-      return Response.json({ error: 'Prescription must be a PDF under 5MB' }, { status: 400 })
-    }
-
-    const rxRef = db.col('prescriptions').doc(prescriptionId)
-    if (!(await rxRef.get()).exists) return Response.json({ error: 'Prescription not found' }, { status: 404 })
-
-    const buffer = Buffer.from(await pdfFile.arrayBuffer())
-    const pdfPath = await uploadFile(buffer, tenantPath(tenant, `prescriptions/${prescriptionId}.pdf`), 'application/pdf')
-    await rxRef.update({ pdfPath, updatedAt: new Date() })
-    await audit(tenant, session, 'prescription.pdf', `prescriptions/${prescriptionId}`)
-
-    const updated = await rxRef.get()
-    return Response.json({ prescription: { id: updated.id, ...updated.data() } })
-  } catch (error) {
-    console.error('[prescription-pdf-put]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

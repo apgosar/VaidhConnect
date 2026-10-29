@@ -7,7 +7,6 @@ import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
 import { PAYMENT_MODES } from '@/lib/constants'
-import { uploadFile, tenantPath } from '@/lib/storage'
 
 const paymentSchema = z.object({
   appointmentId: z.string().min(1).max(128),
@@ -70,39 +69,6 @@ export async function POST(request: Request) {
     return Response.json({ payment: { id: paymentId, ...paymentData } }, { status: 201 })
   } catch (error) {
     console.error('[payment-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-
-// PUT — attach the receipt PDF to a payment
-export async function PUT(request: Request) {
-  try {
-    const a = await authorize()
-    if ('error' in a) return a.error
-    const { tenant, session, db } = a
-
-    const formData = await request.formData()
-    const pdfFile = formData.get('pdf')
-    const paymentId = formData.get('paymentId')
-    if (!(pdfFile instanceof File) || typeof paymentId !== 'string' || !paymentId) {
-      return Response.json({ error: 'pdf and paymentId are required' }, { status: 400 })
-    }
-    if (pdfFile.type !== 'application/pdf' || pdfFile.size > 5 * 1024 * 1024) {
-      return Response.json({ error: 'Receipt must be a PDF under 5MB' }, { status: 400 })
-    }
-
-    const payRef = db.col('payments').doc(paymentId)
-    if (!(await payRef.get()).exists) return Response.json({ error: 'Payment not found' }, { status: 404 })
-
-    const buffer = Buffer.from(await pdfFile.arrayBuffer())
-    const receiptPdfPath = await uploadFile(buffer, tenantPath(tenant, `receipts/${paymentId}.pdf`), 'application/pdf')
-    await payRef.update({ receiptPdfPath, updatedAt: new Date() })
-    await audit(tenant, session, 'payment.receipt', `payments/${paymentId}`)
-
-    const updated = await payRef.get()
-    return Response.json({ payment: { id: updated.id, ...updated.data() } })
-  } catch (error) {
-    console.error('[payment-pdf-put]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
