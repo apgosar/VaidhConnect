@@ -1,7 +1,6 @@
 import { tenantDb } from '../db/tenant'
-import { sendBookingConfirmation, sendCancellation, sendReminder, sendSummaryUpdate } from '../whatsapp'
-import { sendEmail, appointmentReminderHtml } from '../email'
-import { emailAccent } from '../tenant/theme'
+import { sendBookingConfirmation, sendCancellation, sendSummaryUpdate } from '../whatsapp'
+import { sendEmail } from '../email'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
 import type { Tenant } from '../tenant/types'
 
@@ -13,8 +12,9 @@ const whenText = (tenant: Tenant, d: Date) =>
   `${formatDateLongInTz(d, tenant.timezone)} at ${formatTimeInTz(d, tenant.timezone)}`
 
 /**
- * Booking confirmation (+ an immediate reminder if it's within the hour),
- * and the doctor's live schedule update. All times are in the clinic's own
+ * Booking confirmation and the doctor's live schedule update. A booking made
+ * within the hour gets only the confirmation: the reminder would arrive
+ * seconds later and say the same thing (booking.ts marks it as already sent). All times are in the clinic's own
  * timezone. Never throws: a failed message must not fail the booking.
  */
 export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Patient, appt: Appt) {
@@ -22,7 +22,6 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
     const clinicName = doctor.clinicName || 'Clinic'
     const when = whenText(tenant, appt.startTime)
     const clinicPhone = doctor.phone || clinicName
-    const hoursAway = (appt.startTime.getTime() - Date.now()) / 3_600_000
 
     const tasks: Promise<unknown>[] = [
       sendBookingConfirmation(patient.phone, {
@@ -33,23 +32,6 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
         : Promise.resolve(),
     ]
 
-    if (hoursAway < 1) {
-      tasks.push(sendReminder(patient.phone, {
-        clinicName, patientName: patient.name, doctorName: doctor.name || 'Doctor', appointmentTime: when, clinicPhone,
-        directionsUrl: doctor.mapsUrl || 'Contact clinic for directions',
-      }))
-      if (patient.email) {
-        tasks.push(sendEmail({
-          to: patient.email,
-          subject: `Reminder: Upcoming Appointment — ${clinicName}`,
-          html: appointmentReminderHtml({
-            patientName: patient.name, doctorName: doctor.name || 'Doctor', clinicName, appointmentTime: when,
-            clinicPhone: doctor.phone ?? undefined,
-            accentColor: emailAccent(doctor as any), clinicAddress: doctor.address ?? undefined,
-          }),
-        }))
-      }
-    }
     await Promise.all(tasks)
     await notifyDoctorScheduleUpdate(tenant, doctor, appt, `New booking by ${patient.name} for ${formatTimeInTz(appt.startTime, tenant.timezone)}`)
   } catch (err) {

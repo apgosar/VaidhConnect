@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
+import { LogOut, Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
@@ -155,10 +155,28 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
   const [profiles, setProfiles] = useState<SavedPatient[]>([])
   // Signed-in clinic staff book on a patient's behalf from this same page.
   const [staffRole, setStaffRole] = useState<string | null>(null)
+  // A patient who has signed in with their PIN on this device (cookie-backed).
+  const [patientPhone, setPatientPhone] = useState<string | null>(null)
   useEffect(() => {
     setProfiles(getSavedPatients())
     fetch('/api/auth/session').then(r => r.json()).then(d => setStaffRole(d.authenticated ? d.role : null)).catch(() => {})
+    fetch('/api/patient/me').then(r => (r.ok ? r.json() : null)).then(d => setPatientPhone(d?.phone ?? null)).catch(() => {})
   }, [])
+
+  const signOutPatient = async () => {
+    await fetch('/api/patient/pin/login', { method: 'DELETE' }).catch(() => {})
+    setPatientPhone(null)
+  }
+
+  const signOutStaff = async () => {
+    try {
+      const { auth } = await import('@/lib/firebase/client')
+      await auth.signOut()
+    } catch { /* the server cookie below is what grants access */ }
+    await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {})
+    setStaffRole(null)
+    router.refresh()
+  }
 
   const downloadVCard = () => {
     const vcf = `BEGIN:VCARD
@@ -336,6 +354,7 @@ END:VCARD`
           {staffRole && (
             <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-primary-bg)', border: '1px solid var(--color-sage-border)', color: 'var(--color-charcoal-mid)' }}>
               <strong>Staff booking.</strong> You are signed in as clinic staff, so no PIN is needed. Enter the patient&apos;s details; they get the confirmation and reminders on WhatsApp.
+              <button onClick={signOutStaff} className="mt-2 flex items-center gap-1.5 font-semibold" style={{ color: 'var(--color-forest)' }}><LogOut size={14} /> Sign out</button>
             </div>
           )}
 
@@ -368,6 +387,13 @@ END:VCARD`
           <button onClick={() => router.push('/appointments')} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium" style={{ color: 'var(--color-forest)' }}>
             <Calendar size={16} /> View or cancel my appointments
           </button>
+
+          {patientPhone && (
+            <div className="flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--color-primary-bg)', color: 'var(--color-charcoal-mid)' }}>
+              <span>Signed in as {patientPhone}</span>
+              <button onClick={signOutPatient} className="flex items-center gap-1 font-semibold" style={{ color: 'var(--color-forest)' }}><LogOut size={12} /> Sign out</button>
+            </div>
+          )}
         </div>
 
         {/* Clinic Info */}
