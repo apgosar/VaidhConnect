@@ -45,7 +45,7 @@ for (const path of pages) {
   for (const width of widths) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1 })
     const page = await context.newPage()
-    await page.goto(`https://${host}${path}`, { waitUntil: 'networkidle' })
+    await page.goto(`https://${host}${path}`, { waitUntil: 'load', timeout: 60000 })
     await page.waitForTimeout(1200) // entrance animations settle before measuring
 
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()

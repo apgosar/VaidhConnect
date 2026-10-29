@@ -115,7 +115,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
             >
               {clinicName}
             </p>
-            <p className="text-xs truncate mt-0.5" style={{ color: 'rgba(255,255,255,0.50)' }}>
+            <p className="text-xs truncate mt-0.5" style={{ color: '#FFFFFF' }}>
               Dr. {doctorName}
             </p>
           </div>
@@ -137,7 +137,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
                   : ''
               }`}
               style={{
-                color: isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.65)',
+                color: isActive ? 'var(--color-gold)' : '#FFFFFF',
                 background: isActive ? 'rgba(201,161,93,0.08)' : 'transparent',
                 paddingLeft: isActive ? '20px' : '12px',
               }}
@@ -154,7 +154,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors"
-          style={{ color: 'rgba(255,255,255,0.45)' }}
+          style={{ color: '#FFFFFF' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.80)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
         >
@@ -216,7 +216,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
             <button
               onClick={() => setMobileOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-lg"
-              style={{ color: 'rgba(255,255,255,0.60)' }}
+              style={{ color: '#FFFFFF' }}
               aria-label="Close menu"
             >
               <X size={20} />

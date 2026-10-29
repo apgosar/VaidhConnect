@@ -24,9 +24,16 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-/** True if the colour is a plain #RRGGBB hex with enough contrast to carry white text. */
+/**
+ * The brand colour is used two ways: as a background behind white text, and as text on the cream page
+ * background. White at 4.5:1 would still leave it at about 4.2:1 on cream, so require 5:1 against white:
+ * that keeps both uses above WCAG AA (4.5:1).
+ */
+export const MIN_PRIMARY_CONTRAST = 5
+
+/** True if the colour is a plain #RRGGBB hex dark enough for white text and for text on the page background. */
 export function isUsablePrimary(primary: string): boolean {
-  return HEX.test(primary) && 1.05 / (luminance(primary) + 0.05) >= 3
+  return HEX.test(primary) && 1.05 / (luminance(primary) + 0.05) >= MIN_PRIMARY_CONTRAST
 }
 
 /** Returns CSS overriding the design tokens, or '' if no valid primary is set. */
@@ -34,9 +41,8 @@ export function themeCss(theme: unknown): string {
   const primary = (theme as { primary?: unknown } | null)?.primary
   // Strict validation: this string is injected into a <style> tag.
   if (typeof primary !== 'string' || !HEX.test(primary)) return ''
-  // Primary is used as a background behind white text; refuse colours too
-  // light to carry it (WCAG-ish: contrast vs white >= 3).
-  if (1.05 / (luminance(primary) + 0.05) < 3) return ''
+  // Refuse colours too light to carry white text or to be read as text on the page (see MIN_PRIMARY_CONTRAST).
+  if (!isUsablePrimary(primary)) return ''
 
   const [r, g, b] = channels(primary)
   return `:root{` +

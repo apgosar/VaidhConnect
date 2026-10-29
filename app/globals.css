@@ -26,6 +26,7 @@
   --color-danger-icon: #DC2626;   /* delete icons: 4.8:1 on white */
   --color-border-input: #7A8B7F;  /* form control outline: 3.6:1 on the field (WCAG 1.4.11 needs 3:1) */
   --color-on-whatsapp: #0B3D2E;   /* text on the WhatsApp green: 6.1:1 */
+  --color-on-gold: #2B2B26;       /* text on the gold button, whatever brand green the clinic chose: 5.8:1 */
 
   /* Semantic aliases */
   --color-primary: var(--color-forest);
@@ -168,7 +169,7 @@ body {
 /* Gold primary CTA */
 .btn-primary {
   background-color: var(--color-gold);
-  color: var(--color-forest);
+  color: var(--color-on-gold);
   font-weight: 700;
 }
 
@@ -578,11 +579,11 @@ select option {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .header-home {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
   color: #FFFFFF;
   border: 1px solid rgba(255, 255, 255, 0.45);
 }
-.header-home:hover { background: rgba(255, 255, 255, 0.26); }
+.header-home:hover { background: rgba(255, 255, 255, 0.2); }
 
 /* Dialogs */
 .modal-backdrop {

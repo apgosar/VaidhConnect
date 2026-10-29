@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { themeCss, themeColorOf } from '@/lib/tenant/theme'
+import { themeCss, themeColorOf, isUsablePrimary } from '@/lib/tenant/theme'
 import { hasFeature } from '@/lib/tenant/features'
 
 describe('themeCss', () => {
@@ -23,6 +23,16 @@ describe('themeCss', () => {
   it('rejects colours too light to carry white text', () => {
     expect(themeCss({ primary: '#FFFF00' })).toBe('')
     expect(themeCss({ primary: '#F5F5F5' })).toBe('')
+  })
+
+  it('requires AA contrast for white text AND for the colour used as text on the cream page', () => {
+    // #2E8B57 (sea green) passes the old 3:1 rule but would read as 4.1:1 text on the page background
+    expect(isUsablePrimary('#2E8B57')).toBe(false)
+    expect(themeCss({ primary: '#2E8B57' })).toBe('')
+    for (const ok of ['#0F3D2E', '#0B6E4F', '#1E3A8A', '#7A1F1F']) {
+      expect(isUsablePrimary(ok), ok).toBe(true)
+      expect(themeCss({ primary: ok })).toContain(`--color-forest:${ok}`)
+    }
   })
 
   it('falls back for the browser theme colour', () => {

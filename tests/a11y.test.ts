@@ -51,7 +51,7 @@ describe('colour contrast of the design tokens', () => {
     ['delete icon on white', token('color-danger-icon'), white, 3],
     ['form control outline on a field', token('color-border-input'), field, 3],
     ['text on the WhatsApp green', token('color-on-whatsapp'), '#25D366', 4.5],
-    ['button text on the gold button', token('color-forest'), token('color-gold'), 4.5],
+    ['button text on the gold button', token('color-on-gold'), token('color-gold'), 4.5],
     ['white on the green header', white, token('color-forest'), 4.5],
   ])('%s', (_name, fg, bg, min) => {
     expect(ratio(fg as string, bg as string)).toBeGreaterThanOrEqual(min as number)

@@ -265,7 +265,7 @@ END:VCARD`
               <p className="mt-1.5 text-base font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 {doctor.clinicName}
               </p>
-              <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.70)' }}>
+              <p className="mt-1 text-sm" style={{ color: '#FFFFFF' }}>
                 {doctor.qualifications && <span>{doctor.qualifications} · </span>}
                 Reg: {doctor.registrationNumber}
               </p>
@@ -596,7 +596,7 @@ END:VCARD`
           
           {/* 2. Products */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: doctor.products?.length ? 1 : 0.5, pointerEvents: doctor.products?.length ? 'auto' : 'none' }}>
+            <button disabled={!(doctor.products?.length)} onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: (doctor.products?.length) ? 1 : 0.5 }}>
               <Package size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Products</span>
             </button>
@@ -614,7 +614,7 @@ END:VCARD`
 
           {/* 4. Videos */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: doctor.youtubeLinks?.length ? 1 : 0.5, pointerEvents: doctor.youtubeLinks?.length ? 'auto' : 'none' }}>
+            <button disabled={!(doctor.youtubeLinks?.length)} onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.youtubeLinks?.length) ? 1 : 0.5 }}>
               <PlaySquare size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Videos</span>
             </button>
@@ -622,7 +622,7 @@ END:VCARD`
 
           {/* 5. Payment */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 1 : 0.5, pointerEvents: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 'auto' : 'none' }}>
+            <button disabled={!((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)))} onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: ((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))) ? 1 : 0.5 }}>
               <CreditCard size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Payment</span>
             </button>
