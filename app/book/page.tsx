@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Calendar, Clock, CheckCircle2, ChevronRight, Download } from 'lucide-react'
+import { ArrowLeft, Home, Calendar, Clock, CheckCircle2, ChevronRight, Download } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
 import { addDaysYmd, describeYmd, formatDateTimeInTz, formatSlotLabelInTz } from '@/lib/time'
 import { createGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar'
@@ -139,8 +139,8 @@ export default function BookPage() {
     return (
       <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
         <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back to home">
-            <ArrowLeft size={20} />
+          <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
+            <ArrowLeft size={16} /> Home
           </button>
           <div>
             <h1 className="font-bold text-white text-base leading-snug" style={{ fontFamily: 'var(--font-display)' }}>Appointment Confirmed!</h1>
@@ -287,8 +287,8 @@ export default function BookPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back to home">
-          <ArrowLeft size={20} />
+        <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
+          <ArrowLeft size={16} /> Home
         </button>
         <div>
           <h1 className="font-bold text-white text-base" style={{ fontFamily: 'var(--font-display)' }}>Book Appointment</h1>
@@ -298,9 +298,11 @@ export default function BookPage() {
 
       <div className="page-container-sm py-6 space-y-5">
         <div className="flex gap-2">
-          <button onClick={() => router.push('/')} className="btn btn-outline btn-sm flex-1">Back to home</button>
+          <button onClick={() => router.push('/')} className="btn btn-outline flex-1 font-semibold" style={{ borderWidth: 2, borderColor: 'var(--color-forest)', color: 'var(--color-forest)' }}>
+            <Home size={16} /> Back to home
+          </button>
           {/* replace, not push: editing details must not add another history entry to bounce between */}
-          <button onClick={() => router.replace('/register')} className="btn btn-ghost btn-sm flex-1">Edit patient details</button>
+          <button onClick={() => router.replace('/register')} className="btn btn-ghost flex-1">Edit patient details</button>
         </div>
         <div className="card p-5">
           <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm" style={{ color: 'var(--color-charcoal)' }}>
