@@ -2,6 +2,7 @@ import { headers } from 'next/headers'
 import { adminDb } from '../firebase/server'
 import type { Tenant } from './types'
 import { currentTenant } from './context'
+import { tenantDb } from '../db/tenant'
 
 const CACHE_TTL_MS = 60_000
 // A host with no clinic is cached only briefly, so a newly provisioned clinic
@@ -13,27 +14,39 @@ function normalizeHost(raw: string | null): string {
   return (raw ?? '').toLowerCase().split(':')[0]
 }
 
+async function withProfile(base: Tenant): Promise<Tenant | null> {
+  const ref = tenantDb(base).profile()
+  const snap = await ref.get()
+  const data = snap.data() as any
+  // A suspended clinic does not resolve at all: every page and API behaves
+  // as if the host is unknown, and background jobs skip it.
+  if (data?.status === 'suspended') return null
+  return {
+    ...base,
+    timezone: data?.timezone || base.timezone,
+    features: data?.features && typeof data.features === 'object' ? data.features : undefined,
+  }
+}
+
 async function lookup(host: string): Promise<Tenant | null> {
   // 1. Explicit domain mapping: domains/{host} -> { clinicId, storage?, timezone? }
   const domainDoc = await adminDb.collection('domains').doc(host).get()
   if (domainDoc.exists) {
     const d = domainDoc.data() as any
-    return {
+    return withProfile({
       clinicId: d.clinicId,
       storage: d.storage === 'legacy' ? 'legacy' : 'scoped',
       timezone: d.timezone || 'Asia/Kolkata',
-    }
+    })
   }
 
   // 2. Backward compatibility for the original single-clinic deployment:
   //    if no mapping exists and exactly one legacy doctor exists, serve it.
-  //    Once any mapping exists this fallback is only used for unmapped
-  //    hosts (e.g. the raw Cloud Run URL) and can be switched off with
-  //    TENANT_LEGACY_FALLBACK=off.
+  //    Switch off with TENANT_LEGACY_FALLBACK=off once every host is mapped.
   if (process.env.TENANT_LEGACY_FALLBACK === 'off') return null
   const doctors = await adminDb.collection('doctors').limit(2).get()
   if (doctors.size === 1) {
-    return { clinicId: doctors.docs[0].id, storage: 'legacy', timezone: 'Asia/Kolkata' }
+    return withProfile({ clinicId: doctors.docs[0].id, storage: 'legacy', timezone: 'Asia/Kolkata' })
   }
   return null
 }

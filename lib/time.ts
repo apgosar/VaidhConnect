@@ -61,3 +61,58 @@ export function formatDateLongInTz(date: Date, tz: string): string {
   const p = parts(date, tz, { month: 'long', day: 'numeric', year: 'numeric' })
   return `${p.month} ${p.day}, ${p.year}`
 }
+
+/** Exported for slot generation: offset of the timezone from UTC at an instant. */
+export { offsetMs }
+
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+
+/** Weekday name of a YYYY-MM-DD calendar date (timezone-independent). */
+export function dayNameOfYmd(ymd: string): typeof DAY_NAMES[number] {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return DAY_NAMES[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+}
+
+/** YYYY-MM-DD plus n calendar days. */
+export function addDaysYmd(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** The UTC instant at which the clinic's wall clock reads `ymd` `hhmm`. */
+export function zonedToUtc(ymd: string, hhmm: string, tz: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const [h, mi] = hhmm.split(':').map(Number)
+  const guess = Date.UTC(y, m - 1, d, h, mi)
+  let t = guess - offsetMs(new Date(guess), tz)
+  t = guess - offsetMs(new Date(t), tz) // second pass handles DST edges
+  return new Date(t)
+}
+
+/** "09:00 AM" — two-digit hour, the format patients already see in slot pickers. */
+export function formatSlotLabelInTz(date: Date, tz: string): string {
+  const p = parts(date, tz, { hour: '2-digit', minute: '2-digit', hour12: true })
+  return `${p.hour}:${p.minute} ${p.dayPeriod}`
+}
+
+/** "Wednesday, 28 Oct" */
+export function formatDayHeadingInTz(date: Date, tz: string): string {
+  const p = parts(date, tz, { weekday: 'long', day: '2-digit', month: 'short' })
+  return `${p.weekday}, ${p.day} ${p.month}`
+}
+
+/** True if the YYYY-MM-DD string is a real calendar date. */
+export function isValidYmd(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const [y, m, d] = s.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
+
+/** Label parts for a YYYY-MM-DD calendar date (no timezone involved). */
+export function describeYmd(ymd: string): { weekdayShort: string; weekdayLong: string; day: string; monthShort: string } {
+  const [y, m, d] = ymd.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  const f = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...o }).format(dt)
+  return { weekdayShort: f({ weekday: "short" }), weekdayLong: f({ weekday: "long" }), day: String(d), monthShort: f({ month: "short" }) }
+}

@@ -8,6 +8,7 @@ import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
 import SiteFooter from '@/components/SiteFooter'
+import { getBookings, getSavedPatients, setDraft, type SavedPatient } from '@/lib/patientDevice'
 
 interface DoctorProfile {
   id: string
@@ -146,75 +147,16 @@ function BotanicalWatermark() {
 }
 
 export default function PatientPortal({ doctor }: PatientPortalProps) {
-  const [countryCode, setCountryCode] = useState('+91')
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const phone = countryCode + phoneNumber
-  const [error, setError] = useState('')
-  const [foundPatients, setFoundPatients] = useState<PatientRecord[] | null>(null)
   const router = useRouter()
-
-  // Identity is normally a verified phone number, not a typed-in one:
-  // 'checking' (looking for an existing session on mount), 'phone' (entry
-  // form), 'verified' (session established, running lookup).
-  //
-  // TEMPORARY: the WhatsApp OTP code delivery is bypassed right now (Meta
-  // error 132001 — patient_otp_verification template isn't approved), so
-  // there's currently no 'otp' step: submitting the phone form signs the
-  // patient in directly via /api/patient/otp/bypass. See that route's
-  // comment for how to restore real verification.
-  const [authStep, setAuthStep] = useState<'checking' | 'phone' | 'verified'>('checking')
-  const [otpSending, setOtpSending] = useState(false)
-
   const specialtyData = SPECIALTIES.find(s => s.value === doctor.specialty)
 
-  const runLookup = async () => {
-    setError('')
-    try {
-      const res = await fetch('/api/patients/lookup')
-      const data = await res.json()
-
-      if (!res.ok) {
-        // Session missing/expired between the check and this call — fall
-        // back to the phone step, which is the only screen that actually
-        // renders {error}, so the failure isn't stuck behind a spinner.
-        setError(data.error || 'Something went wrong. Please try again.')
-        setAuthStep('phone')
-        return
-      }
-
-      if (data.found) {
-        setFoundPatients(data.patients)
-      } else {
-        router.push('/register')
-      }
-    } catch {
-      setError('Something went wrong. Please try again.')
-      setAuthStep('phone')
-    }
-  }
-
+  // Details this device has used before (family members included) and whether
+  // it holds any bookings it can show/cancel. Read once on the client.
+  const [profiles, setProfiles] = useState<SavedPatient[]>([])
+  const [hasBookings, setHasBookings] = useState(false)
   useEffect(() => {
-    // Skip straight to the lookup if a verified session already exists,
-    // so a returning patient doesn't have to re-verify their phone number
-    // every visit.
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch('/api/patient/session')
-        const data = await res.json()
-        if (cancelled) return
-        if (data.authenticated) {
-          setAuthStep('verified')
-          await runLookup()
-        } else {
-          setAuthStep('phone')
-        }
-      } catch {
-        if (!cancelled) setAuthStep('phone')
-      }
-    })()
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setProfiles(getSavedPatients())
+    setHasBookings(getBookings().length > 0)
   }, [])
 
   const downloadVCard = () => {
@@ -239,84 +181,14 @@ END:VCARD`
     URL.revokeObjectURL(url)
   }
 
-  const handleSendOtp = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    const normalized = phone.replace(/[\s\-()]/g, '')
-    if (normalized.length < 10) {
-      setError('Please enter a valid phone number')
-      return
+  const bookFor = (patient: SavedPatient | null) => {
+    if (patient) {
+      setDraft({ patient })
+      router.push('/book')
+    } else {
+      setDraft(null)
+      router.push('/register')
     }
-
-    setOtpSending(true)
-    setError('')
-
-    try {
-      // TEMPORARY: signs in straight from the typed phone number — see
-      // /api/patient/otp/bypass for why.
-      const res = await fetch('/api/patient/otp/bypass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalized }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || 'Something went wrong. Please try again.')
-        return
-      }
-
-      const { signInWithCustomToken } = await import('firebase/auth')
-      const { auth } = await import('@/lib/firebase/client')
-      const userCredential = await signInWithCustomToken(auth, data.customToken)
-      const idToken = await userCredential.user.getIdToken()
-
-      const sessionRes = await fetch('/api/patient/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      })
-
-      if (!sessionRes.ok) {
-        setError('Failed to continue. Please try again.')
-        return
-      }
-
-      setAuthStep('verified')
-      await runLookup()
-    } catch {
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setOtpSending(false)
-    }
-  }
-
-  const handleChangeNumber = async () => {
-    try {
-      await fetch('/api/patient/session', { method: 'DELETE' })
-    } catch {
-      // ignore — worst case the stale cookie just expires on its own
-    }
-    setFoundPatients(null)
-    setAuthStep('phone')
-    setPhoneNumber('')
-    setError('')
-  }
-
-  const handleBookForPatient = (patient: PatientRecord) => {
-    sessionStorage.setItem('patient', JSON.stringify(patient))
-    if (patient.appointments.length > 0) {
-      sessionStorage.setItem('chiefComplaint', '')
-    }
-    router.push('/book')
-  }
-
-  const handleManageForPatient = (patient: PatientRecord) => {
-    sessionStorage.setItem('patient', JSON.stringify(patient))
-    router.push('/appointments')
-  }
-
-  const handleAddFamilyMember = () => {
-    router.push('/register')
   }
 
   return (
@@ -449,166 +321,49 @@ END:VCARD`
       {/* ── Content Cards ────────────────────────────────────── */}
       <div className="page-container-sm space-y-4 pb-32" style={{ marginTop: '-24px' }}>
 
-        {/* ── STEP 2: Patient Selection (shown after phone lookup) ── */}
-        {foundPatients ? (
-          <div className="space-y-4 animate-fade-in">
-            {/* Header */}
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-lg font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
-                  Welcome back!
-                </h2>
-                <button
-                  onClick={handleChangeNumber}
-                  className="text-xs font-medium"
-                  style={{ color: 'var(--color-sage)' }}
-                >
-                  ← Change number
-                </button>
-              </div>
-              <p className="text-sm" style={{ color: 'var(--color-sage)' }}>
-                {foundPatients.length === 1
-                  ? 'We found your profile. Choose what you would like to do.'
-                  : `We found ${foundPatients.length} patients linked to this number. Select a patient below.`}
-              </p>
-            </div>
-
-            {/* Patient cards */}
-            {foundPatients.map(patient => {
-              const age = (() => { try { return computeAge(patient.dob) } catch { return null } })()
-              return (
-                <div key={patient.id} className="card overflow-hidden animate-fade-in">
-                  {/* Patient info header */}
-                  <div className="flex items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--color-sage-border)' }}>
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                      style={{ background: 'var(--color-forest)' }}
-                    >
-                      <User size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate" style={{ color: 'var(--color-charcoal)' }}>{patient.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
-                        {age !== null ? `Age ${age}` : ''}
-                        {patient.medicalHistory ? ` · ${patient.medicalHistory.slice(0, 40)}${patient.medicalHistory.length > 40 ? '…' : ''}` : ''}
-                      </p>
-                    </div>
-                    {patient.appointments.length > 0 && (
-                      <span
-                        className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
-                        style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
-                      >
-                        {patient.appointments.length} upcoming
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-0" style={{ borderTop: 'none' }}>
-                    <button
-                      onClick={() => handleManageForPatient(patient)}
-                      className="flex-1 flex flex-col items-center gap-1 py-4 text-sm font-medium transition-colors hover:bg-[var(--color-primary-bg)]"
-                      style={{ color: 'var(--color-charcoal-mid)', borderRight: '1px solid var(--color-sage-border)' }}
-                    >
-                      <Calendar size={18} style={{ color: 'var(--color-forest)' }} />
-                      <span>My Appointments</span>
-                    </button>
-                    <button
-                      onClick={() => handleBookForPatient(patient)}
-                      className="flex-1 flex flex-col items-center gap-1 py-4 text-sm font-semibold transition-colors hover:bg-[var(--color-primary-bg)]"
-                      style={{ color: 'var(--color-forest)' }}
-                    >
-                      <ChevronRight size={18} />
-                      <span>Book Appointment</span>
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Add Family Member */}
-            <button
-              onClick={handleAddFamilyMember}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium text-sm transition-all"
-              style={{
-                border: '1.5px dashed var(--color-sage-border)',
-                color: 'var(--color-sage)',
-                background: 'transparent',
-              }}
-            >
-              <UserPlus size={16} />
-              Add a new patient for this number
-            </button>
+        {/* ── Book an appointment ── */}
+        <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2 space-y-4">
+          <div>
+            <h2 className="text-xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
+              Book an Appointment
+            </h2>
+            <p className="text-sm" style={{ color: 'var(--color-sage)' }}>
+              {profiles.length > 0 ? 'Who is this appointment for?' : 'Pick a time that suits you — we confirm on WhatsApp.'}
+            </p>
           </div>
-        ) : authStep === 'checking' || authStep === 'verified' ? (
 
-        /* ── Checking for an existing session / running the lookup ── */
-        <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2 flex items-center justify-center py-14">
-          <div className="spinner" />
-        </div>
+          {profiles.map(p => {
+            const age = (() => { try { return computeAge(p.dob) } catch { return null } })()
+            return (
+              <button
+                key={`${p.phone}-${p.name}-${p.dob}`}
+                onClick={() => bookFor(p)}
+                className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-[var(--color-primary-bg)]"
+                style={{ border: '1.5px solid var(--color-sage-border)' }}
+              >
+                <span className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: 'var(--color-forest)' }}>
+                  <User size={18} />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-semibold truncate" style={{ color: 'var(--color-charcoal)' }}>{p.name}</span>
+                  <span className="block text-xs" style={{ color: 'var(--color-sage)' }}>{age !== null ? `Age ${age} · ` : ''}{p.phone}</span>
+                </span>
+                <ChevronRight size={18} style={{ color: 'var(--color-forest)' }} />
+              </button>
+            )
+          })}
 
-        ) : (
+          <button onClick={() => bookFor(null)} className={profiles.length > 0 ? 'btn btn-outline w-full' : 'btn btn-primary btn-lg w-full'}>
+            <UserPlus size={16} />
+            {profiles.length > 0 ? 'Someone else' : 'Book an appointment'}
+          </button>
 
-        /* ── STEP 1: Phone Entry ── */
-        <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2">
-          <h2
-            className="text-xl font-bold mb-1"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}
-          >
-            Book an Appointment
-          </h2>
-          <p className="text-sm mb-5" style={{ color: 'var(--color-sage)' }}>
-            Enter your mobile number to get started
-          </p>
-
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div className="form-group">
-              <label className="form-label" htmlFor="phone-input">Mobile Number</label>
-              <div className="flex gap-2">
-                {/* Editable country code */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    className="form-input text-center font-medium"
-                    style={{ width: '72px' }}
-                    value={countryCode}
-                    onChange={e => setCountryCode(e.target.value)}
-                    aria-label="Country code"
-                    maxLength={5}
-                  />
-                </div>
-                {/* Phone number */}
-                <div className="relative flex-1">
-                  <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />
-                  <input
-                    id="phone-input"
-                    type="tel"
-                    className="form-input pl-9 w-full"
-                    placeholder="98765 43210"
-                    value={phoneNumber}
-                    onChange={e => setPhoneNumber(e.target.value)}
-                    required
-                    autoComplete="tel"
-                    inputMode="numeric"
-                  />
-                </div>
-              </div>
-              {error && <p className="form-error">{error}</p>}
-            </div>
-            <button
-              type="submit"
-              className="btn btn-primary btn-lg w-full"
-              disabled={otpSending}
-            >
-              {otpSending ? (
-                <><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Continuing...</span></>
-              ) : (
-                <><span>Continue</span><ChevronRight size={18} /></>
-              )}
+          {hasBookings && (
+            <button onClick={() => router.push('/appointments')} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium" style={{ color: 'var(--color-forest)' }}>
+              <Calendar size={16} /> My appointments
             </button>
-          </form>
+          )}
         </div>
-        )}
 
         {/* Clinic Info */}
         {(doctor.address || doctor.phone) && (

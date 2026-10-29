@@ -39,8 +39,6 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Good Morning Dr. ${params[0] || 'Doctor'}, here is your schedule for today (${params[2] || 'Today'}). You have ${params[1] || '0'} appointment(s):\n\n${params[3] || 'No appointments'}`
     case 'daily_summary_update':
       return `Schedule Update for Dr. ${params[0] || 'Doctor'}:\nChange: ${params[1] || 'Update'}\nRemaining appointments today: ${params[2] || '0'}\n\nUpdated Schedule:\n${params[3] || 'No appointments'}`
-    case 'patient_otp_verification':
-      return `${params[0] || '000000'} is your verification code. Do not share this code with anyone. It expires in 10 minutes.`
     default:
       return params.length > 0 ? params.join('\n') : templateName
   }
@@ -289,20 +287,4 @@ export async function sendSummaryUpdate(to: string, params: {
       ]
     }]
   }, { messageType: 'Daily Summary (Update)', recipientName: params.doctorName })
-}
-
-// 6. Patient OTP Verification (`patient_otp_verification`) — Meta
-// "Authentication" category template. Must be pre-approved in Meta
-// Business Manager with exactly this name before this will send.
-export async function sendOtpCode(to: string, params: { code: string }) {
-  return sendWhatsAppTemplate(to, {
-    name: 'patient_otp_verification',
-    language: { code: 'en' },
-    components: [{
-      type: 'body',
-      parameters: [
-        { type: 'text', text: params.code },
-      ]
-    }]
-  }, { messageType: 'OTP Verification', recipientName: 'Patient' })
 }

@@ -11,6 +11,8 @@ export interface Tenant {
   clinicId: string
   storage: 'legacy' | 'scoped'
   timezone: string
+  /** Operator-controlled plan flags; absent = on. Cached with the tenant. */
+  features?: Record<string, boolean>
 }
 
 export const COLLECTIONS = [
@@ -20,6 +22,10 @@ export const COLLECTIONS = [
   'payments',
   'blocked_slots',
   'whatsapp_logs',
+  'slot_locks',
+  'rate_limits',
+  'audit_logs',
+  'users',
 ] as const
 
 export type TenantCollection = typeof COLLECTIONS[number]

@@ -24,6 +24,11 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+/** True if the colour is a plain #RRGGBB hex with enough contrast to carry white text. */
+export function isUsablePrimary(primary: string): boolean {
+  return HEX.test(primary) && 1.05 / (luminance(primary) + 0.05) >= 3
+}
+
 /** Returns CSS overriding the design tokens, or '' if no valid primary is set. */
 export function themeCss(theme: unknown): string {
   const primary = (theme as { primary?: unknown } | null)?.primary

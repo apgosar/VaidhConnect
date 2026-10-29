@@ -1,7 +1,7 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
 import { type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'patients:manage')
+    if (denied) return denied
 
     const q = request.nextUrl.searchParams.get('q')
     const page = parseInt(request.nextUrl.searchParams.get('page') ?? '1')

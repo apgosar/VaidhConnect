@@ -1,8 +1,21 @@
-import { adminAuth } from '@/lib/firebase/server'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
-import { uploadFile } from '@/lib/storage'
+import { uploadFile, tenantPath } from '@/lib/storage'
+import { forbid } from '@/lib/auth/access'
+import { audit } from '@/lib/audit'
+import { isUsablePrimary } from '@/lib/tenant/theme'
+import { FieldValue } from 'firebase-admin/firestore'
+
+// SVG is deliberately not accepted: it can carry script, and these files are
+// served from our storage domain. Only raster formats, verified by signature.
+const IMAGE_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+function looksLikeImage(b: Buffer, type: string): boolean {
+  if (type === 'image/jpeg') return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff
+  if (type === 'image/png') return b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  if (type === 'image/webp') return b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP'
+  return false
+}
 // bcrypt is no longer used since Firebase handles password auth
 
 export const dynamic = 'force-dynamic'
@@ -37,6 +50,8 @@ export async function PATCH(request: Request) {
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'settings:manage')
+    if (denied) return denied
 
     const tenant = await getTenant()
     if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
@@ -56,7 +71,7 @@ export async function PATCH(request: Request) {
       const qrCodeFile = formData.get('qrCode') as File | null
       const photoFile = formData.get('photo') as File | null
 
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
+      const allowedTypes = Object.keys(IMAGE_EXT)
 
       // Handle Logo upload
       if (logoFile) {
@@ -64,11 +79,14 @@ export async function PATCH(request: Request) {
           return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
         }
         if (!allowedTypes.includes(logoFile.type)) {
-          return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+          return Response.json({ error: 'Only JPEG, PNG and WebP images are allowed' }, { status: 400 })
         }
         const buffer = Buffer.from(await logoFile.arrayBuffer())
-        const ext = logoFile.name.split('.').pop() ?? 'jpg'
-        const logoUrl = await uploadFile(buffer, `logos/${session.uid}.${ext}`, logoFile.type, { public: true })
+        if (!looksLikeImage(buffer, logoFile.type)) {
+          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        }
+        const ext = IMAGE_EXT[logoFile.type]
+        const logoUrl = await uploadFile(buffer, tenantPath(tenant, `logos/${session.uid}.${ext}`), logoFile.type, { public: true })
         await doctorRef.update({ logoUrl })
         return Response.json({ doctor: { logoUrl } })
       }
@@ -79,11 +97,14 @@ export async function PATCH(request: Request) {
           return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
         }
         if (!allowedTypes.includes(qrCodeFile.type)) {
-          return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+          return Response.json({ error: 'Only JPEG, PNG and WebP images are allowed' }, { status: 400 })
         }
         const buffer = Buffer.from(await qrCodeFile.arrayBuffer())
-        const ext = qrCodeFile.name.split('.').pop() ?? 'jpg'
-        const qrCodeUrl = await uploadFile(buffer, `qrcodes/${session.uid}.${ext}`, qrCodeFile.type, { public: true })
+        if (!looksLikeImage(buffer, qrCodeFile.type)) {
+          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        }
+        const ext = IMAGE_EXT[qrCodeFile.type]
+        const qrCodeUrl = await uploadFile(buffer, tenantPath(tenant, `qrcodes/${session.uid}.${ext}`), qrCodeFile.type, { public: true })
         
         const existingData = doctorDoc.data()
         let paymentDetails: any = existingData?.paymentDetails || {}
@@ -100,11 +121,14 @@ export async function PATCH(request: Request) {
           return Response.json({ error: 'File size must be under 2MB' }, { status: 400 })
         }
         if (!allowedTypes.includes(photoFile.type)) {
-          return Response.json({ error: 'Only JPEG, PNG, WebP and SVG images are allowed' }, { status: 400 })
+          return Response.json({ error: 'Only JPEG, PNG and WebP images are allowed' }, { status: 400 })
         }
         const buffer = Buffer.from(await photoFile.arrayBuffer())
-        const ext = photoFile.name.split('.').pop() ?? 'jpg'
-        const photoUrl = await uploadFile(buffer, `photos/${session.uid}.${ext}`, photoFile.type, { public: true })
+        if (!looksLikeImage(buffer, photoFile.type)) {
+          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        }
+        const ext = IMAGE_EXT[photoFile.type]
+        const photoUrl = await uploadFile(buffer, tenantPath(tenant, `photos/${session.uid}.${ext}`), photoFile.type, { public: true })
         await doctorRef.update({ photoUrl })
         return Response.json({ doctor: { photoUrl } })
       }
@@ -119,7 +143,7 @@ export async function PATCH(request: Request) {
       specialty, practiceDescription, themeColor, qualifications, slotDurationMins,
       timings, paymentDetails, reminderIntervals,
       registrationNumber, youtubeLinks, products, pageViews,
-      newPassword,
+      theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
     } = body
@@ -185,15 +209,12 @@ export async function PATCH(request: Request) {
     }
     if (pageViews !== undefined) updateData.pageViews = pageViews
 
-    // Password change (requires re-auth on client side if currentPassword check is strictly needed, 
-    // but here we can just update via Admin SDK if we trust the session)
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        return Response.json({ error: 'New password must be at least 6 characters' }, { status: 400 })
-      }
-      // Note: In Firebase, checking current password on the server without it is generally not possible 
-      // without re-authenticating. If the client sends it, we trust the secure session to allow admin update.
-      await adminAuth.updateUser(session.uid, { password: newPassword })
+    // Brand colour: validated (hex + enough contrast for white text); null/'' resets to the default look.
+    if (theme !== undefined) {
+      const primary = theme?.primary
+      if (primary === null || primary === '') updateData.theme = FieldValue.delete()
+      else if (typeof primary === 'string' && isUsablePrimary(primary)) updateData.theme = { primary }
+      else return Response.json({ error: 'Choose a darker brand colour (hex like #0B6E4F) so white text stays readable' }, { status: 400 })
     }
 
     if (Object.keys(updateData).length > 0) {

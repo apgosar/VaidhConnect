@@ -1,359 +1,68 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-import { adminDb } from '@/lib/firebase/server'
-import { generateAvailableSlots, getWorkingWindowsForDay } from '@/lib/slots'
+import { getSession } from '@/lib/auth/session'
+import { can } from '@/lib/auth/access'
+import { bookingSchema, parseBody } from '@/lib/validation'
+import { clientIp } from '@/lib/ratelimit'
+import { isValidYmd, ymdInTz } from '@/lib/time'
+import { getDayAvailability } from '@/lib/modules/availability'
+import { bookAppointment, BookingError } from '@/lib/modules/booking'
+import { audit } from '@/lib/audit'
 import { type NextRequest } from 'next/server'
-import { startOfDay, endOfDay, format } from 'date-fns'
-import type { WeeklyTimings } from '@/lib/constants'
-import { sendBookingConfirmation, sendReminder } from '@/lib/whatsapp'
-import { sendEmail, appointmentReminderHtml } from '@/lib/email'
-import { getPatientSession } from '@/lib/auth/patientSession'
 
-// GET /api/appointments?date=2024-01-15&patientPhone=xxx
+// GET /api/appointments?mode=slots&date=YYYY-MM-DD — public: which slots are
+// open on a clinic-local date. Returns no patient data.
 export async function GET(request: NextRequest) {
   try {
     const tenant = await getTenant()
     if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
     const db = tenantDb(tenant)
+
     const date = request.nextUrl.searchParams.get('date')
-    const patientId = request.nextUrl.searchParams.get('patientId')
-    const mode = request.nextUrl.searchParams.get('mode') // 'slots' | 'patient'
-
-    // Get doctor (single-doctor app)
-    const doctorDoc = await db.profile().get()
-    if (!doctorDoc.exists) {
-      return Response.json({ error: 'Clinic not configured' }, { status: 503 })
-    }
-    const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
-
-    if (mode === 'slots' && date) {
-      const targetDate = new Date(date)
-      const dayStart = startOfDay(targetDate)
-      const dayEnd = endOfDay(targetDate)
-
-      // Firestore only allows inequality on one field, so we query by
-      // startTime and filter the rest in memory. blocked_slots is queried
-      // as "starts on or before this day" (not "starts within this day")
-      // and then filtered by endTime >= dayStart below, so a multi-day
-      // block still shows up on every day it actually covers, not just
-      // the day it started on.
-      const [blockedSlotsSnap, bookedSlotsSnap] = await Promise.all([
-        db.col('blocked_slots')
-          .where('startTime', '<=', dayEnd)
-          .get(),
-        db.col('appointments')
-          .where('startTime', '>=', dayStart)
-          .where('startTime', '<=', dayEnd)
-          .get(),
-      ])
-
-      const blockedSlots = blockedSlotsSnap.docs
-        .map((doc: any) => {
-          const data = doc.data()
-          return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
-        })
-        .filter((slot: any) => slot.doctorId === doctor.id && slot.endTime >= dayStart)
-
-      const bookedSlots = bookedSlotsSnap.docs
-        .map((doc: any) => {
-          const data = doc.data()
-          return { ...data, startTime: data.startTime.toDate(), endTime: data.endTime.toDate() }
-        })
-        .filter((slot: any) => slot.doctorId === doctor.id && slot.status === 'BOOKED')
-
-      const slots = generateAvailableSlots({
-        date: targetDate,
-        timings: doctor.timings as unknown as WeeklyTimings,
-        slotDurationMins: doctor.slotDurationMins,
-        blockedSlots,
-        bookedSlots,
-      })
-
-      // Surfaced to patients alongside the slot picker so they can see
-      // *why* fewer slots are available that day, instead of blocked
-      // time just silently vanishing from the list. Each period is
-      // clipped to the overlap with an actual clinic working-hour
-      // window — never the raw (possibly multi-day) block boundaries,
-      // which would show a nonsensical/backwards-looking time range once
-      // only their time-of-day is displayed (e.g. a block from 12:00 PM
-      // one day to 10:14 AM three days later becoming "12:00 PM – 10:14
-      // AM" on screen).
-      const workingWindows = getWorkingWindowsForDay(targetDate, doctor.timings as unknown as WeeklyTimings)
-      const blockedPeriods: Array<{ startTime: string; endTime: string; reason: string | null }> = []
-      for (const b of blockedSlots) {
-        for (const w of workingWindows) {
-          const overlapStart = b.startTime > w.start ? b.startTime : w.start
-          const overlapEnd = b.endTime < w.end ? b.endTime : w.end
-          if (overlapStart < overlapEnd) {
-            blockedPeriods.push({
-              startTime: overlapStart.toISOString(),
-              endTime: overlapEnd.toISOString(),
-              reason: b.reason ?? null,
-            })
-          }
-        }
-      }
-
-      return Response.json({ slots, blockedPeriods, slotDurationMins: doctor.slotDurationMins })
+    if (request.nextUrl.searchParams.get('mode') !== 'slots' || !date || !isValidYmd(date)) {
+      return Response.json({ error: 'Invalid query parameters' }, { status: 400 })
     }
 
-    // Patient's appointments
-    if (patientId) {
-      const patientSession = await getPatientSession()
-      if (!patientSession) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    const snap = await db.profile().get()
+    if (!snap.exists) return Response.json({ error: 'Clinic not configured' }, { status: 503 })
+    const doctor = { id: snap.id, ...snap.data() } as any
 
-      const patientDoc = await db.col('patients').doc(patientId).get()
-      if (!patientDoc.exists) {
-        return Response.json({ appointments: [] })
-      }
-
-      const pData = patientDoc.data() as any
-
-      // Ownership check: this patient record must belong to the caller's
-      // own verified number, not just any patientId they happen to pass.
-      if (pData.phone !== patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-
-      // Find all duplicate patient IDs with same phone and name
-      const dupSnap = await db.col('patients').where('phone', '==', pData.phone).get()
-      const patientIds = dupSnap.docs
-        .filter(d => d.data().name?.trim().toLowerCase() === pData.name?.trim().toLowerCase())
-        .map(d => d.id)
-
-      // Fetch all appointments for these IDs, filter in memory to avoid composite index
-      const promises = patientIds.map(id => 
-        db.col('appointments').where('patientId', '==', id).get()
-      )
-      const snaps = await Promise.all(promises)
-      
-      const appointments: any[] = []
-      const now = new Date()
-
-      for (const snap of snaps) {
-        for (const doc of snap.docs) {
-          const data = doc.data()
-          const startTime = data.startTime?.toDate()
-          if (data.status === 'BOOKED' && startTime && startTime >= now) {
-            appointments.push({
-              id: doc.id,
-              startTime,
-              endTime: data.endTime?.toDate(),
-              status: data.status,
-              chiefComplaint: data.chiefComplaint,
-            })
-          }
-        }
-      }
-      
-      appointments.sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
-
-      return Response.json({ appointments })
-    }
-
-    return Response.json({ error: 'Invalid query parameters' }, { status: 400 })
-  } catch (error: any) {
+    const availability = await getDayAvailability(tenant, db, doctor, date)
+    return Response.json({
+      ...availability,
+      timezone: tenant.timezone,
+      today: ymdInTz(new Date(), tenant.timezone),
+    })
+  } catch (error) {
     console.error('[appointments-get]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST /api/appointments — book an appointment
+// POST /api/appointments — book an appointment.
+// Public callers send patient details; staff (signed-in clinic users) may
+// instead pass an existing patientId. Public responses never include any
+// existing patient data.
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
     if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const patientSession = await getPatientSession()
-    if (!patientSession) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const body = await request.json()
-    const { patientId, startTime, endTime, chiefComplaint } = body
+    const parsed = await parseBody(request, bookingSchema)
+    if ('error' in parsed) return parsed.error
 
-    if (!patientId || !startTime || !endTime) {
-      return Response.json({ error: 'patientId, startTime and endTime are required' }, { status: 400 })
-    }
+    const session = await getSession()
+    const isStaff = !!session && can(session.role, 'appointments:manage')
+    const result = await bookAppointment(
+      tenant,
+      parsed.data,
+      isStaff ? { kind: 'staff', uid: session!.uid } : { kind: 'public', ip: clientIp(request) },
+    )
 
-    // Ownership check: a verified caller may only book on behalf of a
-    // patient record under their own number (themselves or a family
-    // member registered under the same verified phone).
-    const ownerCheckDoc = await db.col('patients').doc(patientId).get()
-    if (!ownerCheckDoc.exists || ownerCheckDoc.data()?.phone !== patientSession.phoneNumber.replace(/[\s\-()]/g, '')) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const doctorDoc = await db.profile().get()
-    if (!doctorDoc.exists) {
-      return Response.json({ error: 'Clinic not configured' }, { status: 503 })
-    }
-    const doctor = { id: doctorDoc.id, ...doctorDoc.data() } as any
-
-    const start = new Date(startTime)
-    const end = new Date(endTime)
-
-    // Check for conflicts
-    const conflictSnap = await db.col('appointments')
-      .where('doctorId', '==', doctor.id)
-      .where('status', '==', 'BOOKED')
-      .where('startTime', '>=', startOfDay(start))
-      .where('startTime', '<=', endOfDay(start))
-      .get()
-
-    const hasConflict = conflictSnap.docs.some((doc: any) => {
-      const apt = doc.data()
-      const aptStart = apt.startTime.toDate()
-      const aptEnd = apt.endTime.toDate()
-      return (
-        (start >= aptStart && start < aptEnd) ||
-        (end > aptStart && end <= aptEnd) ||
-        (start <= aptStart && end >= aptEnd)
-      )
-    })
-
-    if (hasConflict) {
-      return Response.json({ error: 'This slot is no longer available' }, { status: 409 })
-    }
-
-    const newAppointmentRef = db.col('appointments').doc()
-    const now = new Date()
-    const diffHours = (start.getTime() - now.getTime()) / (1000 * 60 * 60)
-
-    // Set reminder flags according to booking lead time:
-    // If booked < 24h before, 24h reminder is marked true (skip 24h cron).
-    // If booked < 1h before, 1h reminder is marked true (sent immediately below).
-    const reminderSent24h = diffHours < 24
-    const reminderSent1h = diffHours < 1
-
-    const appointmentData = {
-      patientId,
-      doctorId: doctor.id,
-      startTime: start,
-      endTime: end,
-      status: 'BOOKED',
-      chiefComplaint: chiefComplaint || null,
-      reminderSent24h,
-      reminderSent1h,
-      createdAt: now,
-      updatedAt: now,
-    }
-    
-    await newAppointmentRef.set(appointmentData)
-
-    // Fire & Forget notifications
-    const patientDoc = await db.col('patients').doc(patientId).get()
-    const patient = patientDoc.data() as any
-
-    if (patient) {
-      const dateStr = format(start, 'PPP')
-      const timeStr = format(start, 'p')
-      const clinicName = doctor.clinicName || 'Clinic'
-      const appointmentTimeFormatted = `${dateStr} at ${timeStr}`
-      const clinicPhone = doctor.phone || clinicName
-      const msg = `Hi ${patient.name}, your appointment at ${clinicName} is confirmed for ${appointmentTimeFormatted}.`
-
-      const notificationTasks: Promise<any>[] = [
-        // 1. Appointment Confirmation WhatsApp
-        sendBookingConfirmation(patient.phone, {
-          patientName: patient.name,
-          doctorName: doctor.name || 'Doctor',
-          appointmentTime: appointmentTimeFormatted,
-          clinicPhone: clinicPhone
-        }),
-        // 1. Appointment Confirmation Email (if available)
-        patient.email ? sendEmail({
-          to: patient.email,
-          subject: 'Appointment Confirmed',
-          html: `<p>${msg}</p>`
-        }) : Promise.resolve(),
-      ]
-
-      // 2. If appointment is booked less than 1 hour before, send Appointment Reminder IMMEDIATELY
-      if (diffHours < 1) {
-        notificationTasks.push(
-          sendReminder(patient.phone, {
-            patientName: patient.name,
-            doctorName: doctor.name || 'Doctor',
-            appointmentTime: appointmentTimeFormatted,
-            clinicPhone: clinicPhone,
-            directionsUrl: doctor.mapsUrl || 'Contact clinic for directions'
-          })
-        )
-
-        if (patient.email) {
-          notificationTasks.push(
-            sendEmail({
-              to: patient.email,
-              subject: `Reminder: Upcoming Appointment — ${clinicName}`,
-              html: appointmentReminderHtml({
-                patientName: patient.name,
-                doctorName: doctor.name || 'Doctor',
-                clinicName: clinicName,
-                appointmentTime: appointmentTimeFormatted,
-                clinicPhone: doctor.phone ?? undefined,
-                clinicAddress: doctor.address ?? undefined,
-              })
-            })
-          )
-        }
-      }
-
-      await Promise.all(notificationTasks).catch(err => console.error('[Notification Error]', err))
-
-      // If this is a same-day booking and it's after the doctor's configured summaryHour,
-      // send a real-time updated schedule notification (before summaryHour the morning cron covers it)
-      const now = new Date()
-      const summaryHour: number = typeof doctor.summaryHour === 'number' ? doctor.summaryHour : 10
-      if (start.toDateString() === now.toDateString() && now.getHours() >= summaryHour) {
-        const notifyPhone = (doctor.whatsappPhone as string | undefined)?.trim() || (doctor.phone as string | undefined)?.trim()
-        if (notifyPhone) {
-          const { sendSummaryUpdate } = await import('@/lib/whatsapp')
-          const remainingSnap = await db.col('appointments')
-            .where('doctorId', '==', doctor.id)
-            .where('status', '==', 'BOOKED')
-            .where('startTime', '>=', startOfDay(now))
-            .where('startTime', '<=', endOfDay(now))
-            .orderBy('startTime', 'asc')
-            .get()
-
-          let scheduleList = ''
-          for (const doc of remainingSnap.docs) {
-            const rApt = doc.data()
-            if (rApt.patientId) {
-              const pDoc = await db.col('patients').doc(rApt.patientId).get()
-              const pName = pDoc.data()?.name || 'Unknown'
-              const pPhone = pDoc.data()?.phone || ''
-              scheduleList += `${format(rApt.startTime.toDate(), 'p')} - ${pName} - ${pPhone}\n`
-            }
-          }
-          if (!scheduleList) scheduleList = 'No remaining appointments.'
-
-          sendSummaryUpdate(notifyPhone, {
-            doctorName: doctor.name || 'Doctor',
-            cancelledPatientName: `New booking: ${patient.name}`,
-            remainingCount: remainingSnap.size.toString(),
-            scheduleList: scheduleList.trim(),
-          }).catch(err => console.error('[DoctorScheduleUpdate Error]', err))
-        }
-      }
-    }
-
-    return Response.json({
-      appointment: {
-        id: newAppointmentRef.id,
-        ...appointmentData,
-        doctor: {
-          name: doctor.name || 'Doctor',
-          clinicName: doctor.clinicName || 'Clinic',
-          address: doctor.address || undefined,
-          phone: doctor.phone || undefined,
-        },
-      },
-    }, { status: 201 })
+    if (isStaff) await audit(tenant, session!, 'appointment.book', `appointments/${result.appointment.id}`)
+    return Response.json(result, { status: 201 })
   } catch (error) {
+    if (error instanceof BookingError) return Response.json({ error: error.message }, { status: error.status })
     console.error('[appointments-post]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

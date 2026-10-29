@@ -2,6 +2,7 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
 import { constructMessageBody } from '@/lib/whatsapp'
 import { type NextRequest } from 'next/server'
 
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'logs:view')
+    if (denied) return denied
 
     const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') ?? '50'), 100)
     const before = request.nextUrl.searchParams.get('before')

@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-const TENANT = ['patients', 'appointments', 'prescriptions', 'payments', 'blocked_slots', 'whatsapp_logs']
+const TENANT = ['patients', 'appointments', 'prescriptions', 'payments', 'blocked_slots', 'whatsapp_logs', 'slot_locks', 'rate_limits', 'audit_logs', 'users']
 const re = new RegExp(String.raw`adminDb\s*\.collection\(\s*['"](${TENANT.join('|')})['"]`)
 const bad = []
 

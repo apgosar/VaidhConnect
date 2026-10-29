@@ -1,59 +1,72 @@
+import { z } from 'zod'
 import { featureGate } from '@/lib/tenant/features'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
-import { uploadFile } from '@/lib/storage'
-import { sendEmail } from '@/lib/email'
+import { forbid } from '@/lib/auth/access'
+import { parseBody } from '@/lib/validation'
+import { audit } from '@/lib/audit'
+import { PAYMENT_MODES } from '@/lib/constants'
+import { uploadFile, tenantPath } from '@/lib/storage'
 
-// POST — log a payment
+const paymentSchema = z.object({
+  appointmentId: z.string().min(1).max(128),
+  patientId: z.string().min(1).max(128),
+  amount: z.coerce.number().positive().max(10_000_000),
+  mode: z.enum(PAYMENT_MODES),
+  paidAt: z.string().min(8).max(40).optional(),
+  notes: z.string().trim().max(500).optional().nullable(),
+})
+
+async function authorize() {
+  const tenant = await getTenant()
+  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) }
+  const gated = featureGate(tenant, 'payments')
+  if (gated) return { error: gated }
+  const session = await getSession()
+  if (!session?.uid) return { error: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const denied = forbid(session, 'payments:manage')
+  if (denied) return { error: denied }
+  return { tenant, session, db: tenantDb(tenant) }
+}
+
+// POST — log (or update) the payment for an appointment
 export async function POST(request: Request) {
   try {
-    const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const gated = await featureGate(db, 'payments')
-    if (gated) return gated
-    const session = await getSession()
-    if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const a = await authorize()
+    if ('error' in a) return a.error
+    const { tenant, session, db } = a
+
+    const parsed = await parseBody(request, paymentSchema)
+    if ('error' in parsed) return parsed.error
+    const { appointmentId, patientId, amount, mode, paidAt, notes } = parsed.data
+
+    const paidDate = paidAt ? new Date(paidAt) : new Date()
+    if (Number.isNaN(paidDate.getTime())) return Response.json({ error: 'Invalid payment date' }, { status: 400 })
+
+    // The appointment must belong to this clinic and to that patient.
+    const appt = await db.col('appointments').doc(appointmentId).get()
+    if (!appt.exists || appt.data()?.patientId !== patientId) {
+      return Response.json({ error: 'Appointment and patient do not match' }, { status: 400 })
     }
 
-    const { appointmentId, patientId, amount, mode, paidAt, notes } = await request.json()
-
-    if (!appointmentId || !patientId || !amount || !mode) {
-      return Response.json({ error: 'appointmentId, patientId, amount and mode are required' }, { status: 400 })
+    const existing = await db.col('payments').where('appointmentId', '==', appointmentId).limit(1).get()
+    const now = new Date()
+    const paymentData: Record<string, unknown> = {
+      appointmentId, patientId, amount, mode, paidAt: paidDate, notes: notes ?? null, updatedAt: now,
     }
 
-    const paySnap = await db.col('payments')
-      .where('appointmentId', '==', appointmentId)
-      .limit(1)
-      .get()
-
-    let paymentData: any = {
-      appointmentId,
-      patientId,
-      amount: parseFloat(amount),
-      mode,
-      paidAt: paidAt ? new Date(paidAt) : new Date(),
-      notes,
-    }
-
-    let paymentId = ''
-
-    if (paySnap.empty) {
-      paymentData.createdAt = new Date()
-      paymentData.updatedAt = new Date()
-      const newRef = db.col('payments').doc()
-      await newRef.set(paymentData)
-      paymentId = newRef.id
+    let paymentId: string
+    if (existing.empty) {
+      const ref = db.col('payments').doc()
+      await ref.set({ ...paymentData, createdAt: now })
+      paymentId = ref.id
     } else {
-      paymentData.updatedAt = new Date()
-      const existingRef = paySnap.docs[0].ref
-      await existingRef.update(paymentData)
-      paymentId = existingRef.id
+      await existing.docs[0].ref.update(paymentData)
+      paymentId = existing.docs[0].id
     }
 
+    await audit(tenant, session, 'payment.save', `payments/${paymentId}`, { amount, mode })
     return Response.json({ payment: { id: paymentId, ...paymentData } }, { status: 201 })
   } catch (error) {
     console.error('[payment-post]', error)
@@ -61,32 +74,30 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT — upload receipt PDF
+// PUT — attach the receipt PDF to a payment
 export async function PUT(request: Request) {
   try {
-    const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const gated = await featureGate(db, 'payments')
-    if (gated) return gated
-    const session = await getSession()
-    if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const a = await authorize()
+    if ('error' in a) return a.error
+    const { tenant, session, db } = a
 
     const formData = await request.formData()
-    const pdfFile = formData.get('pdf') as File | null
-    const paymentId = formData.get('paymentId') as string | null
-
-    if (!pdfFile || !paymentId) {
+    const pdfFile = formData.get('pdf')
+    const paymentId = formData.get('paymentId')
+    if (!(pdfFile instanceof File) || typeof paymentId !== 'string' || !paymentId) {
       return Response.json({ error: 'pdf and paymentId are required' }, { status: 400 })
     }
-
-    const buffer = Buffer.from(await pdfFile.arrayBuffer())
-    const receiptPdfPath = await uploadFile(buffer, `receipts/${paymentId}.pdf`, 'application/pdf')
+    if (pdfFile.type !== 'application/pdf' || pdfFile.size > 5 * 1024 * 1024) {
+      return Response.json({ error: 'Receipt must be a PDF under 5MB' }, { status: 400 })
+    }
 
     const payRef = db.col('payments').doc(paymentId)
+    if (!(await payRef.get()).exists) return Response.json({ error: 'Payment not found' }, { status: 404 })
+
+    const buffer = Buffer.from(await pdfFile.arrayBuffer())
+    const receiptPdfPath = await uploadFile(buffer, tenantPath(tenant, `receipts/${paymentId}.pdf`), 'application/pdf')
     await payRef.update({ receiptPdfPath, updatedAt: new Date() })
+    await audit(tenant, session, 'payment.receipt', `payments/${paymentId}`)
 
     const updated = await payRef.get()
     return Response.json({ payment: { id: updated.id, ...updated.data() } })

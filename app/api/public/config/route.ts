@@ -1,6 +1,7 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { NextResponse } from 'next/server'
+import { ymdInTz } from '@/lib/time'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,9 @@ export async function GET() {
     const publicConfig = {
       enableChiefComplaint: doctorData.enableChiefComplaint ?? true,
       enableMedicalHistory: doctorData.enableMedicalHistory ?? true,
+      // The clinic's own clock: date pickers and times must follow it, not the visitor's device.
+      timezone: tenant.timezone,
+      today: ymdInTz(new Date(), tenant.timezone),
     }
 
     return NextResponse.json({ config: publicConfig })

@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { adminAuth } from '../firebase/server';
 import { getTenant } from '../tenant/resolve';
 import { tenantDb } from '../db/tenant';
+import type { Role } from './access';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 
 export async function createSessionCookie(idToken: string) {
   const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
@@ -50,7 +52,10 @@ export async function getSession() {
     if (!belongs) return null;
     const profile = await tenantDb(tenant).profile().get();
     if (!profile.exists) return null;
-    return decodedClaims;
+    // Role: legacy single-clinic owner is OWNER; clinic users carry a role
+    // claim; anything unlabelled gets the least-privileged role.
+    const role: Role = (decodedClaims as any).role ?? (claimedClinic ? 'STAFF' : 'OWNER');
+    return { ...decodedClaims, role, clinicId: tenant.clinicId } as DecodedIdToken & { role: Role; clinicId: string };
   } catch (error) {
     return null;
   }

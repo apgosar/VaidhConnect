@@ -2,6 +2,7 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
+import { forbid } from '@/lib/auth/access'
 
 // GET all doctor appointments (for calendar)
 export async function GET(request: Request) {
@@ -13,6 +14,8 @@ export async function GET(request: Request) {
     if (!session?.uid) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const denied = forbid(session, 'appointments:manage')
+    if (denied) return denied
 
     const url = new URL(request.url)
     const from = url.searchParams.get('from')
@@ -30,6 +33,7 @@ export async function GET(request: Request) {
     
     let appointmentsDocs = snapshot.docs.map((doc: any) => {
       const data = doc.data()
+      delete data.cancelTokenHash
       return {
         id: doc.id,
         ...data,

@@ -263,10 +263,10 @@ function SettingsPageContent() {
     e.preventDefault()
     setPasswordError('')
     if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return }
-    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters'); return }
+    if (newPassword.length < 10) { setPasswordError('Password must be at least 10 characters'); return }
 
-    const res = await fetch('/api/doctor/profile', {
-      method: 'PATCH',
+    const res = await fetch('/api/doctor/password', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword, newPassword }),
     })
@@ -274,7 +274,8 @@ function SettingsPageContent() {
     if (!res.ok) { setPasswordError(data.error); return }
     setPasswordSuccess(true)
     setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
-    setTimeout(() => setPasswordSuccess(false), 3000)
+    // Every session is revoked on a password change, so sign in again.
+    setTimeout(() => { window.location.href = '/doctor/login' }, 1500)
   }
 
   if (loading) return <div className="flex justify-center py-20"><div className="spinner" /></div>
@@ -817,14 +818,14 @@ function SettingsPageContent() {
           </div>
           <div className="form-group">
             <label className="form-label">New Password</label>
-            <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} required />
+            <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={10} required />
           </div>
           <div className="form-group">
             <label className="form-label">Confirm New Password</label>
             <input type="password" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
           </div>
           {passwordError && <p className="form-error">{passwordError}</p>}
-          {passwordSuccess && <p className="text-green-600 text-sm">Password changed successfully!</p>}
+          {passwordSuccess && <p className="text-green-600 text-sm">Password changed. Signing you out so you can sign in again…</p>}
           <button type="submit" className="btn btn-primary">Update Password</button>
         </form>
       </div>

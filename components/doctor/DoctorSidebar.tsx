@@ -6,8 +6,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Calendar, Users, Settings, LogOut,
-  Menu, X, CalendarOff, MessageSquare
+  Menu, X, CalendarOff, MessageSquare, CalendarPlus, UserCog, ScrollText
 } from 'lucide-react'
+import { can, type Role, type Permission } from '@/lib/auth/access'
 
 interface DoctorSidebarProps {
   doctorName: string
@@ -15,15 +16,19 @@ interface DoctorSidebarProps {
   specialty: string
   themeColor: string
   logoUrl?: string | null
+  role?: Role
 }
 
-const navItems = [
+const navItems: Array<{ href: string; icon: typeof Calendar; label: string; permission?: Permission }> = [
   { href: '/doctor/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/doctor/calendar', icon: Calendar, label: 'Calendar' },
-  { href: '/doctor/blocked-slots', icon: CalendarOff, label: 'Block Schedule' },
-  { href: '/doctor/patients', icon: Users, label: 'Patients' },
-  { href: '/doctor/whatsapp-logs', icon: MessageSquare, label: 'WhatsApp Logs' },
-  { href: '/doctor/settings', icon: Settings, label: 'Settings' },
+  { href: '/doctor/appointments/new', icon: CalendarPlus, label: 'New Appointment', permission: 'appointments:manage' },
+  { href: '/doctor/calendar', icon: Calendar, label: 'Calendar', permission: 'appointments:manage' },
+  { href: '/doctor/blocked-slots', icon: CalendarOff, label: 'Block Schedule', permission: 'blocked:manage' },
+  { href: '/doctor/patients', icon: Users, label: 'Patients', permission: 'patients:manage' },
+  { href: '/doctor/whatsapp-logs', icon: MessageSquare, label: 'WhatsApp Logs', permission: 'logs:view' },
+  { href: '/doctor/team', icon: UserCog, label: 'Team', permission: 'team:manage' },
+  { href: '/doctor/audit', icon: ScrollText, label: 'Activity Log', permission: 'audit:view' },
+  { href: '/doctor/settings', icon: Settings, label: 'Settings', permission: 'settings:manage' },
 ]
 
 // Subtle botanical leaf watermark for sidebar lower half
@@ -55,7 +60,7 @@ function SidebarBotanical() {
   )
 }
 
-export default function DoctorSidebar({ doctorName, clinicName, logoUrl }: DoctorSidebarProps) {
+export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }: DoctorSidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -114,7 +119,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl }: Docto
 
       {/* Nav Items */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, icon: Icon, label }) => {
+        {navItems.filter(i => !i.permission || can(role, i.permission)).map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`)
           return (
             <Link

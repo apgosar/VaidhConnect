@@ -35,6 +35,7 @@ export default async function DoctorLayout({
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* Sidebar */}
       <DoctorSidebar
+        role={session.role}
         doctorName={doctorName}
         clinicName={clinicName}
         specialty={specialty}

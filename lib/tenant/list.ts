@@ -21,16 +21,21 @@ export async function listTenants(): Promise<Tenant[]> {
 
   const tenants = new Map<string, Tenant>()
   const tz = (data: any) => data?.timezone || 'Asia/Kolkata'
+  const features = (data: any) => (data?.features && typeof data.features === 'object' ? data.features : undefined)
 
   for (const d of legacy.docs) {
-    tenants.set(d.id, { clinicId: d.id, storage: 'legacy', timezone: tz(d.data()) })
+    tenants.set(d.id, { clinicId: d.id, storage: 'legacy', timezone: tz(d.data()), features: features(d.data()) })
   }
   for (const d of scoped.docs) {
     if (!tenants.has(d.id) || scopedLive.has(d.id)) {
-      tenants.set(d.id, { clinicId: d.id, storage: 'scoped', timezone: tz(d.data()) })
+      tenants.set(d.id, { clinicId: d.id, storage: 'scoped', timezone: tz(d.data()), features: features(d.data()) })
     }
   }
-  return [...tenants.values()]
+  // Suspended clinics get no background jobs (reminders, summaries).
+  const suspended = new Set(
+    [...legacy.docs, ...scoped.docs].filter(d => (d.data() as any)?.status === 'suspended').map(d => d.id),
+  )
+  return [...tenants.values()].filter(t => !suspended.has(t.clinicId))
 }
 
 /** Run `fn` over items with bounded concurrency; callers handle their own errors. */

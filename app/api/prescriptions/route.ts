@@ -1,91 +1,102 @@
+import { z } from 'zod'
 import { featureGate } from '@/lib/tenant/features'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
-import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
-import { uploadFile } from '@/lib/storage'
+import { forbid } from '@/lib/auth/access'
+import { parseBody } from '@/lib/validation'
+import { audit } from '@/lib/audit'
+import { uploadFile, tenantPath } from '@/lib/storage'
 
-// POST — save/update prescription + generate PDF
+const text = (max: number) => z.string().trim().max(max)
+const prescriptionSchema = z.object({
+  appointmentId: z.string().min(1).max(128),
+  patientId: z.string().min(1).max(128),
+  diagnosis: text(2000).optional().nullable(),
+  medicines: z.array(z.object({
+    name: text(200),
+    dosage: text(100).optional().default(''),
+    frequency: text(100).optional().default(''),
+    duration: text(100).optional().default(''),
+    instructions: text(500).optional(),
+  })).max(50).default([]),
+  notes: text(2000).optional().nullable(),
+})
+
+async function authorize() {
+  const tenant = await getTenant()
+  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) }
+  const gated = featureGate(tenant, 'prescriptions')
+  if (gated) return { error: gated }
+  const session = await getSession()
+  if (!session?.uid) return { error: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const denied = forbid(session, 'prescriptions:manage')
+  if (denied) return { error: denied }
+  return { tenant, session, db: tenantDb(tenant) }
+}
+
+// POST — save/update the prescription for an appointment
 export async function POST(request: Request) {
   try {
-    const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const gated = await featureGate(db, 'prescriptions')
-    if (gated) return gated
-    const session = await getSession()
-    if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const a = await authorize()
+    if ('error' in a) return a.error
+    const { tenant, session, db } = a
+
+    const parsed = await parseBody(request, prescriptionSchema)
+    if ('error' in parsed) return parsed.error
+    const { appointmentId, patientId, diagnosis, medicines, notes } = parsed.data
+
+    const appt = await db.col('appointments').doc(appointmentId).get()
+    if (!appt.exists || appt.data()?.patientId !== patientId) {
+      return Response.json({ error: 'Appointment and patient do not match' }, { status: 400 })
     }
 
-    const { appointmentId, patientId, diagnosis, medicines, notes } = await request.json()
+    const existing = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
+    const now = new Date()
+    const data = { appointmentId, patientId, diagnosis: diagnosis ?? null, medicines, notes: notes ?? null, updatedAt: now }
 
-    if (!appointmentId || !patientId) {
-      return Response.json({ error: 'appointmentId and patientId are required' }, { status: 400 })
-    }
-
-    // Upsert prescription
-    const rxSnap = await db.col('prescriptions')
-      .where('appointmentId', '==', appointmentId)
-      .limit(1)
-      .get()
-
-    let prescriptionData: any = {
-      appointmentId,
-      patientId,
-      diagnosis,
-      medicines: medicines ?? [],
-      notes,
-    }
-
-    let prescriptionId = ''
-
-    if (rxSnap.empty) {
-      prescriptionData.createdAt = new Date()
-      prescriptionData.updatedAt = new Date()
-      const newRef = db.col('prescriptions').doc()
-      await newRef.set(prescriptionData)
-      prescriptionId = newRef.id
+    let id: string
+    if (existing.empty) {
+      const ref = db.col('prescriptions').doc()
+      await ref.set({ ...data, createdAt: now })
+      id = ref.id
     } else {
-      prescriptionData.updatedAt = new Date()
-      const existingRef = rxSnap.docs[0].ref
-      await existingRef.update(prescriptionData)
-      prescriptionId = existingRef.id
+      await existing.docs[0].ref.update(data)
+      id = existing.docs[0].id
     }
 
-    return Response.json({ prescription: { id: prescriptionId, ...prescriptionData } }, { status: 201 })
+    await audit(tenant, session, 'prescription.save', `prescriptions/${id}`)
+    return Response.json({ prescription: { id, ...data } }, { status: 201 })
   } catch (error) {
     console.error('[prescription-post]', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// PUT — store PDF path after client generates it
+// PUT — attach the generated PDF
 export async function PUT(request: Request) {
   try {
-    const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
-    const db = tenantDb(tenant)
-    const gated = await featureGate(db, 'prescriptions')
-    if (gated) return gated
-    const session = await getSession()
-    if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const a = await authorize()
+    if ('error' in a) return a.error
+    const { tenant, session, db } = a
 
     const formData = await request.formData()
-    const pdfFile = formData.get('pdf') as File | null
-    const prescriptionId = formData.get('prescriptionId') as string | null
-
-    if (!pdfFile || !prescriptionId) {
+    const pdfFile = formData.get('pdf')
+    const prescriptionId = formData.get('prescriptionId')
+    if (!(pdfFile instanceof File) || typeof prescriptionId !== 'string' || !prescriptionId) {
       return Response.json({ error: 'pdf and prescriptionId are required' }, { status: 400 })
     }
-
-    const buffer = Buffer.from(await pdfFile.arrayBuffer())
-    const pdfPath = await uploadFile(buffer, `prescriptions/${prescriptionId}.pdf`, 'application/pdf')
+    if (pdfFile.type !== 'application/pdf' || pdfFile.size > 5 * 1024 * 1024) {
+      return Response.json({ error: 'Prescription must be a PDF under 5MB' }, { status: 400 })
+    }
 
     const rxRef = db.col('prescriptions').doc(prescriptionId)
+    if (!(await rxRef.get()).exists) return Response.json({ error: 'Prescription not found' }, { status: 404 })
+
+    const buffer = Buffer.from(await pdfFile.arrayBuffer())
+    const pdfPath = await uploadFile(buffer, tenantPath(tenant, `prescriptions/${prescriptionId}.pdf`), 'application/pdf')
     await rxRef.update({ pdfPath, updatedAt: new Date() })
+    await audit(tenant, session, 'prescription.pdf', `prescriptions/${prescriptionId}`)
 
     const updated = await rxRef.get()
     return Response.json({ prescription: { id: updated.id, ...updated.data() } })
