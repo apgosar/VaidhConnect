@@ -11,6 +11,9 @@ interface TemplateParams {
   };
   components: Array<{
     type: 'body' | 'header' | 'button';
+    /** Buttons only: Meta requires the kind and position of the button. */
+    sub_type?: 'url';
+    index?: string;
     parameters: Array<{
       type: 'text';
       text: string;
@@ -324,9 +327,11 @@ export async function sendPinResetCode(to: string, params: { code: string }) {
   return sendWhatsAppTemplate(to, {
     name: 'patient_pin_reset',
     language: { code: 'en' },
-    components: [{
-      type: 'body',
-      parameters: [{ type: 'text', text: params.code }],
-    }]
+    // Authentication templates carry a "copy code" button, and Meta requires the
+    // code again as that button's parameter (error 131008 otherwise).
+    components: [
+      { type: 'body', parameters: [{ type: 'text', text: params.code }] },
+      { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: params.code }] },
+    ]
   }, { messageType: 'PIN Reset Code', recipientName: 'Patient' })
 }
