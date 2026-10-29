@@ -179,6 +179,78 @@ async function main() {
     check('front desk cannot download prescriptions', (await staff(`/api/prescriptions/${rxId}/pdf`)).status === 403)
     check('another clinic cannot reach it', (await http(bHost, `/api/prescriptions/${rxId}/pdf`, { cookie: ownerCookie })).status === 401)
 
+    // ── tapering doses, print modes, letterhead ────────────────────────────
+    const taperSave = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Prednisolone', taper: { steps: [{ dose: '40 mg', frequency: 'Once daily', days: 5 }, { dose: '20 mg', frequency: 'Once daily', days: 5 }] } }] } })
+    const taperMed = taperSave.body?.prescription?.medicines?.[0]
+    check('tapering dose is saved and summarised', taperSave.status === 201 && taperMed?.taper?.steps?.length === 2 && taperMed?.duration === '10 days' && taperMed?.dosage === '40 mg', `(${taperSave.status} ${taperMed?.duration})`)
+    const badTaper = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, medicines: [{ name: 'x', taper: { steps: [{ dose: '', days: 0 }] } }] } })
+    check('an empty tapering step is refused', badTaper.status === 400, `(${badTaper.status})`)
+    const taperPdf = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf`, { headers: { cookie: ownerCookie } })
+    check('tapering prescription still downloads as a PDF', taperPdf.status === 200 && Buffer.from(await taperPdf.arrayBuffer()).subarray(0, 5).toString() === '%PDF-')
+    const pre = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf?inline=1&mode=preprinted`, { headers: { cookie: ownerCookie } })
+    check('pre-printed paper mode returns a PDF', pre.status === 200 && pre.headers.get('content-type') === 'application/pdf' && /^inline/.test(pre.headers.get('content-disposition') ?? ''))
+    check('print test page works for the owner', (await fetch(`https://${aHost}/api/doctor/print-test?mode=preprinted`, { headers: { cookie: ownerCookie } })).status === 200)
+    check('front desk cannot open the print test page', (await staff('/api/doctor/print-test')).status === 403)
+
+    const badMargin = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { printSettings: { top: 500, bottom: 25, left: 15, right: 15 } } })
+    check('absurd print spacing is refused', badMargin.status === 400, `(${badMargin.status})`)
+    const okMargin = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { printSettings: { top: 50, bottom: 25, left: 15, right: 15 } } })
+    check('print spacing is saved', okMargin.status === 200 && okMargin.body?.doctor?.printSettings?.top === 50, `(${okMargin.status})`)
+
+    const { default: sharp } = await import('sharp')
+    const a4 = await sharp({ create: { width: 840, height: 1188, channels: 3, background: '#e8f1ec' } }).png().toBuffer()
+    const square = await sharp({ create: { width: 600, height: 600, channels: 3, background: '#ffffff' } }).png().toBuffer()
+    const lhForm = (buf: Buffer, type = 'image/png', name = 'lh.png') => { const f = new FormData(); f.append('letterhead', new Blob([new Uint8Array(buf)], { type }), name); return f }
+    const lhUp = (f: FormData, cookie = ownerCookie) => fetch(`https://${aHost}/api/doctor/profile`, { method: 'PATCH', headers: { cookie }, body: f })
+    check('a square image is refused as a letterhead', (await lhUp(lhForm(square))).status === 400)
+    check('a non-image is refused as a letterhead', (await lhUp(lhForm(Buffer.from('%PDF-1.4 hi'), 'image/png'))).status === 400)
+    check('front desk cannot upload a letterhead', (await lhUp(lhForm(a4), staffCookie)).status === 403)
+    const lhOk = await lhUp(lhForm(a4))
+    check('an A4 letterhead is accepted', lhOk.status === 200, `(${lhOk.status})`)
+    cleanup.push(async () => { await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { removeLetterhead: true } }) })
+    const lhGet = await fetch(`https://${aHost}/api/doctor/letterhead`, { headers: { cookie: ownerCookie } })
+    check('the letterhead can be previewed by the owner only', lhGet.status === 200 && lhGet.headers.get('content-type') === 'image/png' && (await fetch(`https://${aHost}/api/doctor/letterhead`)).status === 401)
+    const withLh = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf`, { headers: { cookie: ownerCookie } })
+    const withLhBytes = Buffer.from(await withLh.arrayBuffer())
+    check('prescriptions are drawn on the uploaded letterhead', withLh.status === 200 && withLhBytes.includes('/Subtype /Image'))
+    const lhRemove = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { removeLetterhead: true } })
+    check('the letterhead can be removed', lhRemove.status === 200 && lhRemove.body?.doctor?.letterheadPath === undefined, `(${lhRemove.status})`)
+    check('and then it is gone', (await fetch(`https://${aHost}/api/doctor/letterhead`, { headers: { cookie: ownerCookie } })).status === 404)
+
+    // ── sharing a prescription on WhatsApp ─────────────────────────────────
+    // The Meta template may not exist yet on a fresh account, so a clinic owner reaching Meta is judged by
+    // the answer being a clean 200 or a clean 502 with a reason, never a crash. No message is expected to land.
+    check('sharing a prescription needs a login', (await http(aHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST' })).status === 401)
+    check('front desk cannot share prescriptions', (await staff(`/api/prescriptions/${rxId}/whatsapp`, 'POST')).status === 403)
+    check('another clinic cannot share it', [401, 404].includes((await http(bHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST', cookie: ownerCookie })).status))
+    const shareTry = await http(aHost, `/api/prescriptions/${rxId}/whatsapp`, { method: 'POST', cookie: ownerCookie })
+    const shareText = JSON.stringify(shareTry.body)
+    check('the owner reaches WhatsApp and gets a clean answer', [200, 502, 422].includes(shareTry.status) && !shareText.includes('storage.googleapis.com') && !shareText.includes(person.phone), `(${shareTry.status} ${shareTry.body?.error ?? shareTry.body?.to ?? ''})`)
+    const sharedFiles = await db.collection('clinics').doc(a).collection('audit_logs').where('action', 'in', ['prescription.share', 'prescription.share_failed']).get()
+    check('the attempt is recorded in the activity log', shareTry.status === 422 || sharedFiles.size >= 1)
+
+    // ── follow-up date, medicine suggestions, patient prescription download ──
+    const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
+    check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)
+    const fuBad = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, medicines: [], followUpDate: '2020-01-01' } })
+    check('a follow-up date before the visit is refused', fuBad.status === 400, `(${fuBad.status})`)
+    cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('medicine_catalog').get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
+    const sug = await http(aHost, '/api/prescriptions/medicines?q=zz+para', { cookie: ownerCookie })
+    check('medicines already prescribed are suggested', sug.status === 200 && sug.body?.medicines?.[0]?.name === 'ZZ Paracetamol' && sug.body.medicines[0].dosage === '500 mg', `(${sug.status})`)
+    check('suggestions are private to the clinic', (await http(aHost, '/api/prescriptions/medicines?q=zz+para')).status === 401 && (await staff('/api/prescriptions/medicines?q=zz+para')).status === 403 && ((await http(bHost, '/api/prescriptions/medicines?q=zz+para', { cookie: ownerCookie })).status === 401))
+    const bSug = await http(bHost, '/api/prescriptions/medicines?q=zz', { cookie: await cookieForUid((await db.collection('clinics').doc(b).get()).data()!.ownerUid as string, bHost, '/api/auth/session', 'session') })
+    check('another clinic does not see them', bSug.status === 200 && bSug.body.medicines.length === 0)
+
+    const pdl = (host: string, cookie?: string) => fetch(`https://${host}/api/patient/prescriptions/${rxApptId}/pdf`, { headers: cookie ? { cookie } : {} })
+    check('a prescription download needs the patient PIN', (await pdl(aHost)).status === 401)
+    const own = await pdl(aHost, pinCookie)
+    check('the patient downloads their own prescription', own.status === 200 && own.headers.get('content-type') === 'application/pdf' && Buffer.from(await own.arrayBuffer()).subarray(0, 5).toString() === '%PDF-', `(${own.status})`)
+    check('a PIN session does not work on another clinic', (await pdl(bHost, pinCookie)).status === 401)
+    const otherPhone = await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: '+919800000098', pin: '5738' } })
+    const stranger = otherPhone.res.headers.getSetCookie().map(c => c.split(';')[0]).find(c => c.startsWith('pp_session='))
+    check('another patient cannot download it', !stranger || (await pdl(aHost, stranger)).status === 404)
+    check('the patient prescription list needs the PIN too', (await http(aHost, '/api/patient/prescriptions')).status === 401 && (await http(aHost, '/api/patient/prescriptions', { cookie: pinCookie })).status === 200)
+
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)
 

@@ -3,6 +3,7 @@ import { tenantDb } from '../db/tenant'
 import { sendEmail, appointmentReminderHtml } from '../email'
 import { emailAccent } from '../tenant/theme'
 import { sendReminder } from '../whatsapp'
+import { processFollowUps } from './followUp'
 import { formatDateTimeInTz } from '../time'
 import type { Tenant } from '../tenant/types'
 
@@ -66,6 +67,12 @@ export async function processReminders(tenant: Tenant, now = new Date()): Promis
       await db.col('appointments').doc(appt.id).update({ [field]: true, updatedAt: new Date() })
       sent++
     }
+  }
+  // Follow-up reminders share this job; their trouble must not hide the appointment reminders just sent.
+  try {
+    sent += await processFollowUps(tenant, doctor, now)
+  } catch (e) {
+    console.error('[follow-up]', tenant.clinicId, e)
   }
   return sent
 }

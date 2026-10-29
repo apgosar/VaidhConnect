@@ -26,6 +26,8 @@ environment: a permanent system-user token, never the 24-hour test token.
 | `daily_summary_morning` | Utility | Doctor | Each morning at the doctor's chosen summary hour (cron) |
 | `daily_summary_update` | Utility | Doctor | Same-day booking or cancellation made after the summary hour |
 | `patient_pin_reset` | Authentication | Patient | Patient asks to reset their PIN |
+| `prescription_share` | Utility | Patient | The doctor taps the WhatsApp button on a prescription |
+| `followup_reminder` | Utility | Patient | The day before the follow-up date set on a prescription (cron) |
 
 ### 1. `appt_booking_confirmation`
 ```
@@ -60,6 +62,28 @@ Schedule update for Dr. {{1}} at {{2}}: {{3}}. Total appointments today: {{4}}. 
 ### 6. `patient_pin_reset`
 Authentication template with a "copy code" button. Meta fixes the wording (`{{1}} is your verification code.`), so the clinic name can't appear here. The code is sent twice, as the body variable and as the button's parameter. Choose a 10-minute expiry.
 {{1}} 6-digit code
+
+### 7. `prescription_share`
+Header type **Document** (Meta asks for a sample PDF when you submit), language English, body:
+```
+Hi {{1}}, here is your prescription from {{2}} for your visit on {{3}}. Please follow the doctor's advice, and call the clinic on {{4}} if you have any questions. Wishing you good health.
+```
+{{1}} patient name · {{2}} clinic name · {{3}} visit date (e.g. `02 Nov 2026`) · {{4}} clinic phone. The prescription itself travels as the header document.
+
+How it is sent: the server renders the PDF, stores it privately at `shares/<clinicId>/<prescriptionId>/<time>.pdf` and gives Meta a 60-minute signed link. The link is never shown to anyone or written to the logs. A storage rule deletes those copies after 7 days:
+```
+gcloud storage buckets update gs://<bucket> --lifecycle-file=scripts/storage-lifecycle.json
+```
+At most 5 sends an hour per prescription. If it fails, the doctor sees WhatsApp's reason on screen and it is logged on the WhatsApp Logs page.
+
+### 8. `followup_reminder`
+Body only, language English:
+```
+Hi {{1}}, this is a gentle reminder from {{2}} that your follow-up visit with Dr. {{3}} is due on {{4}}. To book your appointment, please call the clinic on {{5}} or visit {{6}}. We hope you are feeling better.
+```
+{{1}} patient name · {{2}} clinic name · {{3}} doctor name (without "Dr.") · {{4}} follow-up date (e.g. `03 Nov 2026`) · {{5}} clinic phone · {{6}} the clinic's web address (its custom domain if it has one, otherwise its first mapped host, otherwise the website in Settings).
+
+When it goes out: the reminder job (every 15 minutes) looks for prescriptions whose follow-up date is **tomorrow in the clinic's timezone** and sends between 09:00 and 19:00 clinic time. A prescription is marked done once the message is sent. It is also marked done, with nothing sent, when the patient has no phone number or already has a booked visit in the next 4 days. A failed send is retried on the next run, but only inside that morning window. Changing the follow-up date re-arms the reminder.
 
 ## When messages go out
 

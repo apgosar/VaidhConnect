@@ -4,11 +4,12 @@ import { FakeFirestore, fakeTenantDb } from './helpers/fakeFirestore'
 
 const h = vi.hoisted(() => ({ db: null as any }))
 vi.mock('@/lib/db/tenant', () => ({ tenantDb: () => h.db }))
+vi.mock('@/lib/storage', () => ({ downloadFile: async () => null }))
 
 import { registerPdfFonts, scriptRuns, FONT_DEVANAGARI, FONT_GUJARATI, FONT_LATIN } from '@/lib/pdf/fonts'
 import { PrescriptionDocument, type PrescriptionDocProps } from '@/lib/pdf/prescriptionDocument'
 import { ReceiptDocument } from '@/lib/pdf/receiptDocument'
-import { renderPrescriptionPdf, renderReceiptPdf, loadLogo } from '@/lib/modules/documents'
+import { renderPrescriptionPdf, renderReceiptPdf, renderSamplePrescriptionPdf, loadLogo } from '@/lib/modules/documents'
 import { pdfResponse } from '@/lib/pdfHttp'
 
 const tenant = { clinicId: 'c1', storage: 'scoped' as const, timezone: 'Asia/Kolkata' }
@@ -170,5 +171,90 @@ describe('pdfResponse', () => {
     expect(dl.headers.get('Content-Disposition')).toMatch(/^attachment; filename="Prescription_[_]+_02Nov2026\.pdf"; filename\*=UTF-8''/)
     expect(dl.headers.get('Cache-Control')).toBe('no-store')
     expect(pdfResponse(body, 'a.pdf', true).headers.get('Content-Disposition')).toMatch(/^inline;/)
+  })
+})
+
+describe('tapering medicines in the PDF', () => {
+  const taperDoc = () => baseDoc({
+    prescription: {
+      id: 'rx1',
+      medicines: [
+        { name: 'Prednisolone', dosage: '40 mg', frequency: 'Tapering', duration: '11 days', taper: { steps: [
+          { dose: '40 mg', frequency: 'Once daily', days: 5 },
+          { dose: '20 mg', frequency: 'Once daily', days: 5, instructions: 'After breakfast' },
+          { dose: '10 mg', frequency: 'Alternate days', days: 1 },
+        ] } },
+        { name: 'Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' },
+      ],
+    },
+  })
+
+  it('renders a tapering and a fixed medicine together', async () => {
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(taperDoc())))).toBe(true)
+  })
+
+  it('renders a medicine with an empty tapering list as a fixed dose instead of crashing', async () => {
+    const doc = baseDoc()
+    doc.prescription.medicines = [{ ...doc.prescription.medicines[0], taper: { steps: [] } }]
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(doc)))).toBe(true)
+  })
+})
+
+describe('print modes', () => {
+  const letterhead = { data: Buffer.from(PNG_1PX, 'base64'), format: 'png' as const }
+  const margins = { top: 50, bottom: 30, left: 20, right: 20 }
+
+  it('standard mode draws the uploaded letterhead behind the content', async () => {
+    const buf = await renderToBuffer(PrescriptionDocument(baseDoc({ layout: { mode: 'standard', margins, letterhead } })))
+    expect(asText(buf)).toContain('/Subtype /Image')
+  })
+
+  it('pre-printed mode ignores the letterhead image and the clinic logo, printing content only', async () => {
+    const logoDoc = baseDoc({ doctor: { ...baseDoc().doctor, logo: letterhead }, layout: { mode: 'preprinted', margins, letterhead } })
+    const buf = await renderToBuffer(PrescriptionDocument(logoDoc))
+    expect(isPdf(buf)).toBe(true)
+    expect(asText(buf)).not.toContain('/Subtype /Image')
+  })
+
+  it('pre-printed mode with very large margins still produces a valid PDF', async () => {
+    const buf = await renderToBuffer(PrescriptionDocument(baseDoc({ layout: { mode: 'preprinted', margins: { top: 120, bottom: 100, left: 60, right: 60 } } })))
+    expect(isPdf(buf)).toBe(true)
+  })
+})
+
+describe('rendering modes from saved data', () => {
+  it('reads the clinic spacing and ignores a missing letterhead file', async () => {
+    const fs = new FakeFirestore()
+    h.db = fakeTenantDb(fs)
+    await h.db.profile().set({ name: 'Shah', clinicName: 'Shah Clinic', printSettings: { top: 60, bottom: 20, left: 10, right: 10 }, letterheadPath: 'letterheads/missing.png' })
+    await h.db.col('patients').doc('p1').set({ name: 'Asha Rao', phone: '+919800000001' })
+    await h.db.col('appointments').doc('a1').set({ patientId: 'p1', startTime: new Date('2026-11-02T03:30:00Z') })
+    await h.db.col('prescriptions').doc('rx1').set({ appointmentId: 'a1', patientId: 'p1', medicines: [] })
+    for (const mode of ['standard', 'preprinted'] as const) {
+      const pdf = await renderPrescriptionPdf(tenant, 'rx1', mode)
+      expect(isPdf(pdf!.buffer)).toBe(true)
+    }
+    const sample = await renderSamplePrescriptionPdf(tenant, 'preprinted')
+    expect(isPdf(sample!.buffer)).toBe(true)
+    expect(sample!.filename).toBe('Print_test_preprinted.pdf')
+  })
+})
+
+describe('follow-up in the PDF', () => {
+  it('renders with and without a follow-up date', async () => {
+    const withDate = baseDoc()
+    withDate.prescription.followUpText = '12 Nov 2026'
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(withDate)))).toBe(true)
+    expect(isPdf(await renderToBuffer(PrescriptionDocument(baseDoc())))).toBe(true)
+  })
+
+  it('formats the stored follow-up date as a calendar date, whatever the server timezone', async () => {
+    const fs = new FakeFirestore()
+    h.db = fakeTenantDb(fs)
+    await h.db.profile().set({ name: 'Shah', clinicName: 'Shah Clinic' })
+    await h.db.col('patients').doc('p1').set({ name: 'Asha Rao', phone: '+919800000001' })
+    await h.db.col('appointments').doc('a1').set({ patientId: 'p1', startTime: new Date('2026-11-02T03:30:00Z') })
+    await h.db.col('prescriptions').doc('rx1').set({ appointmentId: 'a1', patientId: 'p1', medicines: [], followUpDate: '2026-11-12' })
+    expect(isPdf((await renderPrescriptionPdf(tenant, 'rx1'))!.buffer)).toBe(true)
   })
 })

@@ -1,7 +1,9 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
-import { uploadFile, tenantPath } from '@/lib/storage'
+import { uploadFile, deleteFile, tenantPath } from '@/lib/storage'
+import sharp, { type Sharp, type Metadata } from 'sharp'
+import { A4_RATIO, A4_RATIO_TOLERANCE, parseMargins } from '@/lib/pdf/layout'
 import { forbid } from '@/lib/auth/access'
 import { audit } from '@/lib/audit'
 import { isUsablePrimary } from '@/lib/tenant/theme'
@@ -70,6 +72,7 @@ export async function PATCH(request: Request) {
       const logoFile = formData.get('logo') as File | null
       const qrCodeFile = formData.get('qrCode') as File | null
       const photoFile = formData.get('photo') as File | null
+      const letterheadFile = formData.get('letterhead') as File | null
 
       const allowedTypes = Object.keys(IMAGE_EXT)
 
@@ -89,6 +92,46 @@ export async function PATCH(request: Request) {
         const logoUrl = await uploadFile(buffer, tenantPath(tenant, `logos/${session.uid}.${ext}`), logoFile.type, { public: true })
         await doctorRef.update({ logoUrl })
         return Response.json({ doctor: { logoUrl } })
+      }
+
+      // Letterhead: a full A4 page image that sits behind prescriptions. Kept private; only our own PDF code reads it.
+      if (letterheadFile) {
+        if (letterheadFile.size > 5 * 1024 * 1024) {
+          return Response.json({ error: 'The letterhead must be under 5MB' }, { status: 400 })
+        }
+        if (letterheadFile.type !== 'image/jpeg' && letterheadFile.type !== 'image/png') {
+          return Response.json({ error: 'The letterhead must be a JPG or PNG image of a full A4 page' }, { status: 400 })
+        }
+        const raw = Buffer.from(await letterheadFile.arrayBuffer())
+        if (!looksLikeImage(raw, letterheadFile.type)) {
+          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        }
+        let image: Sharp
+        let meta: Metadata
+        try {
+          image = sharp(raw).rotate() // honour the phone/scanner orientation tag
+          meta = await image.metadata()
+        } catch {
+          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        }
+        // EXIF orientations 5-8 are sideways: the stored width is the displayed height
+        const sideways = (meta.orientation ?? 1) >= 5
+        const width = (sideways ? meta.height : meta.width) ?? 0
+        const height = (sideways ? meta.width : meta.height) ?? 0
+        if (!width || !height || Math.abs(width / height - A4_RATIO) > A4_RATIO_TOLERANCE) {
+          return Response.json({ error: 'The letterhead should be a portrait A4 page (210 x 297 mm). Export or scan the whole page.' }, { status: 400 })
+        }
+        // A4 at 200 dpi is plenty for print and keeps every PDF small.
+        const resized = image.resize({ width: 1654, height: 2339, fit: 'inside', withoutEnlargement: true })
+        const isPng = letterheadFile.type === 'image/png'
+        const buffer = await (isPng ? resized.png() : resized.jpeg({ quality: 88 })).toBuffer()
+        const ext = isPng ? 'png' : 'jpg'
+        const path = tenantPath(tenant, `letterheads/${doctorRef.id}.${ext}`)
+        const previous = doctorDoc.data()?.letterheadPath as string | undefined
+        await uploadFile(buffer, path, isPng ? 'image/png' : 'image/jpeg')
+        if (previous && previous !== path) await deleteFile(previous)
+        await doctorRef.update({ letterheadPath: path })
+        return Response.json({ doctor: { letterheadPath: path } })
       }
 
       // Handle QR Code upload
@@ -146,6 +189,7 @@ export async function PATCH(request: Request) {
       theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
+      printSettings, removeLetterhead,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -208,6 +252,20 @@ export async function PATCH(request: Request) {
       updateData.products = products
     }
     if (pageViews !== undefined) updateData.pageViews = pageViews
+
+    // Spacing, in mm, left clear for a letterhead's printed artwork.
+    if (printSettings !== undefined) {
+      const margins = parseMargins(printSettings)
+      if (!margins) return Response.json({ error: 'Spacing must be between 0 and 120 mm (top), 100 mm (bottom) and 60 mm (sides)' }, { status: 400 })
+      updateData.printSettings = margins
+    }
+
+    if (removeLetterhead === true) {
+      const existing = doctorDoc.data()?.letterheadPath as string | undefined
+      if (existing) await deleteFile(existing)
+      // not through updateData: its deep-clean would flatten the delete marker
+      await doctorRef.update({ letterheadPath: FieldValue.delete() })
+    }
 
     // Brand colour: validated (hex + enough contrast for white text); null/'' resets to the default look.
     if (theme !== undefined) {
