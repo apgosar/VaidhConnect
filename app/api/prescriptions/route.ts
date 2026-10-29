@@ -6,8 +6,15 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
+import { MAX_TAPER_STEPS, taperTotalDays } from '@/lib/taper'
 
 const text = (max: number) => z.string().trim().max(max)
+const taperStepSchema = z.object({
+  dose: text(100).min(1, 'Each step needs a dose'),
+  frequency: text(100).optional().default(''),
+  days: z.number().int().min(1, 'Each step needs at least 1 day').max(365),
+  instructions: text(300).optional(),
+})
 const prescriptionSchema = z.object({
   appointmentId: z.string().min(1).max(128),
   patientId: z.string().min(1).max(128),
@@ -18,6 +25,7 @@ const prescriptionSchema = z.object({
     frequency: text(100).optional().default(''),
     duration: text(100).optional().default(''),
     instructions: text(500).optional(),
+    taper: z.object({ steps: z.array(taperStepSchema).min(1).max(MAX_TAPER_STEPS) }).optional(),
   })).max(50).default([]),
   notes: text(2000).optional().nullable(),
 })
@@ -52,7 +60,12 @@ export async function POST(request: Request) {
 
     const existing = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
     const now = new Date()
-    const data = { appointmentId, patientId, diagnosis: diagnosis ?? null, medicines, notes: notes ?? null, updatedAt: now }
+    // A tapering medicine states its length in its steps; keep the plain fields in step with it so
+    // anything reading them (lists, search) still shows something sensible.
+    const stored = medicines.map(m => m.taper
+      ? { ...m, dosage: m.taper.steps[0].dose, frequency: 'Tapering', duration: `${taperTotalDays(m.taper.steps)} days` }
+      : m)
+    const data = { appointmentId, patientId, diagnosis: diagnosis ?? null, medicines: stored, notes: notes ?? null, updatedAt: now }
 
     let id: string
     if (existing.empty) {

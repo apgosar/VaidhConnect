@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
-import type { Medicine } from '@/lib/constants'
+import type { Medicine, TaperStep } from '@/lib/constants'
+import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
 import { PAYMENT_MODES } from '@/lib/constants'
 
 interface Patient {
@@ -48,6 +49,15 @@ export default function AppointmentDetailPage() {
   const [savingPay, setSavingPay] = useState(false)
 
   const [error, setError] = useState('')
+  // "Print on letterhead": the paper in the printer already carries the clinic's letterhead.
+  const [onLetterhead, setOnLetterheadState] = useState(false)
+  useEffect(() => {
+    try { setOnLetterheadState(localStorage.getItem('rx.onLetterhead') === '1') } catch { /* private mode */ }
+  }, [])
+  const setOnLetterhead = (v: boolean) => {
+    setOnLetterheadState(v)
+    try { localStorage.setItem('rx.onLetterhead', v ? '1' : '0') } catch { /* private mode */ }
+  }
   // What is saved on the server, to tell when the form has edits the PDF would not include.
   const [savedRx, setSavedRx] = useState('')
   const [savedPay, setSavedPay] = useState('')
@@ -145,6 +155,20 @@ export default function AppointmentDetailPage() {
   }
 
   const addMedicine = () => setMedicines(prev => [...prev, { name: '', dosage: '', frequency: '', duration: '' }])
+  const toggleTaper = (i: number, on: boolean) => setMedicines(prev => prev.map((m, idx) => {
+    if (idx !== i) return m
+    if (!on) {
+      const { taper, ...rest } = m
+      return { ...rest, dosage: taper?.steps[0]?.dose ?? '', frequency: '', duration: '' }
+    }
+    // Seed the first step from whatever was already typed for a fixed dose.
+    return { ...m, taper: { steps: [{ dose: m.dosage, frequency: m.frequency === 'Tapering' ? '' : m.frequency, days: parseInt(m.duration) || 5 }] } }
+  }))
+  const setSteps = (i: number, fn: (steps: TaperStep[]) => TaperStep[]) =>
+    setMedicines(prev => prev.map((m, idx) => idx === i && m.taper ? { ...m, taper: { steps: fn(m.taper.steps) } } : m))
+  const updateStep = (i: number, j: number, patch: Partial<TaperStep>) => setSteps(i, steps => steps.map((st, k) => k === j ? { ...st, ...patch } : st))
+  const addStep = (i: number) => setSteps(i, steps => steps.length >= MAX_TAPER_STEPS ? steps : [...steps, { dose: '', frequency: steps[steps.length - 1]?.frequency ?? '', days: steps[steps.length - 1]?.days ?? 5 }])
+  const removeStep = (i: number, j: number) => setSteps(i, steps => steps.length > 1 ? steps.filter((_, k) => k !== j) : steps)
   const removeMedicine = (i: number) => setMedicines(prev => prev.filter((_, idx) => idx !== i))
   const updateMedicine = (i: number, field: keyof Medicine, value: string) => {
     setMedicines(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
@@ -272,12 +296,21 @@ export default function AppointmentDetailPage() {
                 <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf`} disabled={rxDirty} download>
                   <Download size={14} /> Download PDF
                 </DocLink>
-                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1`} disabled={rxDirty}>
+                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1${onLetterhead ? '&mode=preprinted' : ''}`} disabled={rxDirty}>
                   <Printer size={14} /> Print
                 </DocLink>
               </div>
             )}
           </div>
+          {appt.prescription && (
+            <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer select-none -mt-2">
+              <input type="checkbox" className="mt-0.5" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} />
+              <span>
+                Print on letterhead
+                <span className="block text-xs text-slate-400">Tick when the paper already has your letterhead printed on it. Adjust the spacing in Settings.</span>
+              </span>
+            </label>
+          )}
           {appt.prescription && rxDirty && (
             <p className="text-xs text-amber-700 -mt-2">You have unsaved changes. Save the prescription to download or print the latest version.</p>
           )}
@@ -321,10 +354,37 @@ export default function AppointmentDetailPage() {
                         onChange={e => updateMedicine(i, 'name', e.target.value)}
                       />
                     </div>
-                    <input className="form-input" placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={e => updateMedicine(i, 'dosage', e.target.value)} />
-                    <input className="form-input" placeholder="Frequency (e.g. 3x daily)" value={med.frequency} onChange={e => updateMedicine(i, 'frequency', e.target.value)} />
-                    <input className="form-input" placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={e => updateMedicine(i, 'duration', e.target.value)} />
-                    <input className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
+                    <label className="col-span-2 flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                      <input type="checkbox" checked={!!med.taper} onChange={e => toggleTaper(i, e.target.checked)} />
+                      Tapering dose (the dose changes over the course)
+                    </label>
+                    {med.taper ? (
+                      <div className="col-span-2 space-y-2">
+                        {taperSchedule(med.taper.steps).map((line, j) => (
+                          <div key={j} className="grid grid-cols-12 gap-2 items-center">
+                            <span className="col-span-12 sm:col-span-2 text-xs font-medium text-slate-500">{dayRangeLabel(line)}</span>
+                            <input className="form-input col-span-5 sm:col-span-3" placeholder="Dose (e.g. 40 mg)" value={med.taper!.steps[j].dose} onChange={e => updateStep(i, j, { dose: e.target.value })} aria-label={`Step ${j + 1} dose`} />
+                            <input className="form-input col-span-5 sm:col-span-4" placeholder="How often" value={med.taper!.steps[j].frequency} onChange={e => updateStep(i, j, { frequency: e.target.value })} aria-label={`Step ${j + 1} frequency`} />
+                            <input type="number" min={1} max={365} className="form-input col-span-2 sm:col-span-2" placeholder="Days" value={med.taper!.steps[j].days} onChange={e => updateStep(i, j, { days: Math.max(1, parseInt(e.target.value) || 1) })} aria-label={`Step ${j + 1} days`} />
+                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-12 sm:col-span-1 text-red-400 hover:text-red-600 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between">
+                          <button type="button" onClick={() => addStep(i)} disabled={med.taper.steps.length >= MAX_TAPER_STEPS} className="btn btn-ghost btn-sm text-blue-600"><Plus size={14} /> Add step</button>
+                          <span className="text-xs text-slate-500">Total {taperTotalDays(med.taper.steps)} days</span>
+                        </div>
+                        <input className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
+                      </div>
+                    ) : (
+                      <>
+                        <input className="form-input" placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={e => updateMedicine(i, 'dosage', e.target.value)} />
+                        <input className="form-input" placeholder="Frequency (e.g. 3x daily)" value={med.frequency} onChange={e => updateMedicine(i, 'frequency', e.target.value)} />
+                        <input className="form-input" placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={e => updateMedicine(i, 'duration', e.target.value)} />
+                        <input className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

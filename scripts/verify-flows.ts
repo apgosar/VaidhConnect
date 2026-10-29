@@ -179,6 +179,44 @@ async function main() {
     check('front desk cannot download prescriptions', (await staff(`/api/prescriptions/${rxId}/pdf`)).status === 403)
     check('another clinic cannot reach it', (await http(bHost, `/api/prescriptions/${rxId}/pdf`, { cookie: ownerCookie })).status === 401)
 
+    // ── tapering doses, print modes, letterhead ────────────────────────────
+    const taperSave = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Prednisolone', taper: { steps: [{ dose: '40 mg', frequency: 'Once daily', days: 5 }, { dose: '20 mg', frequency: 'Once daily', days: 5 }] } }] } })
+    const taperMed = taperSave.body?.prescription?.medicines?.[0]
+    check('tapering dose is saved and summarised', taperSave.status === 201 && taperMed?.taper?.steps?.length === 2 && taperMed?.duration === '10 days' && taperMed?.dosage === '40 mg', `(${taperSave.status} ${taperMed?.duration})`)
+    const badTaper = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, medicines: [{ name: 'x', taper: { steps: [{ dose: '', days: 0 }] } }] } })
+    check('an empty tapering step is refused', badTaper.status === 400, `(${badTaper.status})`)
+    const taperPdf = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf`, { headers: { cookie: ownerCookie } })
+    check('tapering prescription still downloads as a PDF', taperPdf.status === 200 && Buffer.from(await taperPdf.arrayBuffer()).subarray(0, 5).toString() === '%PDF-')
+    const pre = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf?inline=1&mode=preprinted`, { headers: { cookie: ownerCookie } })
+    check('pre-printed paper mode returns a PDF', pre.status === 200 && pre.headers.get('content-type') === 'application/pdf' && /^inline/.test(pre.headers.get('content-disposition') ?? ''))
+    check('print test page works for the owner', (await fetch(`https://${aHost}/api/doctor/print-test?mode=preprinted`, { headers: { cookie: ownerCookie } })).status === 200)
+    check('front desk cannot open the print test page', (await staff('/api/doctor/print-test')).status === 403)
+
+    const badMargin = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { printSettings: { top: 500, bottom: 25, left: 15, right: 15 } } })
+    check('absurd print spacing is refused', badMargin.status === 400, `(${badMargin.status})`)
+    const okMargin = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { printSettings: { top: 50, bottom: 25, left: 15, right: 15 } } })
+    check('print spacing is saved', okMargin.status === 200 && okMargin.body?.doctor?.printSettings?.top === 50, `(${okMargin.status})`)
+
+    const { default: sharp } = await import('sharp')
+    const a4 = await sharp({ create: { width: 840, height: 1188, channels: 3, background: '#e8f1ec' } }).png().toBuffer()
+    const square = await sharp({ create: { width: 600, height: 600, channels: 3, background: '#ffffff' } }).png().toBuffer()
+    const lhForm = (buf: Buffer, type = 'image/png', name = 'lh.png') => { const f = new FormData(); f.append('letterhead', new Blob([new Uint8Array(buf)], { type }), name); return f }
+    const lhUp = (f: FormData, cookie = ownerCookie) => fetch(`https://${aHost}/api/doctor/profile`, { method: 'PATCH', headers: { cookie }, body: f })
+    check('a square image is refused as a letterhead', (await lhUp(lhForm(square))).status === 400)
+    check('a non-image is refused as a letterhead', (await lhUp(lhForm(Buffer.from('%PDF-1.4 hi'), 'image/png'))).status === 400)
+    check('front desk cannot upload a letterhead', (await lhUp(lhForm(a4), staffCookie)).status === 403)
+    const lhOk = await lhUp(lhForm(a4))
+    check('an A4 letterhead is accepted', lhOk.status === 200, `(${lhOk.status})`)
+    cleanup.push(async () => { await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { removeLetterhead: true } }) })
+    const lhGet = await fetch(`https://${aHost}/api/doctor/letterhead`, { headers: { cookie: ownerCookie } })
+    check('the letterhead can be previewed by the owner only', lhGet.status === 200 && lhGet.headers.get('content-type') === 'image/png' && (await fetch(`https://${aHost}/api/doctor/letterhead`)).status === 401)
+    const withLh = await fetch(`https://${aHost}/api/prescriptions/${rxId}/pdf`, { headers: { cookie: ownerCookie } })
+    const withLhBytes = Buffer.from(await withLh.arrayBuffer())
+    check('prescriptions are drawn on the uploaded letterhead', withLh.status === 200 && withLhBytes.includes('/Subtype /Image'))
+    const lhRemove = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { removeLetterhead: true } })
+    check('the letterhead can be removed', lhRemove.status === 200 && lhRemove.body?.doctor?.letterheadPath === undefined, `(${lhRemove.status})`)
+    check('and then it is gone', (await fetch(`https://${aHost}/api/doctor/letterhead`, { headers: { cookie: ownerCookie } })).status === 404)
+
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)
 

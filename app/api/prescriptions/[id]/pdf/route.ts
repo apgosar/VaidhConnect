@@ -5,12 +5,14 @@ import { forbid } from '@/lib/auth/access'
 import { audit } from '@/lib/audit'
 import { renderPrescriptionPdf } from '@/lib/modules/documents'
 import { pdfResponse } from '@/lib/pdfHttp'
+import { parsePrintMode } from '@/lib/pdf/layout'
 
 export const runtime = 'nodejs'
 
 // GET /api/prescriptions/[id]/pdf — the prescription as a PDF, built on the server
 // from what is saved. `?inline=1` opens it in the browser's viewer (for printing)
-// instead of downloading it.
+// instead of downloading it. `?mode=preprinted` prints the content only, spaced for paper that
+// already carries the clinic's letterhead.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const tenant = await getTenant()
@@ -23,10 +25,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (denied) return denied
 
     const { id } = await params
-    const pdf = await renderPrescriptionPdf(tenant, id)
+    const url = new URL(request.url)
+    const pdf = await renderPrescriptionPdf(tenant, id, parsePrintMode(url.searchParams.get('mode')))
     if (!pdf) return Response.json({ error: 'Prescription not found' }, { status: 404 })
 
-    const inline = new URL(request.url).searchParams.get('inline') === '1'
+    const inline = url.searchParams.get('inline') === '1'
     await audit(tenant, session, inline ? 'prescription.print' : 'prescription.download', `prescriptions/${id}`)
     return pdfResponse(pdf.buffer, pdf.filename, inline)
   } catch (error) {

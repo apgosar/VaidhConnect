@@ -51,10 +51,20 @@ export const DEFAULT_TIMINGS: WeeklyTimings = {
 export const PAYMENT_MODES = ['CASH', 'UPI', 'CARD', 'OTHER'] as const
 export type PaymentMode = typeof PAYMENT_MODES[number]
 
+/** One stage of a tapering course: this dose, this often, for this many days. */
+export interface TaperStep {
+  dose: string
+  frequency: string
+  days: number
+  instructions?: string
+}
+
 export interface Medicine {
   name: string
   dosage: string
   frequency: string
   duration: string
   instructions?: string
+  /** A tapering dose. When present it replaces the single dosage / frequency / duration. */
+  taper?: { steps: TaperStep[] }
 }
