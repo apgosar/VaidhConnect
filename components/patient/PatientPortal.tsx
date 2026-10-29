@@ -246,47 +246,12 @@ END:VCARD`
       return
     }
 
-    setOtpSending(true)
-    setError('')
-
-    try {
-      // TEMPORARY: signs in straight from the typed phone number — see
-      // /api/patient/otp/bypass for why.
-      const res = await fetch('/api/patient/otp/bypass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalized }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || 'Something went wrong. Please try again.')
-        return
-      }
-
-      const { signInWithCustomToken } = await import('firebase/auth')
-      const { auth } = await import('@/lib/firebase/client')
-      const userCredential = await signInWithCustomToken(auth, data.customToken)
-      const idToken = await userCredential.user.getIdToken()
-
-      const sessionRes = await fetch('/api/patient/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      })
-
-      if (!sessionRes.ok) {
-        setError('Failed to continue. Please try again.')
-        return
-      }
-
-      setAuthStep('verified')
-      await runLookup()
-    } catch {
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setOtpSending(false)
-    }
+    // Security hotfix: the temporary sign-in that trusted a typed phone number
+    // (/api/patient/otp/bypass) has been removed — it let anyone open any
+    // patient's records. Verified sign-in isn't available again until the
+    // booking flow is replaced, so online booking is paused. Patients are
+    // pointed to the clinic's phone number shown at the top of this page.
+    setError('Online booking is temporarily unavailable. Please call the clinic to book your appointment.')
   }
 
   const handleChangeNumber = async () => {
