@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Search, Users, ChevronRight, Phone, Calendar, ChevronLeft } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
+import { LangText } from '@/components/ui/LangText'
 
 interface Patient {
   id: string
@@ -107,7 +108,7 @@ export default function PatientsPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3">
           {patients.map(patient => (
             <Link
               key={patient.id}
@@ -123,7 +124,7 @@ export default function PatientsPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}>{patient.name}</p>
+                    <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}><LangText>{patient.name}</LangText></p>
                     <span
                       className="text-xs font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide"
                       style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}

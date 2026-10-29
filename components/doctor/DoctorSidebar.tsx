@@ -199,6 +199,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
       {mobileOpen && (
         <>
           <div
+            role="presentation"
             className="lg:hidden fixed inset-0 z-40"
             style={{ background: 'rgba(15,61,46,0.60)', backdropFilter: 'blur(2px)' }}
             onClick={() => setMobileOpen(false)}

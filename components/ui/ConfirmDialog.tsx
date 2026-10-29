@@ -29,7 +29,7 @@ export function ConfirmDialog({ open, title, message: body, confirmLabel = messa
   useFocusTrap(panel, open, onCancel, danger ? cancelButton : confirmButton)
   if (!open) return null
   return (
-    <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onCancel() }}>
+    <div role="presentation" className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div ref={panel} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={body ? bodyId : undefined} className="modal-panel space-y-4" tabIndex={-1}>
         <h2 id={titleId} className="text-lg font-semibold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>{title}</h2>
         {body && <p id={bodyId} className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>{body}</p>}

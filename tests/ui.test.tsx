@@ -271,3 +271,44 @@ describe('Badge, Spinner, EmptyState, Section', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Payment details' })).toBeTruthy()
   })
 })
+
+import { Switch } from '@/components/ui/Switch'
+import { LangText } from '@/components/ui/LangText'
+
+describe('Switch', () => {
+  it('is a real switch button that reports on/off and flips with click, Space and Enter', async () => {
+    const onChange = vi.fn()
+    const { rerender } = render(<Switch checked={false} onChange={onChange} label="Enable chief complaint" />)
+    const sw = screen.getByRole('switch', { name: 'Enable chief complaint' })
+    expect(sw.getAttribute('aria-checked')).toBe('false')
+    await userEvent.click(sw)
+    expect(onChange).toHaveBeenLastCalledWith(true)
+
+    rerender(<Switch checked onChange={onChange} label="Enable chief complaint" />)
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
+    screen.getByRole('switch').focus()
+    await userEvent.keyboard(' ')
+    expect(onChange).toHaveBeenLastCalledWith(false)
+    await userEvent.keyboard('{Enter}')
+    expect(onChange).toHaveBeenCalledTimes(3)
+  })
+
+  it('takes its name from a wrapping label and cannot be used when disabled', async () => {
+    const onChange = vi.fn()
+    render(<label>Open on Monday <Switch checked onChange={onChange} disabled /></label>)
+    const sw = screen.getByRole('switch', { name: /Open on Monday/ }) as HTMLButtonElement
+    expect(sw.disabled).toBe(true)
+    await userEvent.click(sw)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+})
+
+describe('LangText', () => {
+  it('tags Gujarati and Hindi text with its language and leaves English alone', () => {
+    const { container } = render(<><p><LangText>આશા રાવ</LangText></p><p><LangText>आशा राव</LangText></p><p><LangText>Asha Rao</LangText></p><p><LangText>{null}</LangText></p></>)
+    const spans = [...container.querySelectorAll('[lang]')]
+    expect(spans.map(s => [s.getAttribute('lang'), s.textContent])).toEqual([['gu', 'આશા રાવ'], ['hi', 'आशा राव']])
+    expect(container.textContent).toContain('Asha Rao')
+    expect(container.querySelectorAll('p')[2].querySelector('span')).toBeNull()
+  })
+})

@@ -16,6 +16,32 @@ Scope: the whole app: patient pages, doctor dashboard, operator console.
 - No screen reader (NVDA/VoiceOver/TalkBack) pass and no automated axe run. Both belong in the follow-up plan (section 6).
 - Keyboard-only walkthrough of every flow was reasoned from the code, not performed.
 
+## Status (after phases 1 to 4)
+| Finding | Status |
+|---|---|
+| A1 zoom blocked | Fixed |
+| A2 contrast | Fixed: new AA tokens, checked by test |
+| A3 unlabeled fields | Fixed: all 92 named, guarded by test |
+| A4 tap targets | Fixed for buttons, fields, text actions and the password toggle; footer links are inline text and unchanged |
+| A5 landmarks and skip link | Fixed |
+| A6 drawer and native dialogs | Fixed: focus trap, Escape, dialog semantics; all 9 browser pop-ups replaced; three keyboard-inaccessible toggles became real switches |
+| A7 errors announced | Fixed through `Alert` / `Field`; remaining hand-made banners on the doctor pages move over as they are touched |
+| A8 small text and 14 px fields | Fixed |
+| A9 focus indicator | Fixed: one ring for the whole app |
+| A10 language marking | Done for patient names on the main screens; PDFs already pick the right font per script |
+| B1 narrow patient pages | Fixed: container scale, two-column home from 1024 px |
+| B2 pages without breakpoints | Partly: patient pages, audit log, patient list and calendar adapted; other doctor pages rely on the responsive shell |
+| B3 calendar on phones | Fixed: agenda is the default below 768 px |
+| B4 tablet sidebar | Unchanged by choice: the menu drawer is used below 1024 px |
+| M1 no UI kit | Fixed: `components/ui`, used by the patient pages and the settings sections |
+| M2 two styling systems | Not fixed: the doctor pages still use Tailwind slate/blue classes beside the tokens |
+| M3 error wording | Fixed on the server (95 literals now use `apiError`) and on the client for migrated screens |
+| M4 message catalogue | Done: English, Hindi and Gujarati files; no language switcher yet |
+| M6 large files | Settings page: printing, videos and password sections extracted (970 to about 800 lines); other sections remain |
+| Guardrails | `npm run lint:a11y` in CI, accessibility unit tests, and `npm run a11y:check` (axe in a real browser) for live sites |
+
+See [`UI_KIT.md`](UI_KIT.md) for how to build screens with the kit.
+
 ## 1. Summary
 | Area | Verdict |
 |---|---|

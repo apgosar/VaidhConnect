@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/Field'
 import { LoadingBlock } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { LangText } from '@/components/ui/LangText'
 
 interface Appointment {
   id: string
@@ -161,7 +162,7 @@ function MyAppointments() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-semibold text-slate-800">{formatDateTimeInTz(new Date(appt.startTime), timezone)}</p>
-                      {appt.patientName && <p className="text-sm text-slate-500 mt-0.5">{appt.patientName}</p>}
+                      {appt.patientName && <p className="text-sm text-slate-500 mt-0.5"><LangText>{appt.patientName}</LangText></p>}
                       {appt.chiefComplaint && <p className="text-sm text-slate-500 mt-0.5">{appt.chiefComplaint}</p>}
                     </div>
                     <span className="status-booked">Upcoming</span>
@@ -196,7 +197,7 @@ function MyAppointments() {
                     <li key={v.appointmentId} className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-800">{formatDateTimeInTz(new Date(v.startTime), timezone).split(',')[0]}</p>
-                        {v.patientName && <p className="text-xs text-slate-500 truncate">{v.patientName}</p>}
+                        {v.patientName && <p className="text-xs text-slate-500 truncate"><LangText>{v.patientName}</LangText></p>}
                       </div>
                       <a href={`/api/patient/prescriptions/${v.appointmentId}/pdf`} download className="btn btn-outline btn-sm shrink-0">
                         <Download size={14} aria-hidden="true" /> Download
