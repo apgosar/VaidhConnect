@@ -50,7 +50,7 @@ export default function AppointmentDetailPage() {
 
   const [error, setError] = useState('')
   // Sending the prescription to the patient on WhatsApp
-  const [share, setShare] = useState<{ state: 'idle' | 'sending' | 'sent' | 'failed'; message?: string }>({ state: 'idle' })
+  const [share, setShare] = useState<{ state: 'idle' | 'confirm' | 'sending' | 'sent' | 'failed'; message?: string }>({ state: 'idle' })
   // "Print on letterhead": the paper in the printer already carries the clinic's letterhead.
   const [onLetterhead, setOnLetterheadState] = useState(false)
   useEffect(() => {
@@ -158,7 +158,6 @@ export default function AppointmentDetailPage() {
 
   const shareOnWhatsApp = async () => {
     if (!appt?.prescription) return
-    if (!confirm(`Send this prescription to ${appt.patient.name} on WhatsApp (${appt.patient.phone})?`)) return
     setShare({ state: 'sending' })
     try {
       const res = await fetch(`/api/prescriptions/${appt.prescription.id}/whatsapp`, { method: 'POST' })
@@ -317,7 +316,7 @@ export default function AppointmentDetailPage() {
                   <Printer size={14} /> Print
                 </DocLink>
                 <button
-                  type="button" onClick={shareOnWhatsApp} disabled={rxDirty || sharing || !appt.patient.phone}
+                  type="button" onClick={() => setShare({ state: 'confirm' })} disabled={rxDirty || sharing || !appt.patient.phone}
                   className="btn btn-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: '#25D366' }}
                   aria-label="Share prescription on WhatsApp"
@@ -327,6 +326,22 @@ export default function AppointmentDetailPage() {
               </div>
             )}
           </div>
+          {!appt.patient.phone && appt.prescription && (
+            <p className="text-xs text-amber-700 -mt-2">This patient has no phone number on file, so the prescription cannot be sent on WhatsApp.</p>
+          )}
+          {(share.state === 'confirm' || sharing) && (
+            <div role="alertdialog" aria-label="Send on WhatsApp" className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3 -mt-2">
+              <p className="text-sm text-slate-700">
+                Send this prescription as a PDF to <strong>{appt.patient.name}</strong> on WhatsApp (<strong>{appt.patient.phone}</strong>)?
+              </p>
+              <div className="flex gap-2">
+                <button type="button" onClick={shareOnWhatsApp} disabled={sharing} className="btn btn-sm text-white disabled:opacity-60" style={{ backgroundColor: '#25D366' }}>
+                  <WhatsAppIcon size={15} /> {sharing ? 'Sending...' : 'Send now'}
+                </button>
+                <button type="button" onClick={() => setShare({ state: 'idle' })} disabled={sharing} className="btn btn-ghost btn-sm">Cancel</button>
+              </div>
+            </div>
+          )}
           {share.state === 'sent' && <p role="status" className="text-sm text-green-700 -mt-2">{share.message}. The patient has the PDF on WhatsApp.</p>}
           {share.state === 'failed' && <p role="alert" className="text-sm text-red-600 -mt-2">{share.message}</p>}
           {appt.prescription && (
