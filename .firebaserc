@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "vaidhconnect-app"
+    "default": "vaidhconnect-app",
+    "production": "vaidhconnect-app",
+    "staging": "swasthya-staging-dec36"
   }
 }

@@ -1,16 +1,34 @@
 param (
+    # Default is production, exactly as before: .\deploy.ps1
+    # Staging is always explicit:               .\deploy.ps1 -Environment staging
+    [ValidateSet("production", "staging")]
+    [string]$Environment = "production",
     [string]$Region = "asia-south1",
-    [string]$ServiceName = "swasthya-connect"
+    [string]$ServiceName
 )
 
-Write-Host "Deploying to Google Cloud Run..." -ForegroundColor Cyan
+Write-Host "Deploying to Google Cloud Run ($Environment)..." -ForegroundColor Cyan
 
-# The user already created the project
-$ProjectId = "vaidhconnect-app"
+$targets = @{
+    production = @{ ProjectId = "vaidhconnect-app";        ServiceName = "swasthya-connect";         EnvFile = ".env" }
+    staging    = @{ ProjectId = "swasthya-staging-dec36";  ServiceName = "swasthya-connect-staging"; EnvFile = ".env.staging" }
+}
+$target = $targets[$Environment]
+$ProjectId = $target.ProjectId
+if (-not $ServiceName) { $ServiceName = $target.ServiceName }
 
+Write-Host "Environment: $Environment"
 Write-Host "Project ID: $ProjectId"
 Write-Host "Service Name: $ServiceName"
 Write-Host "Region: $Region"
+
+if ($Environment -eq "staging") {
+    # A brand-new project has none of these enabled. compute.googleapis.com
+    # is what creates the default compute service account used below.
+    Write-Host "Enabling required APIs on $ProjectId..." -ForegroundColor Cyan
+    gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com compute.googleapis.com --project $ProjectId --quiet
+    if ($LASTEXITCODE -ne 0) { Write-Host "Failed to enable APIs." -ForegroundColor Red; exit 1 }
+}
 
 Write-Host "Fixing IAM permissions for Cloud Build..." -ForegroundColor Cyan
 # Retrieve project number to construct the default compute service account
@@ -42,10 +60,23 @@ gcloud projects add-iam-policy-binding $ProjectId `
 # Cloud Run revision config (visible via `gcloud run services describe` /
 # Cloud Console) and in deploy audit logs. Acceptable here since .env was
 # already the plaintext source of truth; revisit if that ever changes.
-$envFilePath = ".env"
+$envFilePath = $target.EnvFile
 
 if (-not (Test-Path $envFilePath)) {
     Write-Host "Error: $envFilePath not found. Nothing to deploy." -ForegroundColor Red
+    exit 1
+}
+
+# Safety checks: never ship one environment's credentials to the other
+# project, and never deploy a file that still has unfilled placeholders.
+$declaredProject = ((Get-Content $envFilePath | Where-Object { $_ -match '^FIREBASE_PROJECT_ID=' } | Select-Object -First 1) -replace '^FIREBASE_PROJECT_ID=', '') -replace '["'']', ''
+if ($declaredProject.Trim() -ne $ProjectId) {
+    Write-Host "Error: $envFilePath has FIREBASE_PROJECT_ID='$declaredProject' but the target is '$ProjectId'. Refusing to deploy." -ForegroundColor Red
+    exit 1
+}
+$unfilled = Get-Content $envFilePath | Where-Object { -not $_.TrimStart().StartsWith("#") -and $_ -match '<[A-Z_]+>' }
+if ($unfilled) {
+    Write-Host "Error: $envFilePath still contains <PLACEHOLDER> values. Fill them in first." -ForegroundColor Red
     exit 1
 }
 
