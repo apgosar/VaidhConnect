@@ -1,11 +1,9 @@
 /**
- * What the patient portal remembers on the patient's OWN device. Nothing here
- * is sent anywhere until the patient books, and no server lookup by phone
- * number exists — so a stranger typing someone's number learns nothing.
+ * What the patient portal remembers on the patient's OWN device, purely for
+ * convenience. It holds no secrets: the PIN is never stored here, and nothing
+ * here lets anyone see or change an appointment.
  *
  *  - saved patients: details to prefill the next booking (incl. family members)
- *  - bookings: appointment id + the secret token issued at booking, which is
- *    what authorises viewing/cancelling that one appointment
  *  - draft: the details entered so far, handed from /register to /book
  */
 export interface SavedPatient {
@@ -16,20 +14,12 @@ export interface SavedPatient {
   medicalHistory?: string
 }
 
-export interface SavedBooking {
-  id: string
-  token: string
-  patientName: string
-  startTime: string
-}
-
 export interface BookingDraft {
   patient: SavedPatient
   chiefComplaint?: string
 }
 
 const PROFILES = 'sc.patients'
-const BOOKINGS = 'sc.bookings'
 const DRAFT = 'sc.draft'
 
 function read<T>(storage: Storage | undefined, key: string, fallback: T): T {
@@ -53,16 +43,6 @@ export const getSavedPatients = (): SavedPatient[] => read(local(), PROFILES, []
 export function savePatient(p: SavedPatient) {
   const same = (a: SavedPatient) => a.phone === p.phone && a.name.toLowerCase() === p.name.toLowerCase() && a.dob === p.dob
   write(local(), PROFILES, [p, ...getSavedPatients().filter(x => !same(x))].slice(0, 6))
-}
-
-export const getBookings = (): SavedBooking[] => read(local(), BOOKINGS, [])
-
-export function saveBooking(b: SavedBooking) {
-  write(local(), BOOKINGS, [b, ...getBookings().filter(x => x.id !== b.id)].slice(0, 30))
-}
-
-export function removeBooking(id: string) {
-  write(local(), BOOKINGS, getBookings().filter(x => x.id !== id))
 }
 
 export const getDraft = (): BookingDraft | null => read<BookingDraft | null>(session(), DRAFT, null)

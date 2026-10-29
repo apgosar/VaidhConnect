@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/auth/session'
 import { audit } from '@/lib/audit'
 import Link from 'next/link'
+import PatientPinActions from '@/components/doctor/PatientPinActions'
 import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
@@ -116,6 +117,8 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           </div>
         </div>
       </div>
+
+      <PatientPinActions phone={patient.phone} />
 
       {/* Medical History */}
       {patient.medicalHistory && (

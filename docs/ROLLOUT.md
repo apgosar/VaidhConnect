@@ -26,9 +26,11 @@ unmapped host still serves the existing clinic exactly as before.
 Verify: home page, a test booking, cancel from "My Appointments", doctor login,
 dashboard, and both Cloud Scheduler jobs return 200/207.
 
-> **Behaviour changes patients will notice:** there is no phone/OTP step any more
-> (patients enter their details when booking); "My Appointments" shows only
-> bookings made on that device. Staff book on behalf of patients from
+> **Behaviour changes patients will notice:** there is no phone/OTP step any more.
+> Patients choose a 4-digit PIN on their first booking and use it (with their
+> mobile number) in "My Appointments" to view or cancel. Forgotten PINs are reset
+> by WhatsApp code or by clinic staff. **Set `PATIENT_PIN_SECRET` before deploying**
+> and get the WhatsApp template `patient_pin_reset` approved. Staff book on behalf of patients from
 > **New Appointment** in the dashboard. Tell the clinic staff before deploying.
 
 Rollback: redeploy the previous revision (`gcloud run services update-traffic ... --to-revisions=<old>=100`).

@@ -12,5 +12,6 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
+    env: { PATIENT_PIN_SECRET: 'unit-test-secret-unit-test-secret-0123456789' },
   },
 })

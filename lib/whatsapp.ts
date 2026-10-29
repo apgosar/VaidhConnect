@@ -39,6 +39,8 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Good Morning Dr. ${params[0] || 'Doctor'}, here is your schedule for today (${params[2] || 'Today'}). You have ${params[1] || '0'} appointment(s):\n\n${params[3] || 'No appointments'}`
     case 'daily_summary_update':
       return `Schedule Update for Dr. ${params[0] || 'Doctor'}:\nChange: ${params[1] || 'Update'}\nRemaining appointments today: ${params[2] || '0'}\n\nUpdated Schedule:\n${params[3] || 'No appointments'}`
+    case 'patient_pin_reset':
+      return `${params[0] || '000000'} is your code to reset your appointment PIN. Do not share this code with anyone. It expires in 10 minutes.`
     default:
       return params.length > 0 ? params.join('\n') : templateName
   }
@@ -302,4 +304,18 @@ export async function sendSummaryUpdate(to: string, params: {
       ]
     }]
   }, { messageType: 'Daily Summary (Update)', recipientName: params.doctorName })
+}
+
+// 6. PIN reset code (`patient_pin_reset`) — Meta template, one body variable (the
+// code). Sent to the patient's own WhatsApp number, which is what proves they
+// own it. Must be pre-approved in Meta Business Manager with exactly this name.
+export async function sendPinResetCode(to: string, params: { code: string }) {
+  return sendWhatsAppTemplate(to, {
+    name: 'patient_pin_reset',
+    language: { code: 'en' },
+    components: [{
+      type: 'body',
+      parameters: [{ type: 'text', text: params.code }],
+    }]
+  }, { messageType: 'PIN Reset Code', recipientName: 'Patient' })
 }

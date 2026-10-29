@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { can, forbid, PERMISSIONS, ROLES, type Permission } from '@/lib/auth/access'
-import { bookingSchema, lookupSchema, normalizePhone, patientDetailsSchema } from '@/lib/validation'
+import { bookingSchema, normalizePhone, patientDetailsSchema } from '@/lib/validation'
 
 describe('role permissions', () => {
   it('gives the owner everything', () => {
@@ -77,10 +77,10 @@ describe('input validation', () => {
     expect(bookingSchema.safeParse({ patient, ...slot, chiefComplaint: 'x'.repeat(501) }).success).toBe(false)
   })
 
-  it('caps how many appointments one lookup may ask about', () => {
-    const item = { id: 'a', token: 't'.repeat(43) }
-    expect(lookupSchema.safeParse({ items: Array(20).fill(item) }).success).toBe(true)
-    expect(lookupSchema.safeParse({ items: Array(21).fill(item) }).success).toBe(false)
-    expect(lookupSchema.safeParse({ items: [] }).success).toBe(false)
+  it('only accepts a 4-digit PIN on a booking', () => {
+    const ok = { patient, ...slot }
+    expect(bookingSchema.safeParse({ ...ok, pin: '4821' }).success).toBe(true)
+    expect(bookingSchema.safeParse(ok).success).toBe(true)
+    for (const pin of ['482', '48210', 'abcd', '12 4']) expect(bookingSchema.safeParse({ ...ok, pin }).success, pin).toBe(false)
   })
 })

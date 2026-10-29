@@ -12,8 +12,15 @@ class Timestamp {
   valueOf() { return this.d.getTime() }
 }
 
+// Firestore stores every Date as a Timestamp, including inside nested maps.
+const wrapValue = (v: any): any =>
+  v instanceof Date ? new Timestamp(v)
+    : Array.isArray(v) ? v.map(wrapValue)
+    : v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype ? wrap(v)
+    : v
+
 const wrap = (data: Data): Data =>
-  Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v instanceof Date ? new Timestamp(v) : v]))
+  Object.fromEntries(Object.entries(data).map(([k, v]) => [k, wrapValue(v)]))
 
 const cmp = (a: any, b: any) => {
   const x = a instanceof Timestamp ? a.valueOf() : a instanceof Date ? a.getTime() : a
@@ -84,6 +91,7 @@ class FakeQuery {
   async get() {
     let docs = [...this.firestore.coll(this.path).entries()]
       .filter(([, d]) => this.filters.every(([f, op, v]) => {
+        if (d[f] === undefined || d[f] === null) return false // a missing field matches no filter, as in Firestore
         const c = cmp(d[f], v)
         return op === '==' ? c === 0 : op === '>=' ? c >= 0 : op === '<=' ? c <= 0 : op === '>' ? c > 0 : op === '<' ? c < 0 : false
       }))

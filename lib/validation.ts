@@ -31,14 +31,10 @@ export const bookingSchema = z.object({
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   chiefComplaint: trimmed(500).optional(),
+  // 4-digit PIN: sets one the first time, or proves identity on a number that already has one.
+  pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits').optional(),
 }).refine(b => !!b.patient !== !!b.patientId, 'Provide either patient details or a patientId')
 export type BookingInput = z.infer<typeof bookingSchema>
-
-export const cancelTokenSchema = z.object({ token: z.string().min(20).max(200) })
-
-export const lookupSchema = z.object({
-  items: z.array(z.object({ id: z.string().min(1).max(128), token: z.string().min(20).max(200) })).min(1).max(20),
-})
 
 /** Parse JSON with a schema; returns a 400 Response on failure. */
 export async function parseBody<T extends z.ZodTypeAny>(

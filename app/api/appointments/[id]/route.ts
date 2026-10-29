@@ -6,6 +6,7 @@ import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { cancelAppointment, reopenAppointment, BookingError } from '@/lib/modules/booking'
 import { audit } from '@/lib/audit'
+import { getPatientSession } from '@/lib/auth/patientPin'
 
 const STATUSES = ['BOOKED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const
 
@@ -13,9 +14,6 @@ const patchSchema = z.object({
   status: z.enum(STATUSES).optional(),
   chiefComplaint: z.string().trim().max(500).optional(),
   consultationNotes: z.string().max(10000).optional(),
-  // Secret issued to the patient at booking; lets them cancel their own
-  // appointment (and nothing else) without a login.
-  token: z.string().min(20).max(200).optional(),
 })
 
 // Doctor-only: consumed by the doctor appointment detail page. Patients
@@ -99,16 +97,17 @@ export async function PATCH(
 
     const parsed = await parseBody(request, patchSchema)
     if ('error' in parsed) return parsed.error
-    const { status, chiefComplaint, consultationNotes, token } = parsed.data
+    const { status, chiefComplaint, consultationNotes } = parsed.data
 
     const session = await getSession()
 
     if (!session) {
-      // A patient (no login) may only cancel, and only with the secret token
-      // issued at booking. Everything else needs a signed-in clinic user.
-      const bareCancel = status === 'CANCELLED' && !!token && chiefComplaint === undefined && consultationNotes === undefined
-      if (!bareCancel) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-      await cancelAppointment(tenant, id, { kind: 'token', token: token! })
+      // A patient may only cancel, and only an appointment their PIN session
+      // owns. Everything else needs a signed-in clinic user.
+      const patient = await getPatientSession(tenant)
+      const bareCancel = status === 'CANCELLED' && chiefComplaint === undefined && consultationNotes === undefined
+      if (!patient || !bareCancel) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      await cancelAppointment(tenant, id, { kind: 'patient', session: patient })
       return Response.json({ ok: true })
     }
 

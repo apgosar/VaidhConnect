@@ -26,6 +26,7 @@ export const COLLECTIONS = [
   'rate_limits',
   'audit_logs',
   'users',
+  'patient_access',
 ] as const
 
 export type TenantCollection = typeof COLLECTIONS[number]

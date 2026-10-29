@@ -6,7 +6,8 @@ import { ArrowLeft, Calendar, Clock, CheckCircle2, ChevronRight, Download } from
 import { computeAge } from '@/lib/slots'
 import { addDaysYmd, describeYmd, formatDateTimeInTz, formatSlotLabelInTz } from '@/lib/time'
 import { createGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar'
-import { getDraft, saveBooking, savePatient, setDraft, type BookingDraft } from '@/lib/patientDevice'
+import { getDraft, savePatient, setDraft, type BookingDraft } from '@/lib/patientDevice'
+import PinInput from '@/components/patient/PinInput'
 import SiteFooter from '@/components/SiteFooter'
 
 interface TimeSlot { start: string; end: string; label: string }
@@ -33,12 +34,27 @@ export default function BookPage() {
   const [step, setStep] = useState<'select' | 'confirm' | 'success'>('select')
   const [booking, setBooking] = useState(false)
   const [error, setError] = useState('')
+  // PIN step: clinic staff don't need one; patients choose one the first time and enter it after.
+  const [isStaff, setIsStaff] = useState(false)
+  const [hasPin, setHasPin] = useState<boolean | null>(null)
+  const [pin, setPin] = useState('')
+  const [pinConfirm, setPinConfirm] = useState('')
   const [bookedAppointment, setBookedAppointment] = useState<BookedAppointment | null>(null)
 
   useEffect(() => {
     const d = getDraft()
     if (!d) { router.replace('/register'); return }
     setDraftState(d)
+    ;(async () => {
+      try {
+        const me = await (await fetch('/api/auth/session')).json()
+        if (me.authenticated) { setIsStaff(true); return }
+        const s = await fetch('/api/patient/pin/status', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: d.patient.phone }),
+        })
+        if (s.ok) setHasPin((await s.json()).hasPin)
+      } catch { /* the booking itself will report what is needed */ }
+    })()
     // The clinic's own date and timezone drive every picker, not this device's.
     fetch('/api/public/config').then(r => r.json()).then(({ config }) => {
       setTimezone(config.timezone)
@@ -78,12 +94,16 @@ export default function BookPage() {
           startTime: selectedSlot.start,
           endTime: selectedSlot.end,
           chiefComplaint: draft.chiefComplaint,
+          ...(isStaff ? {} : { pin }),
         }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Booking failed. Please try another slot.')
         if (res.status === 409) { setStep('select'); fetchSlots(selectedDate) } // slot just taken: show what is left
+        if (data.code === 'PIN_REQUIRED') setHasPin(true)
+        if (data.code === 'PIN_SETUP_REQUIRED') setHasPin(false)
+        if (data.code === 'PIN_WRONG' || data.code === 'PIN_WEAK') setPin('')
         return
       }
 
@@ -91,9 +111,6 @@ export default function BookPage() {
       // view or cancel this one appointment.
       savePatient(draft.patient)
       setDraft(null) // the details now live in the saved profile; don't leave a copy in this tab
-      if (data.cancelToken) {
-        saveBooking({ id: data.appointment.id, token: data.cancelToken, patientName: draft.patient.name, startTime: data.appointment.startTime })
-      }
       setBookedAppointment(data.appointment)
       setStep('success')
     } catch {
@@ -178,7 +195,7 @@ export default function BookPage() {
             </div>
 
             <p className="text-sm mb-6" style={{ color: 'var(--color-sage)' }}>
-              We&apos;ve sent a confirmation to {patient.phone} on WhatsApp, and we&apos;ll remind you before your visit. To cancel, open <strong>My Appointments</strong> on this device, or call the clinic.
+              We&apos;ve sent a confirmation to {patient.phone} on WhatsApp, and we&apos;ll remind you before your visit. To view or cancel it, open <strong>My Appointments</strong> and enter your PIN, or call the clinic.
             </p>
 
             <div className="flex flex-col gap-3">
@@ -232,8 +249,32 @@ export default function BookPage() {
             </div>
           </div>
 
+          {isStaff ? (
+            <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-primary-bg)', border: '1px solid var(--color-sage-border)' }}>
+              Booking as clinic staff — no PIN needed. The patient will get the confirmation and reminders.
+            </div>
+          ) : (
+            <div className="card p-6 space-y-3">
+              {hasPin ? (
+                <>
+                  <h2 className="font-semibold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Enter your PIN</h2>
+                  <PinInput id="pin" label="4-digit PIN" value={pin} onChange={setPin} autoFocus />
+                  <a href="/appointments?reset=1" className="text-sm font-medium" style={{ color: 'var(--color-gold-dark)' }}>Forgot your PIN?</a>
+                </>
+              ) : (
+                <>
+                  <h2 className="font-semibold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Choose a 4-digit PIN</h2>
+                  <p className="text-sm" style={{ color: 'var(--color-sage)' }}>You will need it to view or cancel your appointments. Don&apos;t share it.</p>
+                  <PinInput id="pin" label="PIN" value={pin} onChange={setPin} autoFocus />
+                  <PinInput id="pin2" label="Type it again" value={pinConfirm} onChange={setPinConfirm}
+                    hint={pinConfirm.length === 4 && pin !== pinConfirm ? 'The two PINs do not match' : undefined} />
+                </>
+              )}
+            </div>
+          )}
+
           {error && <p className="form-error">{error}</p>}
-          <button onClick={handleBook} className="btn btn-primary btn-lg w-full" disabled={booking}>
+          <button onClick={handleBook} className="btn btn-primary btn-lg w-full" disabled={booking || (!isStaff && (pin.length !== 4 || (hasPin === false && pin !== pinConfirm)))}>
             {booking ? (<><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Booking...</span></>) : 'Confirm Booking'}
           </button>
         </div>

@@ -1,4 +1,3 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { tenantDb, type TenantDb } from '../db/tenant'
 import type { Tenant } from '../tenant/types'
 import type { WeeklyTimings } from '../constants'
@@ -7,23 +6,15 @@ import { rateLimit } from '../ratelimit'
 import type { BookingInput, PatientDetails } from '../validation'
 import { getDayAvailability } from './availability'
 import { notifyBooked, notifyCancelled } from './notifications'
+import { getAccess, sessionOwnsAppointment, setInitialPin, verifyPin, PinError, type PatientSession } from './patientAccess'
 
 export class BookingError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 
 export type Actor =
-  | { kind: 'public'; ip: string }
+  | { kind: 'public'; ip: string; session?: PatientSession | null }
   | { kind: 'staff'; uid: string }
-
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
-
-function tokenMatches(token: string, expectedHash: string | undefined): boolean {
-  if (!expectedHash) return false
-  const a = Buffer.from(hashToken(token), 'hex')
-  const b = Buffer.from(expectedHash, 'hex')
-  return a.length === b.length && timingSafeEqual(a, b)
-}
 
 const lockId = (doctorId: string, start: Date) => `${doctorId}_${start.getTime()}`
 
@@ -92,13 +83,40 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
     throw new BookingError(409, 'This slot is no longer available')
   }
 
-  // 2. Abuse limits for the public flow (anyone can type any phone number).
+  // 2. Abuse limit for the public flow: every attempt counts against the caller's
+  // IP. (The per-phone limit is applied below, only AFTER the PIN is proven —
+  // otherwise someone who merely knows a number could use up its daily booking
+  // budget with wrong guesses and lock the real owner out.)
+  if (actor.kind === 'public' && !(await rateLimit(db, `book:ip:${actor.ip}`, 10, 3600))) {
+    throw new BookingError(429, 'Too many booking attempts. Please try again later or call the clinic.')
+  }
+
+  // 2b. PIN gate for the public flow. A phone that already has a PIN needs it
+  // (or a live PIN session) before anyone can book under that number, which
+  // also stops strangers booking in someone else's name. A phone with no PIN
+  // yet sets one now.
+  let pinProof: { accessId: string; pinVersion: number; phone: string } | undefined
   if (actor.kind === 'public') {
     const phone = input.patient!.phone
-    const ok =
-      (await rateLimit(db, `book:phone:${phone}`, 3, 24 * 3600)) &&
-      (await rateLimit(db, `book:ip:${actor.ip}`, 10, 3600))
-    if (!ok) throw new BookingError(429, 'Too many booking attempts. Please try again later or call the clinic.')
+    const access = await getAccess(db, phone)
+    if (access?.pinHash) {
+      if (actor.session && actor.session.phone === phone) {
+        pinProof = { accessId: actor.session.accessId, pinVersion: access.pinVersion, phone }
+      } else if (input.pin) {
+        const v = await verifyPin(db, phone, input.pin)
+        pinProof = { accessId: v.accessId, pinVersion: v.pinVersion, phone }
+      } else {
+        throw new PinError(401, 'PIN_REQUIRED', 'Enter your PIN to book with this number')
+      }
+    } else {
+      if (!input.pin) throw new PinError(400, 'PIN_SETUP_REQUIRED', 'Choose a 4-digit PIN to continue')
+      const s = await setInitialPin(db, phone, input.pin)
+      pinProof = { accessId: s.accessId, pinVersion: s.pinVersion, phone }
+    }
+    // Proven owner of the PIN: now cap how many appointments one number can book a day.
+    if (!(await rateLimit(db, `book:phone:${phone}`, 3, 24 * 3600))) {
+      throw new BookingError(429, 'Too many bookings for this number today. Please call the clinic.')
+    }
   }
 
   // 3. Who is the patient?
@@ -118,7 +136,6 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
   const apptRef = db.col('appointments').doc()
   const lockRef = db.col('slot_locks').doc(lockId(doctor.id, start))
   const { start: dayStart, end: dayEnd } = dayBoundsInTz(start, tenant.timezone)
-  const cancelToken = actor.kind === 'public' ? randomBytes(32).toString('base64url') : undefined
   const now = new Date()
   const diffHours = (start.getTime() - now.getTime()) / 3_600_000
 
@@ -133,7 +150,8 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
     // and the 1h cron if booked <1h out (that one is sent immediately).
     reminderSent24h: diffHours < 24,
     reminderSent1h: diffHours < 1,
-    ...(cancelToken ? { cancelTokenHash: hashToken(cancelToken) } : {}),
+    // Links a portal booking to the PIN that made it, so that PIN can list/cancel it.
+    ...(pinProof ? { accessId: pinProof.accessId } : {}),
     createdBy: actor.kind === 'staff' ? `staff:${actor.uid}` : 'public',
     createdAt: now,
     updatedAt: now,
@@ -181,12 +199,12 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
       },
     },
     patientId: patient.id,
-    // Shown to the patient exactly once; only its hash is stored.
-    cancelToken,
+    // For the caller to start a PIN session (public bookings only).
+    pinSession: pinProof ? { phone: pinProof.phone, pinVersion: pinProof.pinVersion } : undefined,
   }
 }
 
-export type CancelAuth = { kind: 'staff'; uid: string } | { kind: 'token'; token: string }
+export type CancelAuth = { kind: 'staff'; uid: string } | { kind: 'patient'; session: PatientSession }
 
 export async function cancelAppointment(tenant: Tenant, id: string, auth: CancelAuth) {
   const db = tenantDb(tenant)
@@ -197,8 +215,9 @@ export async function cancelAppointment(tenant: Tenant, id: string, auth: Cancel
     const snap = await tx.get(ref)
     if (!snap.exists) throw new BookingError(404, 'Appointment not found')
     appt = snap.data()
-    if (auth.kind === 'token' && !tokenMatches(auth.token, appt.cancelTokenHash)) {
-      throw new BookingError(403, 'Not allowed')
+    if (auth.kind === 'patient') {
+      const patientPhone = appt.patientId ? (await tx.get(db.col('patients').doc(appt.patientId))).data()?.phone ?? null : null
+      if (!sessionOwnsAppointment(auth.session, appt, patientPhone)) throw new BookingError(403, 'Not allowed')
     }
     if (appt.status !== 'BOOKED') throw new BookingError(409, 'This appointment is not active')
     tx.update(ref, { status: 'CANCELLED', cancelledBy: auth.kind === 'staff' ? `staff:${auth.uid}` : 'patient', updatedAt: new Date() })
@@ -239,21 +258,4 @@ export async function reopenAppointment(tenant: Tenant, id: string) {
     tx.update(ref, { status: 'BOOKED', updatedAt: new Date() })
     tx.set(lockRef, { appointmentId: id, startTime: start, createdAt: new Date() })
   })
-}
-
-/** Patient-side "my appointments": only entries whose secret token matches are returned. */
-export async function lookupAppointments(tenant: Tenant, items: Array<{ id: string; token: string }>) {
-  const db = tenantDb(tenant)
-  const out: Array<Record<string, unknown>> = []
-  await Promise.all(items.map(async ({ id, token }) => {
-    const snap = await db.col('appointments').doc(id).get()
-    const a = snap.data() as any
-    if (!snap.exists || !tokenMatches(token, a.cancelTokenHash)) return
-    const p = a.patientId ? (await db.col('patients').doc(a.patientId).get()).data() : null
-    out.push({
-      id, status: a.status, chiefComplaint: a.chiefComplaint ?? null,
-      startTime: a.startTime.toDate(), endTime: a.endTime.toDate(), patientName: p?.name ?? null,
-    })
-  }))
-  return out.sort((x: any, y: any) => x.startTime.getTime() - y.startTime.getTime())
 }

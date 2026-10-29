@@ -8,7 +8,7 @@ import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
 import SiteFooter from '@/components/SiteFooter'
-import { getBookings, getSavedPatients, setDraft, type SavedPatient } from '@/lib/patientDevice'
+import { getSavedPatients, setDraft, type SavedPatient } from '@/lib/patientDevice'
 
 interface DoctorProfile {
   id: string
@@ -153,10 +153,11 @@ export default function PatientPortal({ doctor }: PatientPortalProps) {
   // Details this device has used before (family members included) and whether
   // it holds any bookings it can show/cancel. Read once on the client.
   const [profiles, setProfiles] = useState<SavedPatient[]>([])
-  const [hasBookings, setHasBookings] = useState(false)
+  // Signed-in clinic staff book on a patient's behalf from this same page.
+  const [staffRole, setStaffRole] = useState<string | null>(null)
   useEffect(() => {
     setProfiles(getSavedPatients())
-    setHasBookings(getBookings().length > 0)
+    fetch('/api/auth/session').then(r => r.json()).then(d => setStaffRole(d.authenticated ? d.role : null)).catch(() => {})
   }, [])
 
   const downloadVCard = () => {
@@ -332,6 +333,12 @@ END:VCARD`
             </p>
           </div>
 
+          {staffRole && (
+            <div className="rounded-lg p-3 text-sm" style={{ background: 'var(--color-primary-bg)', border: '1px solid var(--color-sage-border)', color: 'var(--color-charcoal-mid)' }}>
+              <strong>Staff booking.</strong> You are signed in as clinic staff, so no PIN is needed. Enter the patient&apos;s details; they get the confirmation and reminders on WhatsApp.
+            </div>
+          )}
+
           {profiles.map(p => {
             const age = (() => { try { return computeAge(p.dob) } catch { return null } })()
             return (
@@ -358,11 +365,9 @@ END:VCARD`
             {profiles.length > 0 ? 'Someone else' : 'Book an appointment'}
           </button>
 
-          {hasBookings && (
-            <button onClick={() => router.push('/appointments')} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium" style={{ color: 'var(--color-forest)' }}>
-              <Calendar size={16} /> My appointments
-            </button>
-          )}
+          <button onClick={() => router.push('/appointments')} className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium" style={{ color: 'var(--color-forest)' }}>
+            <Calendar size={16} /> View or cancel my appointments
+          </button>
         </div>
 
         {/* Clinic Info */}

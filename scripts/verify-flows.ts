@@ -1,6 +1,6 @@
 /**
  * End-to-end behaviour check against a deployed STAGING environment:
- * public booking without OTP, cancel tokens, double-booking, what an
+ * public booking with a 4-digit PIN, PIN sign-in and lockout, double-booking, what an
  * anonymous visitor can and cannot reach, role permissions, and the operator
  * console (including suspending a clinic). Creates temporary data and removes it.
  *
@@ -80,36 +80,60 @@ async function main() {
 
     // ── public booking, no OTP ─────────────────────────────────────────────
     const person = { name: `ZZ Verify ${stamp}`, phone: '+91' + (9800000000 + (stamp % 99999999)).toString().padStart(10, '9').slice(0, 10), dob: '1991-02-03' }
-    const book = (slot: any, p = person) => http(aHost, '/api/appointments', { method: 'POST', json: { patient: p, startTime: slot.start, endTime: slot.end, chiefComplaint: 'verification' } })
-    const booked = await book(s1)
-    check('public booking succeeds without any login', booked.status === 201, `(${booked.status})`)
-    const apptId = booked.body?.appointment?.id as string, token = booked.body?.cancelToken as string
-    check('response carries a one-time cancel token and no patient data', !!token && !JSON.stringify(booked.body).includes('ZZ Verify') && !JSON.stringify(booked.body).includes(person.phone.slice(3)))
+    const PIN = '4827'
+    const book = (slot: any, p = person, extra: object = {}, cookie?: string) =>
+      http(aHost, '/api/appointments', { method: 'POST', cookie, json: { patient: p, startTime: slot.start, endTime: slot.end, chiefComplaint: 'verification', ...extra } })
+    const cookieOf = (r: { res: Response }) => (r.res.headers.getSetCookie?.() ?? []).map(c => c.split(';')[0]).filter(c => c.startsWith('pp_session=')).join('; ')
+
+    const noPin = await book(s1)
+    check('first booking without a PIN asks for one', noPin.status === 400 && noPin.body?.code === 'PIN_SETUP_REQUIRED', `(${noPin.status} ${noPin.body?.code})`)
+    const weak = await book(s1, person, { pin: '1234' })
+    check('an easy PIN (1234) is refused', weak.status === 400 && weak.body?.code === 'PIN_WEAK', `(${weak.status} ${weak.body?.code})`)
+    const booked = await book(s1, person, { pin: PIN })
+    check('public booking with a new PIN succeeds', booked.status === 201, `(${booked.status})`)
+    const apptId = booked.body?.appointment?.id as string
+    const pinCookie = cookieOf(booked)
+    check('booking response carries no patient data and no secret', !!apptId && !JSON.stringify(booked.body).includes('ZZ Verify') && !JSON.stringify(booked.body).includes(person.phone.slice(3)) && !JSON.stringify(booked.body).includes(PIN))
+    check('booking signs the patient in for My Appointments', pinCookie.startsWith('pp_session='))
     cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(apptId).delete() })
     cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patients').where('name', '==', person.name).get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
+    cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patient_access').get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
 
-    const again = await book(s1, { ...person, name: `ZZ Other ${stamp}`, phone: '+919800000098' })
+    const again = await book(s1, { ...person, name: `ZZ Other ${stamp}`, phone: '+919800000098' }, { pin: PIN })
     check('the same slot cannot be booked twice', again.status === 409, `(${again.status})`)
 
-    const lookupOk = await http(aHost, '/api/appointments/lookup', { method: 'POST', json: { items: [{ id: apptId, token }] } })
-    check('my-appointments works with the right token', lookupOk.status === 200 && lookupOk.body.appointments?.length === 1 && lookupOk.body.appointments[0].id === apptId)
-    const lookupBad = await http(aHost, '/api/appointments/lookup', { method: 'POST', json: { items: [{ id: apptId, token: 'x'.repeat(43) }] } })
-    check('my-appointments returns nothing for a wrong token', lookupBad.status === 200 && lookupBad.body.appointments?.length === 0)
-    const lookupOtherClinic = await http(bHost, '/api/appointments/lookup', { method: 'POST', json: { items: [{ id: apptId, token }] } })
-    check('a token is useless on another clinic\'s host', lookupOtherClinic.body.appointments?.length === 0)
+    const me = await http(aHost, '/api/patient/me', { cookie: pinCookie })
+    check('My Appointments lists the booking after PIN sign-in', me.status === 200 && me.body.appointments?.some((x: any) => x.id === apptId))
+    const meAnon = await http(aHost, '/api/patient/me')
+    check('My Appointments needs a PIN session', meAnon.status === 401, `(${meAnon.status})`)
+    const meOtherClinic = await http(bHost, '/api/patient/me', { cookie: pinCookie })
+    check('a PIN session is useless on another clinic', meOtherClinic.status === 401, `(${meOtherClinic.status})`)
 
-    const badCancel = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', json: { status: 'CANCELLED', token: 'y'.repeat(43) } })
-    check('cancel with a wrong token is refused', badCancel.status === 403, `(${badCancel.status})`)
-    const noToken = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', json: { status: 'CANCELLED' } })
-    check('cancel with no token and no login is refused', noToken.status === 401, `(${noToken.status})`)
-    const notes = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', json: { consultationNotes: 'tampered', token } })
-    check('a patient token cannot edit clinical notes', notes.status === 401, `(${notes.status})`)
+    const wrongLogin = await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: person.phone, pin: '0000' } })
+    check('wrong PIN is refused', wrongLogin.status === 401, `(${wrongLogin.status})`)
+    const rightLogin = await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: person.phone, pin: PIN } })
+    check('right PIN signs in', rightLogin.status === 200, `(${rightLogin.status})`)
+    const reBook = await book(s2, { ...person, name: `ZZ Relative ${stamp}` })
+    check('booking again for a number with a PIN needs the PIN', reBook.status === 401 || reBook.status === 400, `(${reBook.status} ${reBook.body?.code})`)
+    cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patients').where('name', '==', `ZZ Relative ${stamp}`).get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
 
-    const goodCancel = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', json: { status: 'CANCELLED', token } })
-    check('cancel with the right token works', goodCancel.status === 200, `(${goodCancel.status})`)
-    const rebook = await book(s1, { ...person, name: `ZZ Verify ${stamp}` })
-    check('the freed slot can be booked again', rebook.status === 201, `(${rebook.status})`)
+    const anonCancel = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', json: { status: 'CANCELLED' } })
+    check('cancel with no PIN session and no login is refused', anonCancel.status === 401, `(${anonCancel.status})`)
+    const notes = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', cookie: pinCookie, json: { consultationNotes: 'tampered' } })
+    check('a PIN session cannot edit clinical notes', notes.status === 401 || notes.status === 403, `(${notes.status})`)
+    const crossCancel = await http(bHost, `/api/appointments/${apptId}`, { method: 'PATCH', cookie: pinCookie, json: { status: 'CANCELLED' } })
+    check('a PIN session cannot cancel on another clinic', crossCancel.status === 401 || crossCancel.status === 404, `(${crossCancel.status})`)
+
+    const goodCancel = await http(aHost, `/api/appointments/${apptId}`, { method: 'PATCH', cookie: pinCookie, json: { status: 'CANCELLED' } })
+    check('cancel with the PIN session works', goodCancel.status === 200, `(${goodCancel.status})`)
+    const rebook = await book(s1, person, {}, pinCookie)
+    check('the freed slot can be booked again with the session', rebook.status === 201, `(${rebook.status})`)
     if (rebook.body?.appointment?.id) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(rebook.body.appointment.id).delete() })
+
+    // Five wrong guesses lock the number out.
+    for (let i = 0; i < 5; i++) await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: person.phone, pin: '9999' } })
+    const locked = await http(aHost, '/api/patient/pin/login', { method: 'POST', json: { phone: person.phone, pin: PIN } })
+    check('repeated wrong PINs lock the number (even the right PIN is refused)', locked.status === 429, `(${locked.status})`)
 
     const bad = await http(aHost, '/api/appointments', { method: 'POST', json: { patient: { ...person, dob: '2999-01-01' }, startTime: s2.start, endTime: s2.end } })
     check('invalid input is rejected with a 400', bad.status === 400, `(${bad.status})`)
@@ -135,7 +159,7 @@ async function main() {
     check('front desk session is rejected on clinic B', hitStaffOnB.status === 401)
 
     const staffBook = await staff('/api/appointments', 'POST', { patient: { ...person, name: `ZZ Staffbooked ${stamp}`, phone: '+919800000097' }, startTime: s2.start, endTime: s2.end })
-    check('front desk can book on a patient\'s behalf', staffBook.status === 201 && !staffBook.body.cancelToken, `(${staffBook.status})`)
+    check('front desk can book on a patient\'s behalf (no PIN needed)', staffBook.status === 201, `(${staffBook.status})`)
     if (staffBook.body?.appointment?.id) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(staffBook.body.appointment.id).delete() })
     cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patients').where('name', '==', `ZZ Staffbooked ${stamp}`).get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
 
