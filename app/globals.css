@@ -644,3 +644,5 @@ select option {
 @media (min-width: 1024px) {
   .container-split { max-width: 1120px; padding: 40px 32px; }
 }
+
+.modal-panel-lg { max-width: 640px; }

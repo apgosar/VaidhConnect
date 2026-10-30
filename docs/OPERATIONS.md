@@ -77,6 +77,11 @@ can see or change:
 - **Medicine suggestions** come from each clinic's own history (`medicine_catalog`). To fill it from existing prescriptions: `npx tsx --env-file=.env scripts/backfill-medicine-catalog.ts --clinic <id> --execute` (dry run without `--execute`).
 - **Follow-up reminders** need the `followup_reminder` template (see WHATSAPP_NOTIFICATIONS.md).
 
+## Rescheduling and blocked periods
+- **Rescheduling** keeps the same appointment (same id), so a prescription or payment stays attached. The new slot gets the same checks as a booking, and the old slot is freed in the same step. Clinic staff can move any appointment from its page (**Reschedule**), with no limits. Patients can move their own from My Appointments, **at most 2 times and not within 2 hours of the visit** (`lib/reschedulePolicy.ts`); after that they are asked to call. The patient is told on WhatsApp (`appt_rescheduled`).
+- **Block Schedule** lists only periods that have not finished; past ones are hidden. Times are entered and shown in the **clinic's** timezone, not the browser's. A block can be edited, set for whole days, and repeated weekly (up to a year); removing a repeating block offers "only this one" or "this and all later ones".
+- Blocking time **does not cancel appointments already booked** in it. The page lists them with a link to each so the clinic can reschedule or cancel them.
+
 ## Known limits
 - One calendar per clinic (`doctorId` = clinic id). Extra doctors can sign in but
   share the calendar.

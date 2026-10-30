@@ -4,6 +4,7 @@ import { tenantDb, type TenantDb } from '../db/tenant'
 import type { Tenant } from '../tenant/types'
 import { rateLimit } from '../ratelimit'
 import { sendPinResetCode } from '../whatsapp'
+import { patientRescheduleAllowance } from '../reschedulePolicy'
 
 const scryptAsync = promisify(scrypt) as (pw: Buffer, salt: Buffer, keylen: number) => Promise<Buffer>
 
@@ -252,6 +253,10 @@ export interface PatientSession { phone: string; accessId: string; verified: boo
 
 export interface MyAppointment {
   id: string; startTime: Date; endTime: Date; status: string; chiefComplaint: string | null; patientName: string | null
+  /** Whether this patient may move it themselves right now, and if not why (see lib/reschedulePolicy). */
+  canReschedule: boolean
+  rescheduleReason?: string
+  reschedulesLeft: number
 }
 
 /**
@@ -264,7 +269,10 @@ export async function listMyAppointments(tenant: Tenant, session: PatientSession
   const out = new Map<string, MyAppointment>()
   const add = (id: string, a: any, name: string | null) => {
     if (a.status !== 'BOOKED' || a.startTime.toDate() < now) return
-    out.set(id, { id, startTime: a.startTime.toDate(), endTime: a.endTime.toDate(), status: a.status, chiefComplaint: a.chiefComplaint ?? null, patientName: name })
+    const start: Date = a.startTime.toDate()
+    const allowance = patientRescheduleAllowance({ startTime: start, rescheduleCount: a.rescheduleCount }, now)
+    out.set(id, { id, startTime: start, endTime: a.endTime.toDate(), status: a.status, chiefComplaint: a.chiefComplaint ?? null, patientName: name,
+      canReschedule: allowance.allowed, rescheduleReason: allowance.reason, reschedulesLeft: allowance.left })
   }
 
   const names = new Map<string, string>()

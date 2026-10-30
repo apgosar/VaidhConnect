@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/Field'
 import { LoadingBlock } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 import { LangText } from '@/components/ui/LangText'
 
 interface Appointment {
@@ -25,6 +26,10 @@ interface Appointment {
   status: string
   chiefComplaint?: string | null
   patientName?: string | null
+  /** From the server: may this patient move it now, how many moves are left, and why not. */
+  canReschedule?: boolean
+  rescheduleReason?: string
+  reschedulesLeft?: number
 }
 
 interface PastVisit { appointmentId: string; startTime: string; patientName: string | null }
@@ -46,6 +51,8 @@ function MyAppointments() {
   const [error, setError] = useState('')
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null)
+  const [moving, setMoving] = useState<Appointment | null>(null)
+  const [notice, setNotice] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/patient/me')
@@ -150,6 +157,7 @@ function MyAppointments() {
         {state === 'list' && (
           <>
             {error && <Alert>{error}</Alert>}
+            {notice && <Alert variant="success">{notice}</Alert>}
             {appointments.length === 0 ? (
               <EmptyState
                 icon={<Calendar size={40} />}
@@ -179,9 +187,15 @@ function MyAppointments() {
                       </div>
                     </Alert>
                   ) : (
-                    <Button variant="outline" block className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleCancel(appt.id)}>
-                      Cancel Appointment
-                    </Button>
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {appt.canReschedule && <Button variant="outline" className="flex-1" onClick={() => { setNotice(''); setMoving(appt) }}>Reschedule</Button>}
+                        <Button variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleCancel(appt.id)}>
+                          Cancel Appointment
+                        </Button>
+                      </div>
+                      {!appt.canReschedule && appt.rescheduleReason && <p className="text-xs" style={{ color: 'var(--color-sage)' }}>{appt.rescheduleReason}</p>}
+                    </div>
                   )}
                 </div>
               ))
@@ -219,6 +233,17 @@ function MyAppointments() {
           </>
         )}
       </Container>
+      {moving && (
+        <RescheduleDialog
+          open
+          appointmentId={moving.id}
+          currentLabel={formatDateTimeInTz(new Date(moving.startTime), timezone)}
+          patientName={moving.patientName}
+          hint={moving.reschedulesLeft != null ? `You can move this appointment ${moving.reschedulesLeft} more time${moving.reschedulesLeft === 1 ? '' : 's'}.` : undefined}
+          onClose={() => setMoving(null)}
+          onMoved={() => { setMoving(null); setNotice('Your appointment has been moved. We have sent you the new time on WhatsApp.'); load() }}
+        />
+      )}
       <SiteFooter />
     </PageShell>
   )

@@ -28,6 +28,7 @@ environment: a permanent system-user token, never the 24-hour test token.
 | `patient_pin_reset` | Authentication | Patient | Patient asks to reset their PIN |
 | `prescription_share` | Utility | Patient | The doctor taps the WhatsApp button on a prescription |
 | `followup_reminder` | Utility | Patient | The day before the follow-up date set on a prescription (cron) |
+| `appt_rescheduled` | Utility | Patient | An appointment is moved to another time, by the clinic or by the patient |
 
 ### 1. `appt_booking_confirmation`
 ```
@@ -84,6 +85,15 @@ Hi {{1}}, this is a gentle reminder from {{2}} that your follow-up visit with Dr
 {{1}} patient name · {{2}} clinic name · {{3}} doctor name (without "Dr.") · {{4}} follow-up date (e.g. `03 Nov 2026`) · {{5}} clinic phone · {{6}} the clinic's web address (its custom domain if it has one, otherwise its first mapped host, otherwise the website in Settings).
 
 When it goes out: the reminder job (every 15 minutes) looks for prescriptions whose follow-up date is **tomorrow in the clinic's timezone** and sends between 09:00 and 19:00 clinic time. A prescription is marked done once the message is sent. It is also marked done, with nothing sent, when the patient has no phone number or already has a booked visit in the next 4 days. A failed send is retried on the next run, but only inside that morning window. Changing the follow-up date re-arms the reminder.
+
+### 9. `appt_rescheduled`
+Body only, language English:
+```
+Hi {{1}}, your appointment at {{2}} has been moved to {{3}}. It was earlier scheduled for {{4}}. If this new time does not suit you, please call the clinic on {{5}}. Thank you.
+```
+{{1}} patient name · {{2}} clinic name · {{3}} new date and time (e.g. `06 November 2026 at 10:30 AM`) · {{4}} earlier date and time · {{5}} clinic phone.
+
+Sent for every move, whoever makes it, so the patient always hears about a change to their appointment. The doctor's same-day schedule update is refreshed too when the old or the new time is today.
 
 ## When messages go out
 
