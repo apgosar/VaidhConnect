@@ -55,7 +55,7 @@ async function main() {
 
     // ── find two open slots on clinic A ────────────────────────────────────
     let slots: any[] = []
-    for (let i = 0; i < 14 && slots.length < 3; i++) {
+    for (let i = 1; i < 15 && slots.length < 3; i++) {
       slots = (await http(aHost, `/api/appointments?mode=slots&date=${ymdPlus(cfg.today, i)}`)).body.slots ?? []
     }
     check('clinic A has bookable slots', slots.length >= 3)
@@ -276,10 +276,10 @@ async function main() {
     check('My Appointments says the allowance is used up and why', mine?.canReschedule === false && /call the clinic/i.test(mine?.rescheduleReason ?? ''), JSON.stringify({ c: mine?.canReschedule }))
 
     // ── block schedule ─────────────────────────────────────────────────────
-    const blockHttp = (path: string, method: string, json?: unknown, cookie: string | undefined = ownerCookie) => http(aHost, `/api/doctor/blocked-slots${path}`, { method, cookie, ...(json !== undefined ? { json } : {}) })
+    const blockHttp = (path: string, method: string, json?: unknown, cookie: string | null = ownerCookie) => http(aHost, `/api/doctor/blocked-slots${path}`, { method, cookie: cookie ?? undefined, ...(json !== undefined ? { json } : {}) })
     const { toClinicLocal } = await import('../lib/time')
     const local = (iso: string) => toClinicLocal(new Date(iso), cfg.timezone)
-    check('block schedule needs a login', (await blockHttp('', 'GET', undefined, undefined)).status === 401 && (await http(bHost, '/api/doctor/blocked-slots', { cookie: ownerCookie })).status === 401)
+    check('block schedule needs a login', (await blockHttp('', 'GET', undefined, null)).status === 401 && (await http(bHost, '/api/doctor/blocked-slots', { cookie: ownerCookie })).status === 401)
     const blockFrom = local(s3.start), blockTo = local(s3.end)
     const made = await blockHttp('', 'POST', { start: blockFrom, end: blockTo, reason: 'ZZ Verify' })
     check('a block made with the form\'s clinic-time values is accepted', made.status === 201, `(${made.status} ${made.body?.error ?? ''})`)
