@@ -64,4 +64,5 @@ npm run dev
 * [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — concepts, environment variables, day-to-day, background jobs
 * [`docs/ROLLOUT.md`](docs/ROLLOUT.md) — production roll-out and data migration
 * [`docs/CUSTOM_DOMAINS.md`](docs/CUSTOM_DOMAINS.md) — giving a clinic a hostname
+* [`docs/UI_KIT.md`](docs/UI_KIT.md) — shared components, colours, error wording and breakpoints; [`docs/ACCESSIBILITY_AUDIT.md`](docs/ACCESSIBILITY_AUDIT.md) — the audit behind them
 * [`docs/WHATSAPP_NOTIFICATIONS.md`](docs/WHATSAPP_NOTIFICATIONS.md) — messages, templates and their variables

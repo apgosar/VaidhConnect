@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import {
   Menu, X, CalendarOff, MessageSquare, CalendarPlus, UserCog, ScrollText
 } from 'lucide-react'
 import { can, type Role, type Permission } from '@/lib/auth/access'
+import { useFocusTrap } from '@/components/ui/useFocusTrap'
 
 interface DoctorSidebarProps {
   doctorName: string
@@ -65,6 +66,10 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const router = useRouter()
+  const drawer = useRef<HTMLElement>(null)
+
+  // Escape closes the menu, Tab stays inside it while open, and focus returns to the hamburger afterwards.
+  useFocusTrap(drawer, mobileOpen, () => setMobileOpen(false))
 
   const handleSignOut = async () => {
     try {
@@ -110,7 +115,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
             >
               {clinicName}
             </p>
-            <p className="text-xs truncate mt-0.5" style={{ color: 'rgba(255,255,255,0.50)' }}>
+            <p className="text-xs truncate mt-0.5" style={{ color: '#FFFFFF' }}>
               Dr. {doctorName}
             </p>
           </div>
@@ -132,7 +137,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
                   : ''
               }`}
               style={{
-                color: isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.65)',
+                color: isActive ? 'var(--color-gold)' : '#FFFFFF',
                 background: isActive ? 'rgba(201,161,93,0.08)' : 'transparent',
                 paddingLeft: isActive ? '20px' : '12px',
               }}
@@ -149,7 +154,7 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition-colors"
-          style={{ color: 'rgba(255,255,255,0.45)' }}
+          style={{ color: '#FFFFFF' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.80)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
         >
@@ -184,6 +189,8 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
         }}
         onClick={() => setMobileOpen(true)}
         aria-label="Open menu"
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-menu"
       >
         <Menu size={20} />
       </button>
@@ -192,18 +199,24 @@ export default function DoctorSidebar({ doctorName, clinicName, logoUrl, role }:
       {mobileOpen && (
         <>
           <div
+            role="presentation"
             className="lg:hidden fixed inset-0 z-40"
             style={{ background: 'rgba(15,61,46,0.60)', backdropFilter: 'blur(2px)' }}
             onClick={() => setMobileOpen(false)}
           />
           <aside
+            id="mobile-menu"
+            ref={drawer}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
             className="lg:hidden fixed left-0 top-0 bottom-0 w-72 z-50 flex flex-col"
             style={{ background: 'var(--color-forest)' }}
           >
             <button
               onClick={() => setMobileOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-lg"
-              style={{ color: 'rgba(255,255,255,0.60)' }}
+              style={{ color: '#FFFFFF' }}
               aria-label="Close menu"
             >
               <X size={20} />

@@ -6,6 +6,7 @@ import { getSession, clearSessionCookie } from '@/lib/auth/session'
 import { parseBody } from '@/lib/validation'
 import { rateLimit } from '@/lib/ratelimit'
 import { audit } from '@/lib/audit'
+import { apiError } from '@/lib/errors'
 
 const schema = z.object({
   currentPassword: z.string().min(1).max(200),
@@ -18,9 +19,9 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const session = await getSession()
-    if (!session?.uid || !session.email) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid || !session.email) return apiError('UNAUTHORIZED')
 
     const parsed = await parseBody(request, schema)
     if ('error' in parsed) return parsed.error
@@ -49,6 +50,6 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, signedOut: true })
   } catch (error) {
     console.error('[password-change]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

@@ -3,16 +3,17 @@ import { tenantDb } from '@/lib/db/tenant'
 import { adminDb } from '@/lib/firebase/server'
 import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
+import { apiError } from '@/lib/errors'
 
 // GET all doctor appointments (for calendar)
 export async function GET(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'appointments:manage')
     if (denied) return denied
@@ -83,6 +84,6 @@ export async function GET(request: Request) {
     return Response.json({ appointments })
   } catch (error) {
     console.error('[doctor-appointments]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

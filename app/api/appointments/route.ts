@@ -11,13 +11,14 @@ import { bookAppointment, BookingError } from '@/lib/modules/booking'
 import { PinError } from '@/lib/modules/patientAccess'
 import { audit } from '@/lib/audit'
 import { type NextRequest } from 'next/server'
+import { apiError } from '@/lib/errors'
 
 // GET /api/appointments?mode=slots&date=YYYY-MM-DD — public: which slots are
 // open on a clinic-local date. Returns no patient data.
 export async function GET(request: NextRequest) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
 
     const date = request.nextUrl.searchParams.get('date')
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[appointments-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
 
     const parsed = await parseBody(request, bookingSchema)
     if ('error' in parsed) return parsed.error
@@ -74,6 +75,6 @@ export async function POST(request: Request) {
     if (error instanceof BookingError) return Response.json({ error: error.message }, { status: error.status })
     if (error instanceof PinError) return Response.json({ error: error.message, code: error.code, retryAfter: error.retryAfterSec }, { status: error.status })
     console.error('[appointments-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

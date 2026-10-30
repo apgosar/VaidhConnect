@@ -1,3 +1,4 @@
+import { apiError } from '../errors'
 /**
  * Role-based access for clinic users. One owner per clinic, plus optional
  * doctors and front-desk staff. Roles are Firebase custom claims set when
@@ -31,5 +32,5 @@ export const can = (role: Role | undefined, permission: Permission): boolean =>
 export function forbid(session: { role?: Role } | null, permission: Permission): Response | null {
   return can(session?.role, permission)
     ? null
-    : Response.json({ error: 'You do not have permission to do that' }, { status: 403 })
+    : apiError('FORBIDDEN')
 }

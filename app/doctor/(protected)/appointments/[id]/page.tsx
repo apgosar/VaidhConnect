@@ -12,6 +12,7 @@ import { format, parseISO } from 'date-fns'
 import type { Medicine, TaperStep } from '@/lib/constants'
 import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
 import { PAYMENT_MODES } from '@/lib/constants'
+import { LangText } from '@/components/ui/LangText'
 
 interface Suggestion { name: string; dosage: string; frequency: string; duration: string; instructions?: string; taper?: Medicine['taper'] }
 interface Patient {
@@ -256,7 +257,7 @@ export default function AppointmentDetailPage() {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">{appt.patient.name}</h1>
+            <h1 className="text-xl font-bold text-slate-800"><LangText>{appt.patient.name}</LangText></h1>
             <p className="text-sm text-slate-500">{age} yrs · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
           </div>
         </div>
@@ -410,7 +411,7 @@ export default function AppointmentDetailPage() {
 
           <div>
             <div className="flex justify-between items-center mb-3">
-              <label className="form-label mb-0">Medicines</label>
+              <p className="form-label mb-0">Medicines</p>
               <button onClick={addMedicine} className="btn btn-ghost btn-sm text-blue-600">
                 <Plus size={14} /> Add Medicine
               </button>

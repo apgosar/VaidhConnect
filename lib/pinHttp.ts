@@ -4,6 +4,7 @@ import { tenantDb } from './db/tenant'
 import { phoneSchema } from './validation'
 import { clientIp, rateLimit } from './ratelimit'
 import { PinError } from './modules/patientAccess'
+import { apiError } from './errors'
 
 export const pinField = z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits')
 export const phoneBody = z.object({ phone: phoneSchema })
@@ -22,7 +23,7 @@ export const pinFail = (e: unknown): Response | null =>
  */
 export async function pinPreamble(request: Request, bucket: string, perHour: number) {
   const tenant = await getTenant()
-  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) } as const
+  if (!tenant) return { error: apiError('CLINIC_NOT_FOUND') } as const
   if (!(await rateLimit(tenantDb(tenant), `${bucket}:ip:${clientIp(request)}`, perHour, 3600))) {
     return { error: Response.json({ error: 'Too many requests. Please try again later.' }, { status: 429 }) } as const
   }

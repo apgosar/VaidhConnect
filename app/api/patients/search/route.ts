@@ -3,15 +3,16 @@ import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { type NextRequest } from 'next/server'
+import { apiError } from '@/lib/errors'
 
 export async function GET(request: NextRequest) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'patients:manage')
     if (denied) return denied
@@ -57,6 +58,6 @@ export async function GET(request: NextRequest) {
     return Response.json({ patients: paginatedPatients, total })
   } catch (error) {
     console.error('[patient-search]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

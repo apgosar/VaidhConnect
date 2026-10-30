@@ -1,6 +1,7 @@
 import { parseBody } from '@/lib/validation'
 import { phoneBody, pinFail, pinPreamble } from '@/lib/pinHttp'
 import { requestPinReset } from '@/lib/modules/patientAccess'
+import { apiError } from '@/lib/errors'
 
 // POST /api/patient/pin/reset/request — { phone }
 // Sends a one-time code to that number's own WhatsApp. Whoever receives it owns
@@ -17,6 +18,6 @@ export async function POST(request: Request) {
   } catch (e) {
     const r = pinFail(e); if (r) return r
     console.error('[pin-reset-request]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

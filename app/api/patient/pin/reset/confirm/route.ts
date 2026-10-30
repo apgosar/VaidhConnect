@@ -2,6 +2,7 @@ import { parseBody } from '@/lib/validation'
 import { resetConfirmBody, pinFail, pinPreamble } from '@/lib/pinHttp'
 import { confirmPinReset } from '@/lib/modules/patientAccess'
 import { startPatientSession } from '@/lib/auth/patientPin'
+import { apiError } from '@/lib/errors'
 
 // POST /api/patient/pin/reset/confirm — { phone, code, pin }
 // Checks the WhatsApp code, sets the new PIN (verified, because the code proves
@@ -19,6 +20,6 @@ export async function POST(request: Request) {
   } catch (e) {
     const r = pinFail(e); if (r) return r
     console.error('[pin-reset-confirm]', e)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

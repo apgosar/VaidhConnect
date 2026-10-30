@@ -5,6 +5,7 @@ import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay, is
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
 import { formatDate, computeAge, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
+import { LangText } from '@/components/ui/LangText'
 
 interface Appointment {
   id: string
@@ -30,6 +31,10 @@ export default function CalendarPage() {
   const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'week' | 'agenda'>('week')
+  // A 7-day grid does not fit a phone: start on the agenda there (the toggle still lets the doctor choose).
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 767px)').matches) setView('agenda')
+  }, [])
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i))
   const weekStart = weekDays[0]
@@ -256,7 +261,7 @@ export default function CalendarPage() {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-semibold text-sm">{appt.patient.name}</p>
+                          <p className="font-semibold text-sm"><LangText>{appt.patient.name}</LangText></p>
                           <p className="text-xs opacity-70">{computeAge(appt.patient.dob)} yrs · {appt.patient.phone}</p>
                           {appt.chiefComplaint && <p className="text-xs opacity-70 mt-0.5">{appt.chiefComplaint}</p>}
                         </div>
@@ -351,7 +356,7 @@ export default function CalendarPage() {
                         className="block rounded-lg p-2 text-xs hover:opacity-80 transition-opacity"
                         style={statusColor(appt.status)}
                       >
-                        <p className="font-semibold truncate">{appt.patient.name}</p>
+                        <p className="font-semibold truncate"><LangText>{appt.patient.name}</LangText></p>
                         <p className="opacity-70 font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
                       </Link>
                     ))}

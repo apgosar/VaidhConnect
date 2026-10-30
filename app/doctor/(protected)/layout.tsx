@@ -60,7 +60,7 @@ export default async function DoctorLayout({
             >
               {clinicName}
             </p>
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>
+            <p className="text-xs" style={{ color: '#FFFFFF' }}>
               Dr. {doctorName}
             </p>
           </div>

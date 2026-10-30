@@ -51,7 +51,7 @@ describe('colour contrast of the design tokens', () => {
     ['delete icon on white', token('color-danger-icon'), white, 3],
     ['form control outline on a field', token('color-border-input'), field, 3],
     ['text on the WhatsApp green', token('color-on-whatsapp'), '#25D366', 4.5],
-    ['button text on the gold button', token('color-forest'), token('color-gold'), 4.5],
+    ['button text on the gold button', token('color-on-gold'), token('color-gold'), 4.5],
     ['white on the green header', white, token('color-forest'), 4.5],
   ])('%s', (_name, fg, bg, min) => {
     expect(ratio(fg as string, bg as string)).toBeGreaterThanOrEqual(min as number)
@@ -72,7 +72,8 @@ describe('forms', () => {
         if (/type=["'](hidden|file)["']/.test(tag)) continue
         const before = s.slice(Math.max(0, m.index - 250), m.index)
         const wrapped = /<label[^>]*>(?![\s\S]*<\/label>)/.test(before)
-        if (!(/\bid=|aria-label|aria-labelledby/.test(tag) || wrapped)) unnamed.push(`${rel(file)}:${s.slice(0, m.index).split('\n').length}`)
+        // {...control} is the id and aria props that <Field> hands to its control
+        if (!(/\bid=|aria-label|aria-labelledby|\{\.\.\.control\}/.test(tag) || wrapped)) unnamed.push(`${rel(file)}:${s.slice(0, m.index).split('\n').length}`)
       }
     }
     expect(unnamed).toEqual([])
@@ -103,7 +104,8 @@ describe('text and targets', () => {
 
   it('every page that the skip link can land on has a main-content target', () => {
     const pages = ['app/appointments/page.tsx', 'app/book/page.tsx', 'components/patient/PatientPortal.tsx', 'components/patient/RegisterClient.tsx', 'app/doctor/login/page.tsx', 'app/admin/login/page.tsx', 'app/doctor/(protected)/layout.tsx']
-    const missing = pages.filter(p => !fs.readFileSync(path.join(root, p), 'utf8').includes('id="main-content"'))
+    // <PageShell> renders <main id="main-content">
+    const missing = pages.filter(p => { const src = fs.readFileSync(path.join(root, p), 'utf8'); return !src.includes('id="main-content"') && !src.includes('<PageShell') })
     expect(missing).toEqual([])
   })
 })

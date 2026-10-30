@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { UserPlus, Copy, Check } from 'lucide-react'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Member { uid: string; email: string | null; name: string | null; role: 'OWNER' | 'DOCTOR' | 'STAFF'; disabled?: boolean }
 
@@ -84,7 +85,7 @@ export default function TeamPage() {
       </section>
 
       <section className="card overflow-hidden">
-        {loading ? <div className="flex justify-center py-10"><div className="spinner" /></div> : (
+        {loading ? <LoadingBlock className="py-10" /> : (
           <ul>
             {members.map(m => (
               <li key={m.uid} className="flex flex-wrap items-center gap-3 px-5 py-4" style={{ borderBottom: '1px solid var(--color-sage-border)' }}>

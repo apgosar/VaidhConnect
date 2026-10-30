@@ -5,7 +5,14 @@ import { Save, Upload, X, Check, Palette, Copy } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK, DEFAULT_TIMINGS } from '@/lib/constants'
 import type { WeeklyTimings, DayTiming } from '@/lib/constants'
 import Image from 'next/image'
-import { DEFAULT_MARGINS, MARGIN_LIMITS, type PrintMargins } from '@/lib/pdf/layout'
+import { Alert } from '@/components/ui/Alert'
+import { Switch } from '@/components/ui/Switch'
+import { PrintingSection } from '@/components/doctor/settings/PrintingSection'
+import { VideosSection } from '@/components/doctor/settings/VideosSection'
+import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
+import { failureText, networkFailureText } from '@/lib/clientErrors'
+import { DEFAULT_MARGINS, type PrintMargins } from '@/lib/pdf/layout'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
@@ -44,23 +51,12 @@ function SettingsPageContent() {
   const [qrFile, setQrFile] = useState<File | null>(null)
   const qrInputRef = useRef<HTMLInputElement>(null)
   const [sameAsWhatsapp, setSameAsWhatsapp] = useState(false)
-
-  // Prescription printing: letterhead upload happens on its own (not with Save), spacing saves with the rest.
-  const letterheadInputRef = useRef<HTMLInputElement>(null)
-  const [letterheadBusy, setLetterheadBusy] = useState(false)
-  const [letterheadError, setLetterheadError] = useState('')
-  const [letterheadVersion, setLetterheadVersion] = useState(() => Date.now())
+  // Messages that used to be browser pop-ups: they now show on the page where they can be read and announced.
+  const [notice, setNotice] = useState<string | null>(null)
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-
-  // Password change state
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordError, setPasswordError] = useState('')
-  const [passwordSuccess, setPasswordSuccess] = useState(false)
 
   useEffect(() => {
     fetch('/api/doctor/profile')
@@ -104,7 +100,7 @@ function SettingsPageContent() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -112,7 +108,7 @@ function SettingsPageContent() {
   const handleQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setQrFile(file)
     setQrPreview(URL.createObjectURL(file))
   }
@@ -120,7 +116,7 @@ function SettingsPageContent() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('File must be under 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
   }
@@ -138,22 +134,6 @@ function SettingsPageContent() {
       }
       return { ...prev, timings }
     })
-  }
-
-  // YouTube Links Handlers
-  const handleAddYoutube = () => {
-    setDoctor((p: any) => p ? { ...p, youtubeLinks: [...(p.youtubeLinks || []), ''] } : p)
-  }
-  const handleYoutubeChange = (index: number, value: string) => {
-    setDoctor((p: any) => {
-      if (!p) return p
-      const links = [...(p.youtubeLinks || [])]
-      links[index] = value
-      return { ...p, youtubeLinks: links }
-    })
-  }
-  const handleRemoveYoutube = (index: number) => {
-    setDoctor((p: any) => p ? { ...p, youtubeLinks: (p.youtubeLinks || []).filter((_: any, i: number) => i !== index) } : p)
   }
 
   // Products Handlers
@@ -177,7 +157,7 @@ function SettingsPageContent() {
   const handleProductPhoto = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 1024 * 1024) { alert('Product photo must be under 1MB'); return }
+    if (file.size > 1024 * 1024) { setNotice('Product photo must be under 1MB'); return }
     const reader = new FileReader()
     reader.onload = (ev) => {
       handleProductChange(index, 'photoUrl', ev.target?.result as string)
@@ -185,41 +165,10 @@ function SettingsPageContent() {
     reader.readAsDataURL(file)
   }
 
-  const uploadLetterhead = async (file: File) => {
-    setLetterheadBusy(true); setLetterheadError('')
-    try {
-      const fd = new FormData()
-      fd.append('letterhead', file)
-      const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setLetterheadError(data.error ?? 'Could not upload the letterhead'); return }
-      setDoctor(prev => prev ? { ...prev, letterheadPath: data.doctor?.letterheadPath ?? 'set' } : prev)
-      setLetterheadVersion(Date.now())
-    } finally {
-      setLetterheadBusy(false)
-      if (letterheadInputRef.current) letterheadInputRef.current.value = ''
-    }
-  }
-
-  const removeLetterhead = async () => {
-    if (!confirm('Remove the letterhead? Prescriptions will go back to the standard header.')) return
-    setLetterheadBusy(true); setLetterheadError('')
-    try {
-      const res = await fetch('/api/doctor/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLetterhead: true }) })
-      if (!res.ok) { setLetterheadError((await res.json().catch(() => ({}))).error ?? 'Could not remove the letterhead'); return }
-      setDoctor(prev => prev ? { ...prev, letterheadPath: null } : prev)
-    } finally {
-      setLetterheadBusy(false)
-    }
-  }
-
-  const margins: PrintMargins = { ...DEFAULT_MARGINS, ...(doctor?.printSettings ?? {}) }
-  const setMargin = (key: keyof PrintMargins, value: string) =>
-    setDoctor(prev => prev ? { ...prev, printSettings: { ...DEFAULT_MARGINS, ...(prev.printSettings ?? {}), [key]: value === '' ? 0 : Number(value) } } : prev)
-
   const handleSave = async () => {
     if (!doctor) return
     setSaving(true)
+    setNotice(null)
     try {
       let updatedPaymentDetails = { ...doctor.paymentDetails }
       
@@ -282,46 +231,27 @@ function SettingsPageContent() {
           consultationFee: doctor.consultationFee,
           followUpFee: doctor.followUpFee,
           summaryHour: doctor.summaryHour ?? 10,
-          printSettings: margins,
+          printSettings: { ...DEFAULT_MARGINS, ...(doctor.printSettings ?? {}) },
           theme: { primary: doctor.theme?.primary || null },
         }),
       })
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        alert('Failed to save settings: ' + (errData.error || 'Server error'));
+        setNotice(failureText(errData, 'Failed to save settings'));
         return;
       }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (e: any) {
-      alert('Error saving settings: ' + e.message);
+      setNotice(networkFailureText());
     } finally {
       setSaving(false)
     }
   }
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setPasswordError('')
-    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return }
-    if (newPassword.length < 10) { setPasswordError('Password must be at least 10 characters'); return }
-
-    const res = await fetch('/api/doctor/password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setPasswordError(data.error); return }
-    setPasswordSuccess(true)
-    setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
-    // Every session is revoked on a password change, so sign in again.
-    setTimeout(() => { window.location.href = '/doctor/login' }, 1500)
-  }
-
-  if (loading) return <div className="flex justify-center py-20"><div className="spinner" /></div>
+  if (loading) return <LoadingBlock className="py-20" />
   if (!doctor) return null
 
   return (
@@ -332,6 +262,7 @@ function SettingsPageContent() {
           {saved ? <><Check size={16} /> Saved!</> : saving ? 'Saving...' : <><Save size={16} /> Save Changes</>}
         </button>
       </div>
+      {notice && <Alert>{notice}</Alert>}
 
       {/* Clinic Branding */}
       <div className="card p-6 space-y-5">
@@ -340,7 +271,7 @@ function SettingsPageContent() {
         {/* Logo and Photo Uploads */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
           <div className="form-group">
-            <label className="form-label">Clinic Logo</label>
+            <span className="form-label block">Clinic Logo</span>
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
                 {(logoPreview || doctor.logoUrl) ? (
@@ -360,7 +291,7 @@ function SettingsPageContent() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Doctor Photo (vCard Profile)</label>
+            <span className="form-label block">Doctor Photo (vCard Profile)</span>
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
                 {(photoPreview || doctor.photoUrl) ? (
@@ -584,13 +515,15 @@ function SettingsPageContent() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Reminder Intervals (hours before appointment)</label>
-          <div className="flex gap-3 flex-wrap">
+          <span id="reminder-intervals-label" className="form-label block">Reminder Intervals (hours before appointment)</span>
+          <div className="flex gap-3 flex-wrap" role="group" aria-labelledby="reminder-intervals-label">
             {[1, 2, 4, 6, 12, 24, 48].map(h => {
               const active = (doctor.reminderIntervals ?? []).includes(h)
               return (
                 <button
                   key={h}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => {
                     const current = doctor.reminderIntervals ?? []
                     const updated = active ? current.filter(x => x !== h) : [...current, h].sort((a, b) => b - a)
@@ -630,12 +563,7 @@ function SettingsPageContent() {
 
         <div className="form-group pt-4 border-t border-slate-100">
           <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => setDoctor((p: any) => p ? { ...p, enableChiefComplaint: !(p.enableChiefComplaint ?? true) } : p)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${doctor.enableChiefComplaint ?? true ? 'bg-blue-600' : 'bg-slate-200'}`}
-            >
-              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${doctor.enableChiefComplaint ?? true ? 'translate-x-5' : ''}`} />
-            </div>
+            <Switch checked={doctor.enableChiefComplaint ?? true} onChange={next => setDoctor((p: any) => p ? { ...p, enableChiefComplaint: next } : p)} />
             <div>
               <span className="font-medium text-slate-700">Enable Chief Complaint Field</span>
               <p className="text-xs text-slate-500 mt-0.5">When enabled, patients will be required to provide their chief complaint during the online booking flow.</p>
@@ -645,12 +573,7 @@ function SettingsPageContent() {
 
         <div className="form-group pt-4 border-t border-slate-100">
           <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => setDoctor((p: any) => p ? { ...p, enableMedicalHistory: !(p.enableMedicalHistory ?? true) } : p)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${doctor.enableMedicalHistory ?? true ? 'bg-blue-600' : 'bg-slate-200'}`}
-            >
-              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${doctor.enableMedicalHistory ?? true ? 'translate-x-5' : ''}`} />
-            </div>
+            <Switch checked={doctor.enableMedicalHistory ?? true} onChange={next => setDoctor((p: any) => p ? { ...p, enableMedicalHistory: next } : p)} />
             <div>
               <span className="font-medium text-slate-700">Enable Medical History Field</span>
               <p className="text-xs text-slate-500 mt-0.5">When enabled, patients will have the option to provide their medical history during the online booking flow.</p>
@@ -684,12 +607,7 @@ function SettingsPageContent() {
               <div key={day} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <div
-                      onClick={() => handleDayOpenToggle(day)}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${timing.open ? 'bg-blue-600' : 'bg-slate-200'}`}
-                    >
-                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${timing.open ? 'translate-x-5' : ''}`} />
-                    </div>
+                    <Switch checked={timing.open} onChange={() => handleDayOpenToggle(day)} />
                     <span className="font-medium text-slate-700 capitalize">{day}</span>
                   </label>
                   {!timing.open && <span className="text-xs text-red-600">Closed</span>}
@@ -776,7 +694,7 @@ function SettingsPageContent() {
           <textarea id="bank-details" className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
         </div>
         <div className="form-group">
-          <label className="form-label">QR Code Image</label>
+          <span className="form-label block">QR Code Image</span>
           <div className="flex items-center gap-4">
             <div className="w-28 h-28 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
               {(qrPreview || doctor.paymentDetails?.qrCodeUrl) ? (
@@ -796,90 +714,9 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {/* Prescription printing */}
-      <div className="card p-6 space-y-5">
-        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Prescription Printing</h2>
+      <PrintingSection value={doctor} onChange={patch => setDoctor(p => (p ? { ...p, ...patch } : p))} />
 
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-slate-700">Letterhead</p>
-            <p className="text-sm text-slate-500">
-              Upload your letterhead as a full A4 page image (JPG or PNG, up to 5 MB). Prescriptions, downloads and WhatsApp copies are then drawn on it.
-              Without one, the standard header with your logo and details is used.
-            </p>
-          </div>
-          {doctor?.letterheadPath ? (
-            <div className="flex items-start gap-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/doctor/letterhead?v=${letterheadVersion}`} alt="Your letterhead" className="w-28 rounded border border-slate-200 shadow-sm" />
-              <div className="space-y-2">
-                <button type="button" className="btn btn-outline btn-sm" disabled={letterheadBusy} onClick={() => letterheadInputRef.current?.click()}>
-                  <Upload size={14} /> {letterheadBusy ? 'Uploading...' : 'Replace'}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm text-red-500 block" disabled={letterheadBusy} onClick={removeLetterhead}>
-                  <X size={14} /> Remove
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button type="button" className="btn btn-outline btn-sm" disabled={letterheadBusy} onClick={() => letterheadInputRef.current?.click()}>
-              <Upload size={14} /> {letterheadBusy ? 'Uploading...' : 'Upload letterhead'}
-            </button>
-          )}
-          <input ref={letterheadInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadLetterhead(f) }} />
-          {letterheadError && <p className="text-sm text-red-600" role="alert">{letterheadError}</p>}
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-slate-700">Spacing for pre-printed letterhead paper</p>
-            <p className="text-sm text-slate-500">
-              When you tick "Print on letterhead", the prescription is printed without our header or footer. These gaps (in millimetres) keep the text clear of your printed header and footer.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(['top', 'bottom', 'left', 'right'] as const).map(key => (
-              <div key={key} className="form-group">
-                <label className="form-label capitalize" htmlFor={`margin-${key}`}>{key} (mm)</label>
-                <input
-                  id={`margin-${key}`} type="number" inputMode="decimal" step="0.5"
-                  min={MARGIN_LIMITS[key][0]} max={MARGIN_LIMITS[key][1]}
-                  className="form-input" value={margins[key]} onChange={e => setMargin(key, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <a href="/api/doctor/print-test?mode=preprinted" target="_blank" rel="noopener" className="btn btn-outline btn-sm">Print a test page (pre-printed paper)</a>
-            <a href="/api/doctor/print-test?mode=standard" target="_blank" rel="noopener" className="btn btn-ghost btn-sm">Preview standard layout</a>
-          </div>
-          <p className="text-xs text-slate-500">Save your changes first. The test page uses the saved spacing. Print it on your letterhead paper at 100% scale (not "fit to page") and adjust until the text sits where you want it.</p>
-        </div>
-      </div>
-
-      {/* YouTube Links */}
-      <div className="card p-6 space-y-4">
-        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">YouTube Videos</h2>
-        <p className="text-sm text-slate-500 mb-2">Embed YouTube videos on your vCard (e.g., patient testimonials, treatments).</p>
-        <div className="space-y-3">
-          {(doctor.youtubeLinks || []).map((link, idx) => (
-            <div key={idx} className="flex gap-2">
-              <input aria-label={`YouTube link ${idx + 1}`} 
-                className="form-input flex-1" 
-                placeholder="https://youtube.com/watch?v=..." 
-                value={link} 
-                onChange={e => handleYoutubeChange(idx, e.target.value)} 
-              />
-              <button type="button" onClick={() => handleRemoveYoutube(idx)} className="btn btn-outline text-red-500 border-red-200 hover:bg-red-50 px-3">
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={handleAddYoutube} className="btn btn-outline btn-sm">
-            + Add YouTube Link
-          </button>
-        </div>
-      </div>
+      <VideosSection links={doctor.youtubeLinks || []} onChange={links => setDoctor(p => (p ? { ...p, youtubeLinks: links } : p))} />
 
       {/* Products Catalog */}
       <div className="card p-6 space-y-4">
@@ -913,17 +750,17 @@ function SettingsPageContent() {
                 <div className="sm:col-span-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-500 uppercase">Product Name</label>
-                      <input aria-label="Product Name" className="form-input text-sm" placeholder="e.g. Skin Care Kit" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} />
+                      <label htmlFor={`product-name-${prod.id}`} className="text-xs font-semibold text-slate-500 uppercase">Product Name</label>
+                      <input id={`product-name-${prod.id}`} className="form-input text-sm" placeholder="e.g. Skin Care Kit" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-500 uppercase">Price</label>
-                      <input aria-label="Price" className="form-input text-sm" placeholder="₹1500" value={prod.price} onChange={e => handleProductChange(idx, 'price', e.target.value)} />
+                      <label htmlFor={`product-price-${prod.id}`} className="text-xs font-semibold text-slate-500 uppercase">Price</label>
+                      <input id={`product-price-${prod.id}`} className="form-input text-sm" placeholder="₹1500" value={prod.price} onChange={e => handleProductChange(idx, 'price', e.target.value)} />
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">Description</label>
-                    <textarea aria-label="Description" className="form-textarea text-sm" rows={2} placeholder="Brief description of the product..." value={prod.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} />
+                    <label htmlFor={`product-description-${prod.id}`} className="text-xs font-semibold text-slate-500 uppercase">Description</label>
+                    <textarea id={`product-description-${prod.id}`} className="form-textarea text-sm" rows={2} placeholder="Brief description of the product..." value={prod.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -937,27 +774,7 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {/* Change Password */}
-      <div className="card p-6 space-y-4">
-        <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Change Password</h2>
-        <form onSubmit={handlePasswordChange} className="space-y-4">
-          <div className="form-group">
-            <label htmlFor="current-password" className="form-label">Current Password</label>
-            <input id="current-password" type="password" className="form-input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label htmlFor="new-password" className="form-label">New Password</label>
-            <input id="new-password" type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={10} required />
-          </div>
-          <div className="form-group">
-            <label htmlFor="confirm-new-password" className="form-label">Confirm New Password</label>
-            <input id="confirm-new-password" type="password" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-          </div>
-          {passwordError && <p className="form-error" role="alert">{passwordError}</p>}
-          {passwordSuccess && <p className="text-green-600 text-sm">Password changed. Signing you out so you can sign in again…</p>}
-          <button type="submit" className="btn btn-primary">Update Password</button>
-        </form>
-      </div>
+      <PasswordSection />
 
       {/* Sticky Save Bar */}
       <div className="sticky bottom-4 z-40 mt-8">

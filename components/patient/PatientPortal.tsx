@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { PageShell } from '@/components/ui/PageShell'
 import { LogOut, Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
@@ -211,7 +212,7 @@ END:VCARD`
   }
 
   return (
-    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+    <PageShell>
       {/* ── Hero Header ─────────────────────────────────────── */}
       <div
         id="about"
@@ -237,7 +238,7 @@ END:VCARD`
           {doctor.pageViews} views
         </div>
 
-        <div className="relative page-container-sm pt-12 pb-6 text-white">
+        <div className="relative container-narrow pt-12 pb-6 text-white">
           <div className="flex flex-col items-center text-center gap-5">
             {/* Dr Photo (Primary) and Clinic Logo (Secondary) */}
             <div className="relative">
@@ -264,7 +265,7 @@ END:VCARD`
               <p className="mt-1.5 text-base font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 {doctor.clinicName}
               </p>
-              <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.70)' }}>
+              <p className="mt-1 text-sm" style={{ color: '#FFFFFF' }}>
                 {doctor.qualifications && <span>{doctor.qualifications} · </span>}
                 Reg: {doctor.registrationNumber}
               </p>
@@ -338,9 +339,10 @@ END:VCARD`
       </div>
 
       {/* ── Content Cards ────────────────────────────────────── */}
-      <div className="page-container-sm space-y-4 pb-32" style={{ marginTop: '-24px' }}>
-
-        {/* ── Book an appointment ── */}
+      <div className="container-split pb-32 lg:pb-12" style={{ marginTop: '-24px' }}>
+       <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+        {/* ── Book an appointment (stays in view beside the details on wide screens) ── */}
+        <div className="lg:col-span-5 lg:sticky lg:top-6">
         <div id="book" className="card p-6 animate-fade-in scroll-mt-20 relative z-10 mt-2 space-y-4">
           <div>
             <h2 className="text-xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
@@ -395,7 +397,9 @@ END:VCARD`
             </div>
           )}
         </div>
+        </div>
 
+        <div className="lg:col-span-7 space-y-4 mt-4 lg:mt-0">
         {/* Clinic Info */}
         {(doctor.address || doctor.phone) && (
           <div id="location" className="card p-6 space-y-4 animate-fade-in scroll-mt-20">
@@ -571,13 +575,15 @@ END:VCARD`
             </div>
           </div>
         )}
-        <div className="pb-24">
+        </div>
+       </div>
+        <div className="pb-24 lg:pb-0">
           <SiteFooter />
         </div>
       </div>
 
       {/* ── Sticky Bottom Navigation ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 z-50 pb-safe">
+      <nav aria-label="Sections" className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 z-50 pb-safe">
         <div className="max-w-md mx-auto grid grid-cols-5 items-center px-2 py-3">
           
           {/* 1. About */}
@@ -590,7 +596,7 @@ END:VCARD`
           
           {/* 2. Products */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: doctor.products?.length ? 1 : 0.5, pointerEvents: doctor.products?.length ? 'auto' : 'none' }}>
+            <button disabled={!(doctor.products?.length)} onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: (doctor.products?.length) ? 1 : 0.5 }}>
               <Package size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Products</span>
             </button>
@@ -608,7 +614,7 @@ END:VCARD`
 
           {/* 4. Videos */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: doctor.youtubeLinks?.length ? 1 : 0.5, pointerEvents: doctor.youtubeLinks?.length ? 'auto' : 'none' }}>
+            <button disabled={!(doctor.youtubeLinks?.length)} onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.youtubeLinks?.length) ? 1 : 0.5 }}>
               <PlaySquare size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Videos</span>
             </button>
@@ -616,14 +622,14 @@ END:VCARD`
 
           {/* 5. Payment */}
           <div className="flex justify-center">
-            <button onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 1 : 0.5, pointerEvents: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 'auto' : 'none' }}>
+            <button disabled={!((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)))} onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: ((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))) ? 1 : 0.5 }}>
               <CreditCard size={20} />
               <span className="text-xs font-medium uppercase tracking-wider">Payment</span>
             </button>
           </div>
 
         </div>
-      </div>
-    </div>
+      </nav>
+    </PageShell>
   )
 }

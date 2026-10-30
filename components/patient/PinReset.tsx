@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import PinInput from './PinInput'
+import { Alert } from '@/components/ui/Alert'
 
 interface Props {
   initialPhone: string
@@ -62,7 +63,7 @@ export default function PinReset({ initialPhone, onDone, onCancel }: Props) {
             <label className="form-label" htmlFor="reset-phone">Mobile number (with country code)</label>
             <input id="reset-phone" type="tel" inputMode="tel" className="form-input" placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} required />
           </div>
-          {error && <p className="form-error" role="alert">{error}</p>}
+          {error && <Alert>{error}</Alert>}
           <div className="flex gap-2">
             <button className="btn btn-primary flex-1" disabled={busy || phone.replace(/\D/g, '').length < 10}>{busy ? 'Sending…' : 'Send code'}</button>
             <button type="button" className="btn btn-ghost" onClick={onCancel}>Back</button>
@@ -78,7 +79,7 @@ export default function PinReset({ initialPhone, onDone, onCancel }: Props) {
           </div>
           <PinInput id="reset-pin" label="New 4-digit PIN" value={pin} onChange={setPin} />
           <PinInput id="reset-pin2" label="Type it again" value={pin2} onChange={setPin2} />
-          {error && <p className="form-error" role="alert">{error}</p>}
+          {error && <Alert>{error}</Alert>}
           <div className="flex gap-2">
             <button className="btn btn-primary flex-1" disabled={busy || code.length !== 6 || pin.length !== 4 || pin2.length !== 4}>{busy ? 'Saving…' : 'Set new PIN'}</button>
             <button type="button" className="btn btn-ghost" onClick={() => { setStep('request'); setError('') }}>Back</button>

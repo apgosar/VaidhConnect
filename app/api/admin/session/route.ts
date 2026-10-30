@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { adminHostAllowed, createAdminSession, clearAdminSession, getPlatformAdmin } from '@/lib/auth/platform'
+import { apiError } from '@/lib/errors'
 
-const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
+const notFound = () => apiError('NOT_FOUND')
 
 export async function GET() {
   if (!(await adminHostAllowed())) return notFound()

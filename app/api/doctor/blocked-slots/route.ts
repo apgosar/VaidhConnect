@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { z } from 'zod'
 import { parseBody } from '@/lib/validation'
+import { apiError } from '@/lib/errors'
 
 const blockSchema = z.object({
   startTime: z.string().datetime({ offset: true }),
@@ -16,11 +17,11 @@ const blockSchema = z.object({
 export async function GET(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'blocked:manage')
     if (denied) return denied
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
     return Response.json({ blocks })
   } catch (error) {
     console.error('[blocked-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -71,11 +72,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'blocked:manage')
     if (denied) return denied
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
     return Response.json({ block: { id: newBlockRef.id, ...blockData } }, { status: 201 })
   } catch (error) {
     console.error('[blocked-post]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -109,11 +110,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const db = tenantDb(tenant)
     const session = await getSession()
     if (!session?.uid) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return apiError('UNAUTHORIZED')
     }
     const denied = forbid(session, 'blocked:manage')
     if (denied) return denied
@@ -127,13 +128,13 @@ export async function DELETE(request: Request) {
     const blockDoc = await blockRef.get()
 
     if (!blockDoc.exists || blockDoc.data()?.doctorId !== tenant.clinicId) {
-      return Response.json({ error: 'Not found' }, { status: 404 })
+      return apiError('NOT_FOUND')
     }
 
     await blockRef.delete()
     return Response.json({ message: 'Deleted' })
   } catch (error) {
     console.error('[blocked-delete]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

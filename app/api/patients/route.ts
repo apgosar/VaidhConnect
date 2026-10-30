@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { patientDetailsSchema, parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
+import { apiError } from '@/lib/errors'
 
 // POST — staff register a patient (e.g. at the front desk). Public patient
 // self-registration no longer exists: patients are created as part of a
@@ -11,9 +12,9 @@ import { audit } from '@/lib/audit'
 export async function POST(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'patients:manage')
     if (denied) return denied
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     return Response.json({ patient: { id: ref.id, ...data } }, { status: 201 })
   } catch (error) {
     console.error('[patient-create]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -48,9 +49,9 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const tenant = await getTenant()
-    if (!tenant) return Response.json({ error: 'Clinic not found' }, { status: 404 })
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
     const session = await getSession()
-    if (!session?.uid) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.uid) return apiError('UNAUTHORIZED')
     const denied = forbid(session, 'patients:manage')
     if (denied) return denied
 
@@ -73,6 +74,6 @@ export async function PUT(request: Request) {
     return Response.json({ patient: { id, ...p, dob: p.dob?.toDate() } })
   } catch (error) {
     console.error('[patient-update]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

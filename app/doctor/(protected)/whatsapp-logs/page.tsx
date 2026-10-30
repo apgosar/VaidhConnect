@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
 import { MessageSquare, CheckCircle2, XCircle, RefreshCw, ChevronDown, Phone, Info, Copy, Check } from 'lucide-react'
 import type { Metadata } from 'next'
+import { Alert } from '@/components/ui/Alert'
 
 interface WhatsAppLog {
   id: string
@@ -289,15 +290,7 @@ export default function WhatsAppLogsPage() {
       )}
 
       {/* Content */}
-      {error && (
-        <div
-          className="rounded-lg p-4 text-sm flex items-center gap-2"
-          style={{ background: 'rgba(181,74,60,0.07)', border: '1px solid rgba(181,74,60,0.18)', color: '#B54A3C' }}
-        >
-          <XCircle size={16} />
-          {error}
-        </div>
-      )}
+      {error && <Alert>{error}</Alert>}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 gap-2" style={{ color: 'var(--color-sage)' }}>

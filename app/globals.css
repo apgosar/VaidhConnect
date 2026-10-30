@@ -26,6 +26,7 @@
   --color-danger-icon: #DC2626;   /* delete icons: 4.8:1 on white */
   --color-border-input: #7A8B7F;  /* form control outline: 3.6:1 on the field (WCAG 1.4.11 needs 3:1) */
   --color-on-whatsapp: #0B3D2E;   /* text on the WhatsApp green: 6.1:1 */
+  --color-on-gold: #2B2B26;       /* text on the gold button, whatever brand green the clinic chose: 5.8:1 */
 
   /* Semantic aliases */
   --color-primary: var(--color-forest);
@@ -168,7 +169,7 @@ body {
 /* Gold primary CTA */
 .btn-primary {
   background-color: var(--color-gold);
-  color: var(--color-forest);
+  color: var(--color-on-gold);
   font-weight: 700;
 }
 
@@ -542,4 +543,104 @@ select option {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* ─── Shared component styles (components/ui) ───────────── */
+:root {
+  --color-success: #1C5C46;
+  --color-warning: #8A5A00;
+  --color-info: #1F4E79;
+}
+
+/* Status banners. Text colours are the AA-checked tokens on their own tinted background. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.alert-error   { background: rgba(181, 74, 60, 0.08);  border-color: rgba(181, 74, 60, 0.28);  color: var(--color-danger); }
+.alert-success { background: rgba(28, 92, 70, 0.08);   border-color: rgba(28, 92, 70, 0.28);   color: var(--color-success); }
+.alert-warning { background: rgba(138, 90, 0, 0.08);   border-color: rgba(138, 90, 0, 0.28);   color: var(--color-warning); }
+.alert-info    { background: rgba(31, 78, 121, 0.08);  border-color: rgba(31, 78, 121, 0.28);  color: var(--color-info); }
+.alert > svg { flex-shrink: 0; margin-top: 2px; }
+
+/* The green bar at the top of patient pages. */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-forest);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.header-home {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+.header-home:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Dialogs */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 61, 46, 0.55);
+}
+.modal-panel {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  background: #FFFEF9;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ─── Breakpoint scale and containers ───────────────────── */
+/* Mobile first. Breakpoints used everywhere (Tailwind's defaults): sm 640 · md 768 · lg 1024 · xl 1280.
+   Forms and lists use .container-narrow, dashboards .container-wide. */
+.container-narrow {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+.container-wide {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+@media (min-width: 768px) {
+  .container-narrow { max-width: 720px; padding: 32px 24px; }
+  .container-wide { padding: 32px 24px; }
+}
+@media (min-width: 1024px) {
+  .container-narrow { max-width: 760px; }
+  .container-wide { padding: 40px 32px; }
+}
+
+/* The patient home page: one column up to tablet width, then booking beside the clinic details. */
+.container-split {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+@media (min-width: 768px) {
+  .container-split { max-width: 720px; padding: 32px 24px; }
+}
+@media (min-width: 1024px) {
+  .container-split { max-width: 1120px; padding: 40px 32px; }
 }

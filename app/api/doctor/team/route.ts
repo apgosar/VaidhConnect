@@ -7,6 +7,7 @@ import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { sendEmail } from '@/lib/email'
 import { audit } from '@/lib/audit'
+import { apiError } from '@/lib/errors'
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(120),
@@ -21,9 +22,9 @@ const updateSchema = z.object({
 
 async function owner() {
   const tenant = await getTenant()
-  if (!tenant) return { error: Response.json({ error: 'Clinic not found' }, { status: 404 }) }
+  if (!tenant) return { error: apiError('CLINIC_NOT_FOUND') }
   const session = await getSession()
-  if (!session?.uid) return { error: Response.json({ error: 'Unauthorized' }, { status: 401 }) }
+  if (!session?.uid) return { error: apiError('UNAUTHORIZED') }
   const denied = forbid(session, 'team:manage')
   if (denied) return { error: denied }
   return { tenant, session, db: tenantDb(tenant) }
@@ -47,7 +48,7 @@ export async function GET() {
     return Response.json({ members })
   } catch (error) {
     console.error('[team-get]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     return Response.json({ member: { uid: user.uid, email, name, role }, emailed, ...(emailed ? {} : { link }) }, { status: 201 })
   } catch (error) {
     console.error('[team-invite]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }
 
@@ -128,6 +129,6 @@ export async function PATCH(request: Request) {
     return Response.json({ ok: true })
   } catch (error) {
     console.error('[team-update]', error)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return apiError('SERVER_ERROR')
   }
 }

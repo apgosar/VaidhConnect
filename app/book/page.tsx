@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Home, Calendar, Clock, CheckCircle2, ChevronRight, Download } from 'lucide-react'
+import { Home, Calendar, Clock, CheckCircle2, ChevronRight, Download } from 'lucide-react'
 import { computeAge } from '@/lib/slots'
 import { addDaysYmd, describeYmd, formatDateTimeInTz, formatSlotLabelInTz } from '@/lib/time'
 import { createGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar'
 import { getDraft, savePatient, setDraft, type BookingDraft } from '@/lib/patientDevice'
 import PinInput from '@/components/patient/PinInput'
 import SiteFooter from '@/components/SiteFooter'
+import { PageShell, Container } from '@/components/ui/PageShell'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
+import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface TimeSlot { start: string; end: string; label: string }
 interface BlockedPeriod { startTime: string; endTime: string; reason: string | null }
@@ -137,18 +142,10 @@ export default function BookPage() {
     const calendarEvent = { id: bookedAppointment.id, title: eventTitle, description: eventDescription, location: eventLocation, startTime: bookedAppointment.startTime, endTime: apptEndTime }
 
     return (
-      <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
-        <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
-            <ArrowLeft size={16} /> Home
-          </button>
-          <div>
-            <h1 className="font-bold text-white text-base leading-snug" style={{ fontFamily: 'var(--font-display)' }}>Appointment Confirmed!</h1>
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>{at(bookedAppointment.startTime)}</p>
-          </div>
-        </div>
+      <PageShell>
+        <PageHeader title="Appointment Confirmed!" subtitle={at(bookedAppointment.startTime)} />
 
-        <div className="page-container-sm py-8 flex flex-col items-center justify-center">
+        <Container className="flex flex-col items-center justify-center">
           <div className="card p-6 sm:p-8 max-w-md w-full text-center animate-slide-up">
             <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(28,92,70,0.12)' }}>
               <CheckCircle2 size={40} style={{ color: 'var(--color-pine)' }} />
@@ -203,9 +200,9 @@ export default function BookPage() {
               <button onClick={() => router.push('/')} className="btn btn-ghost w-full" style={{ color: 'var(--color-sage)' }}>Back to Home</button>
             </div>
           </div>
-        </div>
+        </Container>
         <SiteFooter />
-      </div>
+      </PageShell>
     )
   }
 
@@ -213,15 +210,10 @@ export default function BookPage() {
   if (step === 'confirm' && selectedSlot) {
     const day = describeYmd(selectedDate)
     return (
-      <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
-        <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={() => setStep('select')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back">
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="font-bold text-white text-base" style={{ fontFamily: 'var(--font-display)' }}>Confirm Appointment</h1>
-        </div>
+      <PageShell>
+        <PageHeader title="Confirm Appointment" onBack={() => setStep('select')} />
 
-        <div className="page-container-sm py-6 space-y-4">
+        <Container className="space-y-4">
           <div className="card p-6 space-y-4">
             <h2 className="font-semibold text-lg" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Appointment Summary</h2>
             <div className="space-y-3">
@@ -273,30 +265,22 @@ export default function BookPage() {
             </div>
           )}
 
-          {error && <p className="form-error" role="alert">{error}</p>}
-          <button onClick={handleBook} className="btn btn-primary btn-lg w-full" disabled={booking || (!isStaff && (pin.length !== 4 || (hasPin === false && pin !== pinConfirm)))}>
-            {booking ? (<><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Booking...</span></>) : 'Confirm Booking'}
-          </button>
-        </div>
+          {error && <Alert>{error}</Alert>}
+          <Button size="lg" block onClick={handleBook} loading={booking} disabled={!isStaff && (pin.length !== 4 || (hasPin === false && pin !== pinConfirm))}>
+            {booking ? 'Booking...' : 'Confirm Booking'}
+          </Button>
+        </Container>
         <SiteFooter />
-      </div>
+      </PageShell>
     )
   }
 
   // ── Select a date and time ───────────────────────────────────────────
   return (
-    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
-      <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
-          <ArrowLeft size={16} /> Home
-        </button>
-        <div>
-          <h1 className="font-bold text-white text-base" style={{ fontFamily: 'var(--font-display)' }}>Book Appointment</h1>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.55)' }}>{patient.name}{age !== null ? ` · ${age} years` : ''}</p>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader title="Book Appointment" subtitle={`${patient.name}${age !== null ? ` · ${age} years` : ''}`} />
 
-      <div className="page-container-sm py-6 space-y-5">
+      <Container className="space-y-5">
         <div className="flex gap-2">
           <button onClick={() => router.push('/')} className="btn btn-outline flex-1 font-semibold" style={{ borderWidth: 2, borderColor: 'var(--color-forest)', color: 'var(--color-forest)' }}>
             <Home size={16} /> Back to home
@@ -340,7 +324,8 @@ export default function BookPage() {
           )}
 
           {!loadingSlots && blockedPeriods.length > 0 && (
-            <div className="rounded-lg p-3 mb-3 text-xs space-y-1" style={{ background: 'rgba(181,74,60,0.06)', border: '1px solid rgba(181,74,60,0.18)', color: '#B54A3C' }}>
+            <Alert variant="warning" className="mb-3 text-xs">
+            <div className="space-y-1">
               {blockedPeriods.map((b, i) => (
                 <p key={i}>
                   Doctor unavailable {formatSlotLabelInTz(new Date(b.startTime), timezone)} – {formatSlotLabelInTz(new Date(b.endTime), timezone)}
@@ -348,12 +333,11 @@ export default function BookPage() {
                 </p>
               ))}
             </div>
+            </Alert>
           )}
 
           {loadingSlots ? (
-            <div className="flex items-center justify-center py-8 gap-2" style={{ color: 'var(--color-sage)' }}>
-              <div className="spinner" /><span className="text-sm">Loading slots...</span>
-            </div>
+            <LoadingBlock className="py-8" label="Loading slots" />
           ) : slots.length === 0 ? (
             <div className="text-center py-8" style={{ color: 'var(--color-sage)' }}>
               <Clock size={32} className="mx-auto mb-2" style={{ opacity: 0.35 }} />
@@ -381,12 +365,12 @@ export default function BookPage() {
           )}
         </div>
 
-        {error && <p className="form-error" role="alert">{error}</p>}
+        {error && <Alert>{error}</Alert>}
         <button onClick={() => selectedSlot && setStep('confirm')} className="btn btn-primary btn-lg w-full" disabled={!selectedSlot}>
           Continue <ChevronRight size={18} />
         </button>
-      </div>
+      </Container>
       <SiteFooter />
-    </div>
+    </PageShell>
   )
 }
