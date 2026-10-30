@@ -9,7 +9,7 @@ interface Member { uid: string; email: string | null; name: string | null; role:
 const ROLE_HELP: Record<string, string> = {
   OWNER: 'Everything, including the team',
   DOCTOR: 'Clinical work and settings',
-  STAFF: 'Front desk: bookings, patients, payments',
+  STAFF: 'Bookings, patients, payments',
 }
 
 export default function TeamPage() {
