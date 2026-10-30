@@ -1,5 +1,5 @@
 import { tenantDb } from '../db/tenant'
-import { sendBookingConfirmation, sendCancellation, sendSummaryUpdate } from '../whatsapp'
+import { sendBookingConfirmation, sendCancellation, sendRescheduled, sendSummaryUpdate } from '../whatsapp'
 import { sendEmail } from '../email'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
 import type { Tenant } from '../tenant/types'
@@ -57,6 +57,34 @@ export async function notifyCancelled(tenant: Tenant, doctor: Doctor, patient: P
     await notifyDoctorScheduleUpdate(tenant, doctor, appt, `Cancellation by ${patient.name} for ${formatTimeInTz(appt.startTime, tenant.timezone)}`)
   } catch (err) {
     console.error('[notifyCancelled]', err)
+  }
+}
+
+/** The patient is told their appointment moved (WhatsApp + email), and the doctor's live schedule is refreshed. */
+export async function notifyRescheduled(tenant: Tenant, doctor: Doctor, patient: Patient, appt: Appt, previousStart: Date) {
+  try {
+    const clinicName = doctor.clinicName || 'Clinic'
+    const when = whenText(tenant, appt.startTime)
+    const was = whenText(tenant, previousStart)
+    const tasks: Promise<unknown>[] = [
+      sendRescheduled(patient.phone, { patientName: patient.name, clinicName, newTime: when, oldTime: was, clinicPhone: doctor.phone || clinicName }),
+    ]
+    if (patient.email) {
+      tasks.push(sendEmail({
+        to: patient.email,
+        subject: 'Appointment Rescheduled',
+        html: `<p>${escapeHtml(`Hi ${patient.name}, your appointment at ${clinicName} has been moved to ${when}. It was earlier scheduled for ${was}.`)}</p>`,
+      }))
+    }
+    await Promise.all(tasks)
+    // The doctor's schedule message covers today only: refresh it if either the old or the new time is today.
+    const today = ymdInTz(new Date(), tenant.timezone)
+    const touched = ymdInTz(appt.startTime, tenant.timezone) === today ? appt : ymdInTz(previousStart, tenant.timezone) === today ? { startTime: previousStart } : null
+    if (touched) {
+      await notifyDoctorScheduleUpdate(tenant, doctor, touched, `Rescheduled: ${patient.name} from ${formatTimeInTz(previousStart, tenant.timezone)} to ${formatTimeInTz(appt.startTime, tenant.timezone)}`)
+    }
+  } catch (err) {
+    console.error('[notifyRescheduled]', err)
   }
 }
 

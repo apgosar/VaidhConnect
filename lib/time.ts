@@ -122,3 +122,20 @@ export function formatDateShortInTz(date: Date, tz: string): string {
   const p = parts(date, tz, { day: '2-digit', month: 'short', year: 'numeric' })
   return `${p.day} ${p.month} ${p.year}`
 }
+
+/**
+ * A "YYYY-MM-DDTHH:mm" value (what <input type="datetime-local"> produces) read as the CLINIC's wall clock,
+ * returned as the UTC instant it names. null if it is malformed. A browser's own timezone never enters into
+ * it, so a doctor travelling abroad blocks the same hours the patients see.
+ */
+export function parseClinicLocal(value: string, tz: string): Date | null {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(value)
+  if (!m || !isValidYmd(m[1]) || Number(m[2]) > 23 || Number(m[3]) > 59) return null
+  return zonedToUtc(m[1], `${m[2]}:${m[3]}`, tz)
+}
+
+/** The inverse: a UTC instant as "YYYY-MM-DDTHH:mm" on the clinic's wall clock (to fill a datetime-local input). */
+export function toClinicLocal(date: Date, tz: string): string {
+  const p = parts(date, tz, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
+}

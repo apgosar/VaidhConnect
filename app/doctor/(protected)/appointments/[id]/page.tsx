@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, User, Clock, FileText, CreditCard,
   CheckCircle2, XCircle, Edit3, Save, Pill, Plus, Trash2,
-  Download, Printer, Phone
+  Download, Printer, Phone, CalendarClock
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
@@ -13,6 +13,7 @@ import type { Medicine, TaperStep } from '@/lib/constants'
 import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
 import { PAYMENT_MODES } from '@/lib/constants'
 import { LangText } from '@/components/ui/LangText'
+import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 
 interface Suggestion { name: string; dosage: string; frequency: string; duration: string; instructions?: string; taper?: Medicine['taper'] }
 interface Patient {
@@ -55,6 +56,7 @@ export default function AppointmentDetailPage() {
   const [savingPay, setSavingPay] = useState(false)
 
   const [error, setError] = useState('')
+  const [rescheduling, setRescheduling] = useState(false)
   // Sending the prescription to the patient on WhatsApp
   const [share, setShare] = useState<{ state: 'idle' | 'confirm' | 'sending' | 'sent' | 'failed'; message?: string }>({ state: 'idle' })
   // "Print on letterhead": the paper in the printer already carries the clinic's letterhead.
@@ -267,12 +269,28 @@ export default function AppointmentDetailPage() {
             appt.status === 'COMPLETED' ? 'badge-green' : 'badge-red'
           }`}>{appt.status}</span>
           {appt.status === 'BOOKED' && (
-            <button onClick={markCompleted} className="btn btn-success btn-sm">
-              <CheckCircle2 size={14} /> Done
-            </button>
+            <>
+              <button onClick={() => setRescheduling(true)} className="btn btn-outline btn-sm">
+                <CalendarClock size={14} aria-hidden="true" /> Reschedule
+              </button>
+              <button onClick={markCompleted} className="btn btn-success btn-sm">
+                <CheckCircle2 size={14} /> Done
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {rescheduling && (
+        <RescheduleDialog
+          open
+          appointmentId={appt.id}
+          currentLabel={formatDate(appt.startTime)}
+          patientName={appt.patient.name}
+          onClose={() => setRescheduling(false)}
+          onMoved={() => { setRescheduling(false); fetchAppt() }}
+        />
+      )}
 
       {/* Patient Info Card */}
       <div className="card p-4 flex flex-wrap gap-4 text-sm">

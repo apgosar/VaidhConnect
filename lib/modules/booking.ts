@@ -5,11 +5,13 @@ import { dayBoundsInTz, ymdInTz } from '../time'
 import { rateLimit } from '../ratelimit'
 import type { BookingInput, PatientDetails } from '../validation'
 import { getDayAvailability } from './availability'
-import { notifyBooked, notifyCancelled } from './notifications'
+import { notifyBooked, notifyCancelled, notifyRescheduled } from './notifications'
+import { patientRescheduleAllowance } from '../reschedulePolicy'
 import { getAccess, sessionOwnsAppointment, setInitialPin, verifyPin, PinError, type PatientSession } from './patientAccess'
 
 export class BookingError extends Error {
-  constructor(public status: number, message: string) { super(message) }
+  /** `code` lets a screen react to a specific refusal (a taken slot, a used-up allowance) without parsing the text. */
+  constructor(public status: number, message: string, public code?: string) { super(message) }
 }
 
 export type Actor =
@@ -258,4 +260,96 @@ export async function reopenAppointment(tenant: Tenant, id: string) {
     tx.update(ref, { status: 'BOOKED', updatedAt: new Date() })
     tx.set(lockRef, { appointmentId: id, startTime: start, createdAt: new Date() })
   })
+}
+
+export interface RescheduleInput { startTime: string; endTime: string }
+
+/**
+ * Move a booked appointment to another open slot. It is the SAME appointment (same id), so its prescription,
+ * payment and links stay attached; only the time, the slot lock and the reminder flags change.
+ *
+ * Staff may move any appointment. A patient may move their own, subject to lib/reschedulePolicy (a limited
+ * number of changes, and not close to the visit). The new slot gets the same checks as a new booking, and
+ * the move is one transaction: the old slot is freed and the new one taken together, or neither.
+ */
+export async function rescheduleAppointment(tenant: Tenant, id: string, input: RescheduleInput, auth: CancelAuth) {
+  const db = tenantDb(tenant)
+  const doctor = await loadDoctor(db)
+  const newStart = new Date(input.startTime)
+  const newEnd = new Date(input.endTime)
+  if (Number.isNaN(newStart.getTime()) || Number.isNaN(newEnd.getTime()) || newEnd <= newStart) throw new BookingError(400, 'Choose a valid time')
+
+  const ref = db.col('appointments').doc(id)
+  const before = await ref.get()
+  if (!before.exists) throw new BookingError(404, 'Appointment not found')
+
+  // The new slot must be a real, currently open one for this clinic (same rule as booking).
+  const day = await getDayAvailability(tenant, db, doctor as { id: string; timings: WeeklyTimings; slotDurationMins: number }, ymdInTz(newStart, tenant.timezone))
+  if (!day.slots.some(s => s.start === newStart.toISOString() && s.end === newEnd.toISOString())) {
+    throw new BookingError(409, 'This slot is no longer available', 'SLOT_TAKEN')
+  }
+
+  const now = new Date()
+  const newLockRef = db.col('slot_locks').doc(lockId(doctor.id, newStart))
+  const { start: dayStart, end: dayEnd } = dayBoundsInTz(newStart, tenant.timezone)
+  let oldStart!: Date
+  let patientId: string | null = null
+
+  await ref.firestore.runTransaction(async tx => {
+    const snap = await tx.get(ref)
+    if (!snap.exists) throw new BookingError(404, 'Appointment not found')
+    const a = snap.data() as any
+    if (a.status !== 'BOOKED') throw new BookingError(409, 'This appointment is not active')
+    oldStart = a.startTime.toDate()
+    const oldEnd: Date = a.endTime.toDate()
+    patientId = a.patientId ?? null
+
+    if (auth.kind === 'patient') {
+      const phone = a.patientId ? (await tx.get(db.col('patients').doc(a.patientId))).data()?.phone ?? null : null
+      if (!sessionOwnsAppointment(auth.session, a, phone)) throw new BookingError(403, 'Not allowed')
+      const allowance = patientRescheduleAllowance({ startTime: oldStart, rescheduleCount: a.rescheduleCount }, now)
+      if (!allowance.allowed) throw new BookingError(409, allowance.reason!, 'RESCHEDULE_NOT_ALLOWED')
+    }
+    if (oldStart.getTime() === newStart.getTime()) throw new BookingError(400, 'That is the time it already has. Choose a different one.')
+
+    // all reads first
+    const oldLockRef = db.col('slot_locks').doc(lockId(a.doctorId, oldStart))
+    const oldLock = await tx.get(oldLockRef)
+    const newLock = await tx.get(newLockRef)
+    const sameDay = await tx.get(db.col('appointments').where('startTime', '>=', dayStart).where('startTime', '<=', dayEnd))
+
+    if (newLock.exists) {
+      const holder = newLock.data()?.appointmentId as string | undefined
+      if (holder && holder !== id) {
+        const holderSnap = await tx.get(db.col('appointments').doc(holder))
+        if (holderSnap.exists && holderSnap.data()?.status === 'BOOKED') throw new BookingError(409, 'This slot is no longer available', 'SLOT_TAKEN')
+      }
+    }
+    const clash = sameDay.docs.some(d => {
+      const x = d.data()
+      return d.id !== id && x.doctorId === doctor.id && x.status === 'BOOKED' && newStart < x.endTime.toDate() && newEnd > x.startTime.toDate()
+    })
+    if (clash) throw new BookingError(409, 'This slot is no longer available', 'SLOT_TAKEN')
+
+    const diffHours = (newStart.getTime() - now.getTime()) / 3_600_000
+    tx.update(ref, {
+      startTime: newStart,
+      endTime: newEnd,
+      // reminders restart for the new time, by the same lead-time rules as a fresh booking
+      reminderSent24h: diffHours < 24,
+      reminderSent1h: diffHours < 1,
+      rescheduleCount: (a.rescheduleCount ?? 0) + 1,
+      rescheduledFrom: { startTime: oldStart, endTime: oldEnd },
+      rescheduledBy: auth.kind === 'staff' ? `staff:${auth.uid}` : 'patient',
+      rescheduledAt: now,
+      updatedAt: now,
+    })
+    if (oldLock.exists && oldLock.data()?.appointmentId === id) tx.delete(oldLockRef)
+    tx.set(newLockRef, { appointmentId: id, startTime: newStart, createdAt: now })
+  })
+
+  const patientSnap = patientId ? await db.col('patients').doc(patientId).get() : null
+  if (patientSnap?.exists) await notifyRescheduled(tenant, doctor, patientSnap.data() as any, { startTime: newStart }, oldStart)
+
+  return { id, startTime: newStart, endTime: newEnd, previousStartTime: oldStart }
 }

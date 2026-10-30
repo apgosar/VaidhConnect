@@ -55,7 +55,7 @@ async function main() {
 
     // ── find two open slots on clinic A ────────────────────────────────────
     let slots: any[] = []
-    for (let i = 0; i < 14 && slots.length < 3; i++) {
+    for (let i = 1; i < 15 && slots.length < 3; i++) {
       slots = (await http(aHost, `/api/appointments?mode=slots&date=${ymdPlus(cfg.today, i)}`)).body.slots ?? []
     }
     check('clinic A has bookable slots', slots.length >= 3)
@@ -250,6 +250,52 @@ async function main() {
     const stranger = otherPhone.res.headers.getSetCookie().map(c => c.split(';')[0]).find(c => c.startsWith('pp_session='))
     check('another patient cannot download it', !stranger || (await pdl(aHost, stranger)).status === 404)
     check('the patient prescription list needs the PIN too', (await http(aHost, '/api/patient/prescriptions')).status === 401 && (await http(aHost, '/api/patient/prescriptions', { cookie: pinCookie })).status === 200)
+
+    // ── rescheduling ───────────────────────────────────────────────────────
+    const s3 = slots[2]
+    const apptAt = async () => (await db.collection('clinics').doc(a).collection('appointments').doc(rxApptId).get()).data()!
+    const moveBy = (cookie: string | undefined, host: string, slot: { start: string; end: string }) => http(host, `/api/appointments/${rxApptId}/reschedule`, { method: 'POST', cookie, json: { startTime: slot.start, endTime: slot.end } })
+    check('rescheduling needs a login', (await moveBy(undefined, aHost, s3)).status === 401)
+    check('a PIN session cannot move an appointment on another clinic', (await moveBy(pinCookie, bHost, s3)).status === 401)
+    const clash = await moveBy(ownerCookie, aHost, s2) // s2 holds the front-desk booking made above
+    check('moving onto a taken slot is refused with SLOT_TAKEN', clash.status === 409 && clash.body?.code === 'SLOT_TAKEN', `(${clash.status} ${clash.body?.code})`)
+    const staffMove = await moveBy(ownerCookie, aHost, s3)
+    check('staff can move an appointment to a free slot', staffMove.status === 200, `(${staffMove.status} ${staffMove.body?.error ?? ''})`)
+    const afterMove = await apptAt()
+    check('it is the same appointment with the new time and the move recorded', afterMove.startTime.toDate().toISOString() === new Date(s3.start).toISOString() && afterMove.rescheduleCount === 1 && !!afterMove.rescheduledFrom)
+    const openNow = await http(aHost, `/api/appointments?mode=slots&date=${s1.start.slice(0, 10)}`)
+    check('the old slot is open again and the new one is taken', openNow.body?.slots?.some((x: any) => x.start === s1.start) && !openNow.body?.slots?.some((x: any) => x.start === s3.start))
+    const patientMove = await moveBy(pinCookie, aHost, s1)
+    check('the patient can move their own appointment', patientMove.status === 200, `(${patientMove.status} ${patientMove.body?.error ?? ''})`)
+    const tooMany = await moveBy(pinCookie, aHost, s3)
+    check('a patient is stopped after two moves', tooMany.status === 409 && tooMany.body?.code === 'RESCHEDULE_NOT_ALLOWED', `(${tooMany.status} ${tooMany.body?.code})`)
+    const staffAgain = await moveBy(ownerCookie, aHost, s3)
+    check('staff are not limited', staffAgain.status === 200, `(${staffAgain.status})`)
+    const meAfter = await http(aHost, '/api/patient/me', { cookie: pinCookie })
+    const mine = meAfter.body?.appointments?.find((x: any) => x.id === rxApptId)
+    check('My Appointments says the allowance is used up and why', mine?.canReschedule === false && /call the clinic/i.test(mine?.rescheduleReason ?? ''), JSON.stringify({ c: mine?.canReschedule }))
+
+    // ── block schedule ─────────────────────────────────────────────────────
+    const blockHttp = (path: string, method: string, json?: unknown, cookie: string | null = ownerCookie) => http(aHost, `/api/doctor/blocked-slots${path}`, { method, cookie: cookie ?? undefined, ...(json !== undefined ? { json } : {}) })
+    const { toClinicLocal } = await import('../lib/time')
+    const local = (iso: string) => toClinicLocal(new Date(iso), cfg.timezone)
+    check('block schedule needs a login', (await blockHttp('', 'GET', undefined, null)).status === 401 && (await http(bHost, '/api/doctor/blocked-slots', { cookie: ownerCookie })).status === 401)
+    const blockFrom = local(s3.start), blockTo = local(s3.end)
+    const made = await blockHttp('', 'POST', { start: blockFrom, end: blockTo, reason: 'ZZ Verify' })
+    check('a block made with the form\'s clinic-time values is accepted', made.status === 201, `(${made.status} ${made.body?.error ?? ''})`)
+    const blockId = made.body?.block?.id as string
+    cleanup.push(async () => { if (blockId) await db.collection('clinics').doc(a).collection('blocked_slots').doc(blockId).delete() })
+    check('it warns about the appointment now inside the block', made.body?.conflicts?.some((c: any) => c.id === rxApptId), JSON.stringify(made.body?.conflicts))
+    const pastId = `zz-past-${stamp}`
+    await db.collection('clinics').doc(a).collection('blocked_slots').doc(pastId).set({ doctorId: a, startTime: new Date(Date.now() - 3 * 86_400_000), endTime: new Date(Date.now() - 2 * 86_400_000), reason: 'ZZ past' })
+    cleanup.push(async () => { await db.collection('clinics').doc(a).collection('blocked_slots').doc(pastId).delete() })
+    const listed = await blockHttp('', 'GET')
+    check('the page lists upcoming blocks and hides the one that is over', listed.body?.blocks?.some((b: any) => b.id === blockId) && !listed.body?.blocks?.some((b: any) => b.id === pastId) && typeof listed.body?.timezone === 'string')
+    const edited = await blockHttp('', 'PATCH', { id: blockId, start: blockFrom, end: blockTo, reason: 'ZZ Verify edited' })
+    check('a block can be edited', edited.status === 200 && edited.body?.block?.reason === 'ZZ Verify edited', `(${edited.status})`)
+    check('a block with its end before its start is refused', (await blockHttp('', 'PATCH', { id: blockId, start: blockTo, end: blockFrom })).status === 400)
+    const gone = await blockHttp('', 'DELETE', { id: blockId })
+    check('a block can be removed', gone.status === 200 && gone.body?.removed === 1)
 
     const ownerAudit = await db.collection('clinics').doc(a).collection('audit_logs').where('action', '==', 'appointment.book').get()
     check('staff bookings are recorded in the activity log', ownerAudit.size >= 1)

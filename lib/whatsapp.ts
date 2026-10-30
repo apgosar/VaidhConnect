@@ -44,6 +44,8 @@ export function constructMessageBody(templateName: string, params: string[]): st
       return `Good morning Dr. ${params[0] || 'Doctor'}. Here is the schedule for ${params[1] || 'the clinic'} on ${params[2] || 'Today'}. You have ${params[3] || '0'} appointment(s): ${params[4] || 'No appointments'}. Have a great day.`
     case 'daily_summary_update':
       return `Schedule update for Dr. ${params[0] || 'Doctor'} at ${params[1] || 'the clinic'}: ${params[2] || 'Update'}. Total appointments today: ${params[3] || '0'}. Updated schedule: ${params[4] || 'No appointments'}. Thank you.`
+    case 'appt_rescheduled':
+      return `Hi ${params[0] || 'Patient'}, your appointment at ${params[1] || 'the clinic'} has been moved to ${params[2] || 'the new time'}. It was earlier scheduled for ${params[3] || 'the earlier time'}. If this new time does not suit you, please call the clinic on ${params[4] || 'the clinic'}. Thank you.`
     case 'prescription_share':
       return `Hi ${params[0] || 'Patient'}, here is your prescription from ${params[1] || 'the clinic'} for your visit on ${params[2] || 'your visit date'}. Please follow the doctor's advice, and call the clinic on ${params[3] || 'the clinic'} if you have any questions. Wishing you good health. [Prescription PDF attached]`
     case 'followup_reminder':
@@ -412,4 +414,28 @@ export async function sendFollowUpReminder(to: string, params: {
       ],
     }],
   }, { messageType: 'Follow-up Reminder', recipientName: params.patientName })
+}
+
+// 9. Appointment moved to another time (`appt_rescheduled`) — body-only, five variables, in order of appearance.
+export async function sendRescheduled(to: string, params: {
+  patientName: string
+  clinicName: string
+  newTime: string
+  oldTime: string
+  clinicPhone: string
+}): Promise<boolean> {
+  return sendWhatsAppTemplate(to, {
+    name: 'appt_rescheduled',
+    language: { code: 'en' },
+    components: [{
+      type: 'body',
+      parameters: [
+        { type: 'text', text: params.patientName },
+        { type: 'text', text: params.clinicName },
+        { type: 'text', text: params.newTime },
+        { type: 'text', text: params.oldTime },
+        { type: 'text', text: params.clinicPhone },
+      ],
+    }],
+  }, { messageType: 'Rescheduled', recipientName: params.patientName })
 }
