@@ -137,7 +137,7 @@ export default function BookPage() {
     const calendarEvent = { id: bookedAppointment.id, title: eventTitle, description: eventDescription, location: eventLocation, startTime: bookedAppointment.startTime, endTime: apptEndTime }
 
     return (
-      <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+      <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
         <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
             <ArrowLeft size={16} /> Home
@@ -213,7 +213,7 @@ export default function BookPage() {
   if (step === 'confirm' && selectedSlot) {
     const day = describeYmd(selectedDate)
     return (
-      <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+      <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
         <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <button onClick={() => setStep('select')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back">
             <ArrowLeft size={20} />
@@ -259,7 +259,7 @@ export default function BookPage() {
                 <>
                   <h2 className="font-semibold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Enter your PIN</h2>
                   <PinInput id="pin" label="4-digit PIN" value={pin} onChange={setPin} autoFocus />
-                  <a href="/appointments?reset=1" className="text-sm font-medium" style={{ color: 'var(--color-gold-dark)' }}>Forgot your PIN?</a>
+                  <a href="/appointments?reset=1" className="link-action">Forgot your PIN?</a>
                 </>
               ) : (
                 <>
@@ -273,7 +273,7 @@ export default function BookPage() {
             </div>
           )}
 
-          {error && <p className="form-error">{error}</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
           <button onClick={handleBook} className="btn btn-primary btn-lg w-full" disabled={booking || (!isStaff && (pin.length !== 4 || (hasPin === false && pin !== pinConfirm)))}>
             {booking ? (<><div className="spinner w-4 h-4" style={{ borderTopColor: 'var(--color-forest)' }} /><span>Booking...</span></>) : 'Confirm Booking'}
           </button>
@@ -285,7 +285,7 @@ export default function BookPage() {
 
   // ── Select a date and time ───────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <button onClick={() => router.push('/')} className="btn btn-sm flex items-center gap-1.5 font-semibold" aria-label="Back to home" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)' }}>
           <ArrowLeft size={16} /> Home
@@ -358,7 +358,7 @@ export default function BookPage() {
             <div className="text-center py-8" style={{ color: 'var(--color-sage)' }}>
               <Clock size={32} className="mx-auto mb-2" style={{ opacity: 0.35 }} />
               <p className="text-sm">No slots available on this day</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-sage-light)' }}>Try selecting another date</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Try selecting another date</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -381,7 +381,7 @@ export default function BookPage() {
           )}
         </div>
 
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
         <button onClick={() => selectedSlot && setStep('confirm')} className="btn btn-primary btn-lg w-full" disabled={!selectedSlot}>
           Continue <ChevronRight size={18} />
         </button>

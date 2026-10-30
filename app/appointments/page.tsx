@@ -98,7 +98,7 @@ function MyAppointments() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       <div className="px-4 py-4 flex items-center gap-3" style={{ background: 'var(--color-forest)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <button onClick={() => router.push('/')} className="btn btn-ghost p-2 -ml-2" style={{ color: 'rgba(255,255,255,0.70)' }} aria-label="Back to home">
           <ArrowLeft size={20} />
@@ -131,9 +131,9 @@ function MyAppointments() {
               </div>
             </div>
             <PinInput id="pin" label="PIN" value={pin} onChange={setPin} />
-            {error && <p className="form-error">{error}</p>}
+            {error && <p className="form-error" role="alert">{error}</p>}
             <button className="btn btn-primary btn-lg w-full" disabled={busy || pin.length !== 4 || phone.replace(/\D/g, '').length < 10}>{busy ? 'Signing in…' : 'Sign in'}</button>
-            <button type="button" className="text-sm font-medium w-full" style={{ color: 'var(--color-gold-dark)' }} onClick={() => { setError(''); setState('reset') }}>Forgot your PIN?</button>
+            <button type="button" className="link-action w-full" onClick={() => { setError(''); setState('reset') }}>Forgot your PIN?</button>
             <button type="button" className="btn btn-outline w-full" onClick={() => router.push('/')}>Book a new appointment</button>
           </form>
         )}
@@ -144,7 +144,7 @@ function MyAppointments() {
 
         {state === 'list' && (
           <>
-            {error && <p className="form-error">{error}</p>}
+            {error && <p className="form-error" role="alert">{error}</p>}
             {appointments.length === 0 ? (
               <div className="card p-8 text-center">
                 <Calendar size={40} className="mx-auto mb-3" style={{ color: 'var(--color-sage-light)' }} />

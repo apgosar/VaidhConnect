@@ -78,8 +78,8 @@ export default function BlockedSlotsPage() {
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="form-group">
-              <label className="form-label">Start Date & Time</label>
-              <input
+              <label htmlFor="start-date-time" className="form-label">Start Date & Time</label>
+              <input id="start-date-time"
                 type="datetime-local"
                 className="form-input"
                 value={startTime}
@@ -88,8 +88,8 @@ export default function BlockedSlotsPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">End Date & Time</label>
-              <input
+              <label htmlFor="end-date-time" className="form-label">End Date & Time</label>
+              <input id="end-date-time"
                 type="datetime-local"
                 className="form-input"
                 value={endTime}
@@ -100,10 +100,10 @@ export default function BlockedSlotsPage() {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Reason <span className="text-slate-400 text-xs font-normal">(optional)</span></label>
-            <input className="form-input" placeholder="e.g. Lunch break, Out of clinic, Surgery" value={reason} onChange={e => setReason(e.target.value)} />
+            <label htmlFor="reason" className="form-label">Reason <span className="text-slate-500 text-xs font-normal">(optional)</span></label>
+            <input id="reason" className="form-input" placeholder="e.g. Lunch break, Out of clinic, Surgery" value={reason} onChange={e => setReason(e.target.value)} />
           </div>
-          {error && <p className="form-error">{error}</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
           <button type="submit" className="btn btn-primary" disabled={saving}>
             <Plus size={16} /> {saving ? 'Blocking...' : 'Block This Period'}
           </button>
@@ -118,7 +118,7 @@ export default function BlockedSlotsPage() {
         ) : blocks.length === 0 ? (
           <div className="card p-8 text-center">
             <Clock size={32} className="mx-auto mb-2 text-slate-300" />
-            <p className="text-slate-400 text-sm">No blocked periods. Your schedule is fully open.</p>
+            <p className="text-slate-500 text-sm">No blocked periods. Your schedule is fully open.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -131,7 +131,7 @@ export default function BlockedSlotsPage() {
                   <div>
                     <p className="font-medium text-slate-800 text-sm">
                       {format(parseISO(block.startTime), 'dd MMM yyyy, hh:mm a')}
-                      <span className="text-slate-400 mx-1">→</span>
+                      <span className="text-slate-500 mx-1">→</span>
                       {format(parseISO(block.endTime), 'hh:mm a, dd MMM yyyy')}
                     </p>
                     {block.reason && <p className="text-xs text-slate-500 mt-0.5">{block.reason}</p>}
@@ -139,7 +139,7 @@ export default function BlockedSlotsPage() {
                 </div>
                 <button
                   onClick={() => handleDelete(block.id)}
-                  className="btn btn-ghost p-2 text-red-400 hover:text-red-600 shrink-0"
+                  className="btn btn-ghost p-2 text-red-600 hover:text-red-700 shrink-0"
                   aria-label="Delete block"
                 >
                   <Trash2 size={15} />

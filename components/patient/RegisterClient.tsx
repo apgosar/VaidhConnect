@@ -78,7 +78,7 @@ export default function RegisterClient({ config }: RegisterClientProps) {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* Header */}
       <div
         className="px-4 py-4 flex items-center gap-3"
@@ -202,7 +202,7 @@ export default function RegisterClient({ config }: RegisterClientProps) {
             {config?.enableMedicalHistory !== false && (
               <div className="form-group">
                 <label className="form-label" htmlFor="medicalHistory">
-                  Medical History <span className="text-slate-400 text-xs font-normal">(optional)</span>
+                  Medical History <span className="text-slate-500 text-xs font-normal">(optional)</span>
                 </label>
                 <div className="relative">
                   <Heart size={16} className="absolute left-3 top-3" style={{ color: 'var(--color-sage)' }} />
@@ -221,7 +221,7 @@ export default function RegisterClient({ config }: RegisterClientProps) {
             {/* Email */}
             <div className="form-group">
               <label className="form-label" htmlFor="email">
-                Email <span className="text-slate-400 text-xs font-normal">(for reminders — optional)</span>
+                Email <span className="text-slate-500 text-xs font-normal">(for reminders — optional)</span>
               </label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />

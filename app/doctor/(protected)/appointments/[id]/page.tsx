@@ -233,7 +233,7 @@ export default function AppointmentDetailPage() {
   }
 
   if (!appt) {
-    return <div className="text-center py-20 text-slate-400">Appointment not found</div>
+    return <div className="text-center py-20 text-slate-500">Appointment not found</div>
   }
 
   const age = computeAge(appt.patient.dob)
@@ -328,7 +328,7 @@ export default function AppointmentDetailPage() {
             )}
           </div>
           {editingNotes ? (
-            <textarea
+            <textarea aria-label="Consultation notes"
               className="form-textarea min-h-[200px]"
               value={notes}
               onChange={e => setNotes(e.target.value)}
@@ -337,7 +337,7 @@ export default function AppointmentDetailPage() {
             />
           ) : (
             <div className="min-h-[100px] text-slate-700 whitespace-pre-wrap">
-              {notes || <span className="text-slate-400 italic">No notes yet. Click Edit to add.</span>}
+              {notes || <span className="text-slate-500 italic">No notes yet. Click Edit to add.</span>}
             </div>
           )}
         </div>
@@ -357,8 +357,8 @@ export default function AppointmentDetailPage() {
                 </DocLink>
                 <button
                   type="button" onClick={() => setShare({ state: 'confirm' })} disabled={rxDirty || sharing || !appt.patient.phone}
-                  className="btn btn-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: '#25D366' }}
+                  className="btn btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}
                   aria-label="Share prescription on WhatsApp"
                 >
                   <WhatsAppIcon size={15} /> {sharing ? 'Sending...' : 'WhatsApp'}
@@ -375,7 +375,7 @@ export default function AppointmentDetailPage() {
                 Send this prescription as a PDF to <strong>{appt.patient.name}</strong> on WhatsApp (<strong>{appt.patient.phone}</strong>)?
               </p>
               <div className="flex gap-2">
-                <button type="button" onClick={shareOnWhatsApp} disabled={sharing} className="btn btn-sm text-white disabled:opacity-60" style={{ backgroundColor: '#25D366' }}>
+                <button type="button" onClick={shareOnWhatsApp} disabled={sharing} className="btn btn-sm disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
                   <WhatsAppIcon size={15} /> {sharing ? 'Sending...' : 'Send now'}
                 </button>
                 <button type="button" onClick={() => setShare({ state: 'idle' })} disabled={sharing} className="btn btn-ghost btn-sm">Cancel</button>
@@ -389,7 +389,7 @@ export default function AppointmentDetailPage() {
               <input type="checkbox" className="mt-0.5" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} />
               <span>
                 Print on letterhead
-                <span className="block text-xs text-slate-400">Tick when the paper already has your letterhead printed on it. Adjust the spacing in Settings.</span>
+                <span className="block text-xs text-slate-500">Tick when the paper already has your letterhead printed on it. Adjust the spacing in Settings.</span>
               </span>
             </label>
           )}
@@ -398,8 +398,8 @@ export default function AppointmentDetailPage() {
           )}
 
           <div className="form-group">
-            <label className="form-label">Diagnosis</label>
-            <textarea
+            <label htmlFor="diagnosis" className="form-label">Diagnosis</label>
+            <textarea id="diagnosis"
               className="form-textarea"
               value={diagnosis}
               onChange={e => setDiagnosis(e.target.value)}
@@ -422,14 +422,14 @@ export default function AppointmentDetailPage() {
                   <div className="flex justify-between items-start">
                     <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Medicine {i + 1}</span>
                     {medicines.length > 1 && (
-                      <button onClick={() => removeMedicine(i)} className="text-red-400 hover:text-red-600 p-1">
+                      <button onClick={() => removeMedicine(i)} className="text-red-600 hover:text-red-700 p-1">
                         <Trash2 size={14} />
                       </button>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
-                      <input
+                      <input aria-label={`Medicine ${i + 1} name`}
                         className="form-input"
                         placeholder="Medicine name"
                         value={med.name}
@@ -450,7 +450,7 @@ export default function AppointmentDetailPage() {
                             <input className="form-input col-span-5 sm:col-span-3" placeholder="Dose (e.g. 40 mg)" value={med.taper!.steps[j].dose} onChange={e => updateStep(i, j, { dose: e.target.value })} aria-label={`Step ${j + 1} dose`} />
                             <input className="form-input col-span-5 sm:col-span-4" placeholder="How often" value={med.taper!.steps[j].frequency} onChange={e => updateStep(i, j, { frequency: e.target.value })} aria-label={`Step ${j + 1} frequency`} />
                             <input type="number" min={1} max={365} className="form-input col-span-2 sm:col-span-2" placeholder="Days" value={med.taper!.steps[j].days} onChange={e => updateStep(i, j, { days: Math.max(1, parseInt(e.target.value) || 1) })} aria-label={`Step ${j + 1} days`} />
-                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-12 sm:col-span-1 text-red-400 hover:text-red-600 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
+                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-12 sm:col-span-1 text-red-600 hover:text-red-700 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -459,14 +459,14 @@ export default function AppointmentDetailPage() {
                           <button type="button" onClick={() => addStep(i)} disabled={med.taper.steps.length >= MAX_TAPER_STEPS} className="btn btn-ghost btn-sm text-blue-600"><Plus size={14} /> Add step</button>
                           <span className="text-xs text-slate-500">Total {taperTotalDays(med.taper.steps)} days</span>
                         </div>
-                        <input className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
+                        <input aria-label={`Medicine ${i + 1} instructions`} className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
                       </div>
                     ) : (
                       <>
-                        <input className="form-input" placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={e => updateMedicine(i, 'dosage', e.target.value)} />
-                        <input className="form-input" placeholder="Frequency (e.g. 3x daily)" value={med.frequency} onChange={e => updateMedicine(i, 'frequency', e.target.value)} />
-                        <input className="form-input" placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={e => updateMedicine(i, 'duration', e.target.value)} />
-                        <input className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
+                        <input aria-label={`Medicine ${i + 1} dosage`} className="form-input" placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={e => updateMedicine(i, 'dosage', e.target.value)} />
+                        <input aria-label={`Medicine ${i + 1} frequency`} className="form-input" placeholder="Frequency (e.g. 3x daily)" value={med.frequency} onChange={e => updateMedicine(i, 'frequency', e.target.value)} />
+                        <input aria-label={`Medicine ${i + 1} duration`} className="form-input" placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={e => updateMedicine(i, 'duration', e.target.value)} />
+                        <input aria-label={`Medicine ${i + 1} instructions`} className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
                       </>
                     )}
                   </div>
@@ -484,12 +484,12 @@ export default function AppointmentDetailPage() {
               ))}
               {followUpDate && <button type="button" className="btn btn-ghost btn-sm text-red-500" onClick={() => setFollowUpDate('')}>Clear</button>}
             </div>
-            <p className="text-xs text-slate-400 mt-1">Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
+            <p className="text-xs text-slate-500 mt-1">Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Additional Notes</label>
-            <textarea
+            <label htmlFor="additional-notes" className="form-label">Additional Notes</label>
+            <textarea id="additional-notes"
               className="form-textarea"
               value={prescriptionNotes}
               onChange={e => setPrescriptionNotes(e.target.value)}
@@ -522,13 +522,13 @@ export default function AppointmentDetailPage() {
           )}
 
           <div className="form-group">
-            <label className="form-label">Amount (₹)</label>
-            <input type="number" className="form-input" placeholder="500" value={payAmount} onChange={e => setPayAmount(e.target.value)} min="0" step="0.01" />
+            <label htmlFor="amount" className="form-label">Amount (₹)</label>
+            <input id="amount" type="number" className="form-input" placeholder="500" value={payAmount} onChange={e => setPayAmount(e.target.value)} min="0" step="0.01" />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Payment Mode</label>
-            <select className="form-select" value={payMode} onChange={e => setPayMode(e.target.value)}>
+            <label htmlFor="payment-mode" className="form-label">Payment Mode</label>
+            <select id="payment-mode" className="form-select" value={payMode} onChange={e => setPayMode(e.target.value)}>
               {PAYMENT_MODES.map(m => (
                 <option key={m} value={m}>{m}</option>
               ))}
@@ -536,8 +536,8 @@ export default function AppointmentDetailPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Notes (optional)</label>
-            <input className="form-input" placeholder="Any payment notes..." value={payNotes} onChange={e => setPayNotes(e.target.value)} />
+            <label htmlFor="notes" className="form-label">Notes (optional)</label>
+            <input id="notes" className="form-input" placeholder="Any payment notes..." value={payNotes} onChange={e => setPayNotes(e.target.value)} />
           </div>
 
           <button onClick={savePayment} className="btn btn-primary w-full" disabled={savingPay || !payAmount}>

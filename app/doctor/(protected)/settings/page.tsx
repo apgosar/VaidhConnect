@@ -353,7 +353,7 @@ function SettingsPageContent() {
                 <button onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
                   <Upload size={14} /> Upload Logo
                 </button>
-                <p className="text-xs text-slate-400">Max 2MB</p>
+                <p className="text-xs text-slate-500">Max 2MB</p>
               </div>
               <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
             </div>
@@ -373,7 +373,7 @@ function SettingsPageContent() {
                 <button onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
                   <Upload size={14} /> Upload Photo
                 </button>
-                <p className="text-xs text-slate-400">Max 2MB</p>
+                <p className="text-xs text-slate-500">Max 2MB</p>
               </div>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
             </div>
@@ -382,8 +382,8 @@ function SettingsPageContent() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="form-group">
-            <label className="form-label">Doctor Name</label>
-            <input className="form-input" value={doctor.name} onChange={e => setDoctor((p: any) => p ? { ...p, name: e.target.value } : p)} />
+            <label htmlFor="doctor-name" className="form-label">Doctor Name</label>
+            <input id="doctor-name" className="form-input" value={doctor.name} onChange={e => setDoctor((p: any) => p ? { ...p, name: e.target.value } : p)} />
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="registrationNumber">Registration Number</label>
@@ -422,20 +422,20 @@ function SettingsPageContent() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Qualifications / Degrees</label>
-            <input className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, qualifications: e.target.value } : p)} />
+            <label htmlFor="qualifications-degrees" className="form-label">Qualifications / Degrees</label>
+            <input id="qualifications-degrees" className="form-input" placeholder="e.g. MBBS, MD (Cardiology)" value={doctor.qualifications ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, qualifications: e.target.value } : p)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Practice Description (Optional)</label>
-            <input className="form-input" placeholder="e.g. Ayurveda Consultant, Orthopaedic Surgeon" value={doctor.practiceDescription ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, practiceDescription: e.target.value } : p)} />
+            <label htmlFor="practice-description" className="form-label">Practice Description (Optional)</label>
+            <input id="practice-description" className="form-input" placeholder="e.g. Ayurveda Consultant, Orthopaedic Surgeon" value={doctor.practiceDescription ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, practiceDescription: e.target.value } : p)} />
           </div>
           <div className="form-group sm:col-span-2">
-            <label className="form-label">Clinic Name</label>
-            <input className="form-input" value={doctor.clinicName} onChange={e => setDoctor((p: any) => p ? { ...p, clinicName: e.target.value } : p)} />
+            <label htmlFor="clinic-name" className="form-label">Clinic Name</label>
+            <input id="clinic-name" className="form-input" value={doctor.clinicName} onChange={e => setDoctor((p: any) => p ? { ...p, clinicName: e.target.value } : p)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Email</label>
-            <input type="email" className="form-input" value={doctor.email} onChange={e => setDoctor((p: any) => p ? { ...p, email: e.target.value } : p)} />
+            <label htmlFor="email" className="form-label">Email</label>
+            <input id="email" type="email" className="form-input" value={doctor.email} onChange={e => setDoctor((p: any) => p ? { ...p, email: e.target.value } : p)} />
           </div>
 
           {/* Dr. WhatsApp Number */}
@@ -494,16 +494,16 @@ function SettingsPageContent() {
             </p>
           </div>
           <div className="form-group col-span-2">
-            <label className="form-label">Clinic Address</label>
-            <textarea className="form-textarea" rows={2} value={doctor.address ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, address: e.target.value } : p)} />
+            <label htmlFor="clinic-address" className="form-label">Clinic Address</label>
+            <textarea id="clinic-address" className="form-textarea" rows={2} value={doctor.address ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, address: e.target.value } : p)} />
           </div>
           <div className="form-group col-span-2">
-            <label className="form-label">Google Maps URL <span className="text-slate-400 text-xs">(share link for "Get Directions" button)</span></label>
-            <input className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, mapsUrl: e.target.value } : p)} />
+            <label htmlFor="google-maps-url" className="form-label">Google Maps URL <span className="text-slate-500 text-xs">(share link for "Get Directions" button)</span></label>
+            <input id="google-maps-url" className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, mapsUrl: e.target.value } : p)} />
           </div>
           <div className="form-group col-span-2">
-            <label className="form-label">Clinic Website <span className="text-slate-400 text-xs">(optional)</span></label>
-            <input className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, websiteUrl: e.target.value } : p)} />
+            <label htmlFor="clinic-website" className="form-label">Clinic Website <span className="text-slate-500 text-xs">(optional)</span></label>
+            <input id="clinic-website" className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, websiteUrl: e.target.value } : p)} />
           </div>
         </div>
       </div>
@@ -512,25 +512,25 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Specialty & Theme</h2>
         <div className="form-group">
-          <label className="form-label">Specialty</label>
-          <select className="form-select" value={doctor.specialty} onChange={e => handleSpecialtyChange(e.target.value)}>
+          <label htmlFor="specialty" className="form-label">Specialty</label>
+          <select id="specialty" className="form-select" value={doctor.specialty} onChange={e => handleSpecialtyChange(e.target.value)}>
             {SPECIALTIES.map(s => (
               <option key={s.value} value={s.value}>{s.icon} {s.value}</option>
             ))}
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label flex items-center gap-2">
-            <Palette size={14} /> Accent Color <span className="text-slate-400 text-xs">(auto-set by specialty, override here)</span>
+          <label htmlFor="accent-color" className="form-label flex items-center gap-2">
+            <Palette size={14} /> Accent Color <span className="text-slate-500 text-xs">(auto-set by specialty, override here)</span>
           </label>
           <div className="flex items-center gap-3">
-            <input
+            <input id="accent-color"
               type="color"
               className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.themeColor}
               onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)}
             />
-            <input className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
+            <input aria-label="Theme colour, hex value" className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
             <div className="flex gap-2 flex-wrap">
               {SPECIALTIES.map(s => (
                 <button
@@ -545,17 +545,17 @@ function SettingsPageContent() {
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label flex items-center gap-2">
-            <Palette size={14} /> Brand Colour <span className="text-slate-400 text-xs">(buttons, headers, PDFs and emails)</span>
+          <label htmlFor="brand-colour" className="form-label flex items-center gap-2">
+            <Palette size={14} /> Brand Colour <span className="text-slate-500 text-xs">(buttons, headers, PDFs and emails)</span>
           </label>
           <div className="flex items-center gap-3 flex-wrap">
-            <input
+            <input id="brand-colour"
               type="color"
               className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.theme?.primary || '#0F3D2E'}
               onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
             />
-            <input
+            <input aria-label="Brand colour, hex value"
               className="form-input w-36"
               value={doctor.theme?.primary || ''}
               onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
@@ -575,8 +575,8 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Appointment Settings</h2>
         <div className="form-group">
-          <label className="form-label">Slot Duration (minutes)</label>
-          <select className="form-select" value={doctor.slotDurationMins} onChange={e => setDoctor((p: any) => p ? { ...p, slotDurationMins: parseInt(e.target.value) } : p)}>
+          <label htmlFor="slot-duration" className="form-label">Slot Duration (minutes)</label>
+          <select id="slot-duration" className="form-select" value={doctor.slotDurationMins} onChange={e => setDoctor((p: any) => p ? { ...p, slotDurationMins: parseInt(e.target.value) } : p)}>
             {[5, 10, 15, 20, 30, 45, 60].map(d => (
               <option key={d} value={d}>{d} minutes</option>
             ))}
@@ -692,7 +692,7 @@ function SettingsPageContent() {
                     </div>
                     <span className="font-medium text-slate-700 capitalize">{day}</span>
                   </label>
-                  {!timing.open && <span className="text-xs text-red-400">Closed</span>}
+                  {!timing.open && <span className="text-xs text-red-600">Closed</span>}
                 </div>
 
                 {timing.open && (
@@ -729,29 +729,29 @@ function SettingsPageContent() {
 
                     {isFullDay ? (
                       <div className="space-y-1">
-                        <p className="text-xs text-slate-400 font-medium">HOURS</p>
+                        <p className="text-xs text-slate-500 font-medium">HOURS</p>
                         <div className="flex gap-2 items-center">
-                          <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
-                          <span className="text-slate-400 text-xs">–</span>
-                          <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                          <input aria-label={`${day} start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                          <span className="text-slate-500 text-xs">–</span>
+                          <input aria-label={`${day} end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                         </div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <p className="text-xs text-slate-400 font-medium">MORNING</p>
+                          <p className="text-xs text-slate-500 font-medium">MORNING</p>
                           <div className="flex gap-2 items-center">
-                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
-                            <span className="text-slate-400 text-xs">–</span>
-                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                            <input aria-label={`${day} morning start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                            <span className="text-slate-500 text-xs">–</span>
+                            <input aria-label={`${day} morning end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs text-slate-400 font-medium">EVENING</p>
+                          <p className="text-xs text-slate-500 font-medium">EVENING</p>
                           <div className="flex gap-2 items-center">
-                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
-                            <span className="text-slate-400 text-xs">–</span>
-                            <input type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
+                            <input aria-label={`${day} evening start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
+                            <span className="text-slate-500 text-xs">–</span>
+                            <input aria-label={`${day} evening end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
                           </div>
                         </div>
                       </div>
@@ -768,12 +768,12 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Payment Details</h2>
         <div className="form-group">
-          <label className="form-label">UPI ID</label>
-          <input className="form-input" placeholder="doctor@upi" value={doctor.paymentDetails?.upiId ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, upiId: e.target.value } } : p)} />
+          <label htmlFor="upi-id" className="form-label">UPI ID</label>
+          <input id="upi-id" className="form-input" placeholder="doctor@upi" value={doctor.paymentDetails?.upiId ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, upiId: e.target.value } } : p)} />
         </div>
         <div className="form-group">
-          <label className="form-label">Bank Details</label>
-          <textarea className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
+          <label htmlFor="bank-details" className="form-label">Bank Details</label>
+          <textarea id="bank-details" className="form-textarea" rows={2} placeholder="Bank name, Account no, IFSC..." value={doctor.paymentDetails?.bankDetails ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, paymentDetails: { ...p.paymentDetails, bankDetails: e.target.value } } : p)} />
         </div>
         <div className="form-group">
           <label className="form-label">QR Code Image</label>
@@ -789,7 +789,7 @@ function SettingsPageContent() {
               <button type="button" onClick={() => qrInputRef.current?.click()} className="btn btn-outline btn-sm">
                 <Upload size={14} /> Upload QR Code
               </button>
-              <p className="text-xs text-slate-400">PNG, JPG · Max 2MB</p>
+              <p className="text-xs text-slate-500">PNG, JPG · Max 2MB</p>
             </div>
             <input ref={qrInputRef} type="file" accept="image/*" className="hidden" onChange={handleQrChange} />
           </div>
@@ -853,7 +853,7 @@ function SettingsPageContent() {
             <a href="/api/doctor/print-test?mode=preprinted" target="_blank" rel="noopener" className="btn btn-outline btn-sm">Print a test page (pre-printed paper)</a>
             <a href="/api/doctor/print-test?mode=standard" target="_blank" rel="noopener" className="btn btn-ghost btn-sm">Preview standard layout</a>
           </div>
-          <p className="text-xs text-slate-400">Save your changes first. The test page uses the saved spacing. Print it on your letterhead paper at 100% scale (not "fit to page") and adjust until the text sits where you want it.</p>
+          <p className="text-xs text-slate-500">Save your changes first. The test page uses the saved spacing. Print it on your letterhead paper at 100% scale (not "fit to page") and adjust until the text sits where you want it.</p>
         </div>
       </div>
 
@@ -864,7 +864,7 @@ function SettingsPageContent() {
         <div className="space-y-3">
           {(doctor.youtubeLinks || []).map((link, idx) => (
             <div key={idx} className="flex gap-2">
-              <input 
+              <input aria-label={`YouTube link ${idx + 1}`} 
                 className="form-input flex-1" 
                 placeholder="https://youtube.com/watch?v=..." 
                 value={link} 
@@ -888,7 +888,7 @@ function SettingsPageContent() {
         <div className="space-y-6">
           {(doctor.products || []).map((prod, idx) => (
             <div key={prod.id} className="relative border border-slate-200 rounded-lg p-4 bg-slate-50/50">
-              <button type="button" onClick={() => handleRemoveProduct(idx)} className="absolute top-3 right-3 text-red-400 hover:text-red-600">
+              <button type="button" onClick={() => handleRemoveProduct(idx)} className="absolute top-3 right-3 text-red-600 hover:text-red-700">
                 <X size={18} />
               </button>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -902,9 +902,9 @@ function SettingsPageContent() {
                         </div>
                       </>
                     ) : (
-                      <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-forest transition-colors">
+                      <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-forest transition-colors">
                         <Upload size={24} />
-                        <span className="text-[10px] font-medium uppercase tracking-wider">Upload Image</span>
+                        <span className="text-xs font-medium uppercase tracking-wider">Upload Image</span>
                       </div>
                     )}
                     <input type="file" accept="image/*" className="hidden" onChange={e => handleProductPhoto(idx, e)} />
@@ -914,16 +914,16 @@ function SettingsPageContent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-slate-500 uppercase">Product Name</label>
-                      <input className="form-input text-sm" placeholder="e.g. Skin Care Kit" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} />
+                      <input aria-label="Product Name" className="form-input text-sm" placeholder="e.g. Skin Care Kit" value={prod.name} onChange={e => handleProductChange(idx, 'name', e.target.value)} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-slate-500 uppercase">Price</label>
-                      <input className="form-input text-sm" placeholder="₹1500" value={prod.price} onChange={e => handleProductChange(idx, 'price', e.target.value)} />
+                      <input aria-label="Price" className="form-input text-sm" placeholder="₹1500" value={prod.price} onChange={e => handleProductChange(idx, 'price', e.target.value)} />
                     </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-slate-500 uppercase">Description</label>
-                    <textarea className="form-textarea text-sm" rows={2} placeholder="Brief description of the product..." value={prod.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} />
+                    <textarea aria-label="Description" className="form-textarea text-sm" rows={2} placeholder="Brief description of the product..." value={prod.description} onChange={e => handleProductChange(idx, 'description', e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -942,18 +942,18 @@ function SettingsPageContent() {
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Change Password</h2>
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div className="form-group">
-            <label className="form-label">Current Password</label>
-            <input type="password" className="form-input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+            <label htmlFor="current-password" className="form-label">Current Password</label>
+            <input id="current-password" type="password" className="form-input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
           </div>
           <div className="form-group">
-            <label className="form-label">New Password</label>
-            <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={10} required />
+            <label htmlFor="new-password" className="form-label">New Password</label>
+            <input id="new-password" type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={10} required />
           </div>
           <div className="form-group">
-            <label className="form-label">Confirm New Password</label>
-            <input type="password" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+            <label htmlFor="confirm-new-password" className="form-label">Confirm New Password</label>
+            <input id="confirm-new-password" type="password" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
           </div>
-          {passwordError && <p className="form-error">{passwordError}</p>}
+          {passwordError && <p className="form-error" role="alert">{passwordError}</p>}
           {passwordSuccess && <p className="text-green-600 text-sm">Password changed. Signing you out so you can sign in again…</p>}
           <button type="submit" className="btn btn-primary">Update Password</button>
         </form>

@@ -1,7 +1,7 @@
 export default function SiteFooter() {
   return (
     <footer className="px-4 py-6 text-center">
-      <p className="text-xs" style={{ color: 'var(--color-sage-light)' }}>
+      <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
         <a
           href="https://siddhtech.ai/swasthyaconnect"
           target="_blank"

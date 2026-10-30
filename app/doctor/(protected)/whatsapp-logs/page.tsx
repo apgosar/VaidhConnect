@@ -117,7 +117,7 @@ function LogCard({ log }: { log: WhatsAppLog }) {
                 color: 'var(--color-charcoal)',
               }}
             >
-              <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-sage)]">
+              <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 text-xs font-semibold uppercase tracking-wider text-[var(--color-sage)]">
                 <span className="flex items-center gap-1">
                   <MessageSquare size={11} />
                   Message Body
@@ -125,7 +125,7 @@ function LogCard({ log }: { log: WhatsAppLog }) {
                 <button
                   type="button"
                   onClick={handleCopyBody}
-                  className="flex items-center gap-1 text-[11px] font-normal hover:text-[var(--color-forest)] transition-colors px-1.5 py-0.5 rounded hover:bg-black/5"
+                  className="flex items-center gap-1 text-xs font-normal hover:text-[var(--color-forest)] transition-colors px-1.5 py-0.5 rounded hover:bg-black/5"
                   title="Copy message text"
                 >
                   {copied ? (
@@ -277,7 +277,7 @@ export default function WhatsAppLogsPage() {
             {
               label: 'Today',
               value: logs.filter(l => l.sentAt && new Date(l.sentAt).toDateString() === new Date().toDateString()).length,
-              color: 'var(--color-gold-dark)',
+              color: 'var(--color-link)',
             },
           ].map(({ label, value, color }) => (
             <div key={label} className="card-data p-4 text-center">

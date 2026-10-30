@@ -73,7 +73,7 @@ function ProductCard({ prod, doctorPhone }: { prod: DoctorProfile['products'][0]
             <button
               type="button"
               onClick={() => setExpanded(prev => !prev)}
-              className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all hover:opacity-90 active:scale-95 shadow-xs cursor-pointer"
+              className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all hover:opacity-90 active:scale-95 shadow-xs cursor-pointer"
               style={{
                 background: expanded ? 'rgba(15, 61, 46, 0.12)' : 'var(--color-primary-bg)',
                 color: 'var(--color-forest)',
@@ -211,7 +211,7 @@ END:VCARD`
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
+    <div id="main-content" role="main" className="min-h-screen" style={{ backgroundColor: 'var(--color-linen)' }}>
       {/* ── Hero Header ─────────────────────────────────────── */}
       <div
         id="about"
@@ -279,7 +279,7 @@ END:VCARD`
                 <div className="mt-4 inline-flex justify-center gap-6 text-sm bg-black/10 rounded-2xl px-6 py-2.5 border border-white/10 backdrop-blur-sm">
                   {doctor.consultationFee && (
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Consultation</span>
+                      <span className="text-xs uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Consultation</span>
                       <span className="font-semibold text-white tracking-wide">{doctor.consultationFee}</span>
                     </div>
                   )}
@@ -288,7 +288,7 @@ END:VCARD`
                   )}
                   {doctor.followUpFee && (
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up</span>
+                      <span className="text-xs uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up</span>
                       <span className="font-semibold text-white tracking-wide">{doctor.followUpFee}</span>
                     </div>
                   )}
@@ -301,7 +301,7 @@ END:VCARD`
                     <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
                       <UserPlus size={20} />
                     </div>
-                    <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Save</span>
+                    <span className="text-xs font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Save</span>
                   </button>
 
                   {doctor.phone && (
@@ -310,14 +310,14 @@ END:VCARD`
                         <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
                           <Phone size={20} />
                         </div>
-                        <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Call</span>
+                        <span className="text-xs font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Call</span>
                       </a>
                       
                       <a href={`https://wa.me/${doctor.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 hover:scale-105 transition-transform group" aria-label="WhatsApp">
                         <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
                           <MessageCircle size={20} />
                         </div>
-                        <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>WhatsApp</span>
+                        <span className="text-xs font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>WhatsApp</span>
                       </a>
                     </>
                   )}
@@ -327,7 +327,7 @@ END:VCARD`
                       <div className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', backdropFilter: 'blur(4px)' }}>
                         <MapPin size={20} />
                       </div>
-                      <span className="text-[10px] font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Navigate</span>
+                      <span className="text-xs font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.9)' }}>Navigate</span>
                     </a>
                   )}
                 </div>
@@ -514,13 +514,13 @@ END:VCARD`
                     )}
                     {pay.upiId && (
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">UPI ID</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">UPI ID</p>
                         <p className="font-medium text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-sm tracking-wide break-all">{pay.upiId}</p>
                       </div>
                     )}
                     {pay.bankDetails && (
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Bank Transfer</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Bank Transfer</p>
                         <div className="bg-slate-50 px-3 py-3 rounded-lg border border-slate-100">
                           <p className="text-sm whitespace-pre-wrap leading-relaxed text-slate-700">{pay.bankDetails.replace(/\\n/g, '\n')}</p>
                         </div>
@@ -584,7 +584,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
               <User size={20} />
-              <span className="text-[10px] font-medium uppercase tracking-wider">About</span>
+              <span className="text-xs font-medium uppercase tracking-wider">About</span>
             </button>
           </div>
           
@@ -592,7 +592,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: doctor.products?.length ? 1 : 0.5, pointerEvents: doctor.products?.length ? 'auto' : 'none' }}>
               <Package size={20} />
-              <span className="text-[10px] font-medium uppercase tracking-wider">Products</span>
+              <span className="text-xs font-medium uppercase tracking-wider">Products</span>
             </button>
           </div>
 
@@ -602,7 +602,7 @@ END:VCARD`
               <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
                 <Calendar size={22} />
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
+              <span className="text-xs font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
             </button>
           </div>
 
@@ -610,7 +610,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: doctor.youtubeLinks?.length ? 1 : 0.5, pointerEvents: doctor.youtubeLinks?.length ? 'auto' : 'none' }}>
               <PlaySquare size={20} />
-              <span className="text-[10px] font-medium uppercase tracking-wider">Videos</span>
+              <span className="text-xs font-medium uppercase tracking-wider">Videos</span>
             </button>
           </div>
 
@@ -618,7 +618,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 1 : 0.5, pointerEvents: (doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)) ? 'auto' : 'none' }}>
               <CreditCard size={20} />
-              <span className="text-[10px] font-medium uppercase tracking-wider">Payment</span>
+              <span className="text-xs font-medium uppercase tracking-wider">Payment</span>
             </button>
           </div>
 
