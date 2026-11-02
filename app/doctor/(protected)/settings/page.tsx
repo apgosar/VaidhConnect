@@ -424,15 +424,15 @@ function SettingsPageContent() {
               Shown on the patient-facing landing page and included in WhatsApp messages sent to patients.
             </p>
           </div>
-          <div className="form-group col-span-2">
+          <div className="form-group sm:col-span-2">
             <label htmlFor="clinic-address" className="form-label">Clinic Address</label>
             <textarea id="clinic-address" className="form-textarea" rows={2} value={doctor.address ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, address: e.target.value } : p)} />
           </div>
-          <div className="form-group col-span-2">
+          <div className="form-group sm:col-span-2">
             <label htmlFor="google-maps-url" className="form-label">Google Maps URL <span className="text-slate-500 text-xs">(share link for "Get Directions" button)</span></label>
             <input id="google-maps-url" className="form-input" placeholder="https://maps.google.com/..." value={doctor.mapsUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, mapsUrl: e.target.value } : p)} />
           </div>
-          <div className="form-group col-span-2">
+          <div className="form-group sm:col-span-2">
             <label htmlFor="clinic-website" className="form-label">Clinic Website <span className="text-slate-500 text-xs">(optional)</span></label>
             <input id="clinic-website" className="form-input" placeholder="https://www.yourclinic.com" value={doctor.websiteUrl ?? ''} onChange={e => setDoctor((p: any) => p ? { ...p, websiteUrl: e.target.value } : p)} />
           </div>
