@@ -9,6 +9,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     name,
     short_name: name.length > 12 ? name.split(' ')[0] : name,
     description: `Book appointments at ${name}`,
+    id: '/',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',
