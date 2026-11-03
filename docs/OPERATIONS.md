@@ -82,6 +82,12 @@ can see or change:
 - **Block Schedule** lists only periods that have not finished; past ones are hidden. Times are entered and shown in the **clinic's** timezone, not the browser's. A block can be edited, set for whole days, and repeated weekly (up to a year); removing a repeating block offers "only this one" or "this and all later ones".
 - Blocking time **does not cancel appointments already booked** in it. The page lists them with a link to each so the clinic can reschedule or cancel them.
 
+## Quick prescription
+- **Dashboard → Quick prescription** (also in the menu) is for a consultation by phone or video. The doctor enters the patient's mobile number, name and age (or date of birth), an optional diagnosis and the medicines, then **Save and send on WhatsApp**. The patient receives the PDF on the clinic letterhead, exactly as from the appointment page. **Save only** keeps it without sending.
+- Typing the number first finds patients already on the books with that number (families share phones); pick one, or "Someone else on this number". The same name on the same number is never added twice.
+- Behind the scenes it is a **completed visit** (type "Phone / video", no booking slot taken), so history, the PDF, resending, the follow-up reminder and the patient's "Past visits" all work as for any visit. An age is stored as an estimated date of birth (`dobApproximate`).
+- Only owners and doctors can use it (the same permission as writing a prescription). Uses the `appointments` visit and `prescriptions` collections; the WhatsApp template is the existing `prescription_share`.
+
 ## Known limits
 - One calendar per clinic (`doctorId` = clinic id). Extra doctors can sign in but
   share the calendar.

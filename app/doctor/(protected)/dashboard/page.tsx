@@ -8,7 +8,8 @@ import { computeAge } from '@/lib/slots'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Calendar, Users, CheckCircle2, Clock, ChevronRight, CalendarOff } from 'lucide-react'
+import { Calendar, Users, CheckCircle2, Clock, ChevronRight, CalendarOff, FilePlus2 } from 'lucide-react'
+import { can } from '@/lib/auth/access'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -165,6 +166,14 @@ export default async function DoctorDashboard() {
             </p>
           </div>
         </div>
+        {can(session?.role, 'prescriptions:manage') && (
+          <div className="mt-4">
+            <Link href="/doctor/quick-prescription" className="btn btn-primary w-full sm:w-auto">
+              <FilePlus2 size={16} aria-hidden="true" /> Quick prescription
+            </Link>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--color-sage)' }}>A phone or video consultation: add the patient, write the medicines, send on WhatsApp.</p>
+          </div>
+        )}
       </div>
 
       {/* ── Stat Cards ───────────────────────────────────── */}

@@ -1,26 +1,26 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, User, Clock, FileText, CreditCard,
-  CheckCircle2, XCircle, Edit3, Save, Pill, Plus, Trash2,
+  CheckCircle2, XCircle, Edit3, Save, Pill,
   Download, Printer, Phone, CalendarClock
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
-import type { Medicine, TaperStep } from '@/lib/constants'
-import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
+import type { Medicine } from '@/lib/constants'
+import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
+import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { PAYMENT_MODES } from '@/lib/constants'
 import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 
-interface Suggestion { name: string; dosage: string; frequency: string; duration: string; instructions?: string; taper?: Medicine['taper'] }
 interface Patient {
   id: string; name: string; phone: string; dob: string; medicalHistory?: string; email?: string
 }
 interface Appointment {
-  id: string; startTime: string; endTime: string; status: string;
+  id: string; startTime: string; endTime: string; status: string; visitType?: string;
   chiefComplaint?: string; consultationNotes?: string;
   patient: Patient;
   prescription?: { id: string; diagnosis?: string; medicines: Medicine[]; notes?: string; followUpDate?: string | null }
@@ -40,13 +40,11 @@ export default function AppointmentDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false)
 
   // Prescription state
+  const [chiefComplaint, setChiefComplaint] = useState('')
   const [diagnosis, setDiagnosis] = useState('')
   const [medicines, setMedicines] = useState<Medicine[]>([{ name: '', dosage: '', frequency: '', duration: '' }])
   const [prescriptionNotes, setPrescriptionNotes] = useState('')
   const [followUpDate, setFollowUpDate] = useState('')
-  // Medicines this clinic has prescribed before, offered as the doctor types.
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [savingRx, setSavingRx] = useState(false)
 
   // Payment state
@@ -80,6 +78,8 @@ export default function AppointmentDetailPage() {
       const data = await res.json()
       setAppt(data.appointment)
       setNotes(data.appointment?.consultationNotes ?? '')
+      // The complaint belongs to the visit (the patient may have given it when booking), so it is there before a prescription exists.
+      setChiefComplaint(data.appointment?.chiefComplaint ?? '')
       if (data.appointment?.prescription) {
         const rx = data.appointment.prescription
         const meds = rx.medicines?.length ? rx.medicines : [{ name: '', dosage: '', frequency: '', duration: '' }]
@@ -87,7 +87,7 @@ export default function AppointmentDetailPage() {
         setMedicines(meds)
         setPrescriptionNotes(rx.notes ?? '')
         setFollowUpDate(rx.followUpDate ?? '')
-        setSavedRx(JSON.stringify([rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
+        setSavedRx(JSON.stringify([data.appointment?.chiefComplaint ?? '', rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
       }
       if (data.appointment?.payment) {
         const pay = data.appointment.payment
@@ -138,6 +138,7 @@ export default function AppointmentDetailPage() {
       const ok = await write('/api/prescriptions', 'POST', {
         appointmentId: appt.id,
         patientId: appt.patient.id,
+        chiefComplaint,
         diagnosis,
         medicines: medicines.filter(m => m.name),
         notes: prescriptionNotes,
@@ -179,53 +180,6 @@ export default function AppointmentDetailPage() {
     }
   }
 
-  const addMedicine = () => setMedicines(prev => [...prev, { name: '', dosage: '', frequency: '', duration: '' }])
-  const toggleTaper = (i: number, on: boolean) => setMedicines(prev => prev.map((m, idx) => {
-    if (idx !== i) return m
-    if (!on) {
-      const { taper, ...rest } = m
-      return { ...rest, dosage: taper?.steps[0]?.dose ?? '', frequency: '', duration: '' }
-    }
-    // Seed the first step from whatever was already typed for a fixed dose.
-    return { ...m, taper: { steps: [{ dose: m.dosage, frequency: m.frequency === 'Tapering' ? '' : m.frequency, days: parseInt(m.duration) || 5 }] } }
-  }))
-  const setSteps = (i: number, fn: (steps: TaperStep[]) => TaperStep[]) =>
-    setMedicines(prev => prev.map((m, idx) => idx === i && m.taper ? { ...m, taper: { steps: fn(m.taper.steps) } } : m))
-  const updateStep = (i: number, j: number, patch: Partial<TaperStep>) => setSteps(i, steps => steps.map((st, k) => k === j ? { ...st, ...patch } : st))
-  const addStep = (i: number) => setSteps(i, steps => steps.length >= MAX_TAPER_STEPS ? steps : [...steps, { dose: '', frequency: steps[steps.length - 1]?.frequency ?? '', days: steps[steps.length - 1]?.days ?? 5 }])
-  const removeStep = (i: number, j: number) => setSteps(i, steps => steps.length > 1 ? steps.filter((_, k) => k !== j) : steps)
-  const removeMedicine = (i: number) => setMedicines(prev => prev.filter((_, idx) => idx !== i))
-  const askForSuggestions = (text: string) => {
-    if (suggestTimer.current) clearTimeout(suggestTimer.current)
-    if (text.trim().length < 2) { setSuggestions([]); return }
-    suggestTimer.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/prescriptions/medicines?q=${encodeURIComponent(text.trim())}`)
-        if (res.ok) setSuggestions((await res.json()).medicines ?? [])
-      } catch { /* suggestions are a convenience; typing carries on without them */ }
-    }, 250)
-  }
-
-  // Picking a remembered medicine from the list fills in how it was prescribed last time (blank fields only).
-  const onNameChange = (i: number, value: string) => {
-    askForSuggestions(value)
-    const hit = suggestions.find(s => s.name.toLowerCase() === value.trim().toLowerCase())
-    setMedicines(prev => prev.map((m, idx) => {
-      if (idx !== i) return m
-      const next = { ...m, name: value }
-      const untouched = !m.dosage && !m.frequency && !m.duration && !m.taper
-      if (hit && untouched) {
-        next.dosage = hit.dosage; next.frequency = hit.frequency; next.duration = hit.duration
-        if (hit.instructions) next.instructions = hit.instructions
-        if (hit.taper) next.taper = hit.taper
-      }
-      return next
-    }))
-  }
-
-  const updateMedicine = (i: number, field: keyof Medicine, value: string) => {
-    setMedicines(prev => prev.map((m, idx) => idx === i ? { ...m, [field]: value } : m))
-  }
 
   if (loading) {
     return (
@@ -240,8 +194,7 @@ export default function AppointmentDetailPage() {
   }
 
   const age = computeAge(appt.patient.dob)
-  const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
-  const addDays = (n: number) => { const d = new Date(appt.startTime); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+  const rxDirty = JSON.stringify([chiefComplaint, diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
   const sharing = share.state === 'sending'
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
@@ -264,6 +217,7 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {appt.visitType === 'TELECONSULTATION' && <span className="badge badge-blue">Phone / video</span>}
           <span className={`badge ${
             appt.status === 'BOOKED' ? 'badge-blue' :
             appt.status === 'COMPLETED' ? 'badge-green' : 'badge-red'
@@ -326,10 +280,6 @@ export default function AppointmentDetailPage() {
           </button>
         ))}
       </div>
-
-      <datalist id="medicine-suggestions">
-        {suggestions.map(s => <option key={s.name} value={s.name} />)}
-      </datalist>
 
       {/* Tab Panels */}
       {activeTab === 'notes' && (
@@ -416,106 +366,14 @@ export default function AppointmentDetailPage() {
             <p className="text-xs text-amber-700 -mt-2">You have unsaved changes. Save the prescription to download or print the latest version.</p>
           )}
 
-          <div className="form-group">
-            <label htmlFor="diagnosis" className="form-label">Diagnosis</label>
-            <textarea id="diagnosis"
-              className="form-textarea"
-              value={diagnosis}
-              onChange={e => setDiagnosis(e.target.value)}
-              placeholder="e.g. Upper respiratory tract infection"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-3">
-              <p className="form-label mb-0">Medicines</p>
-              <button onClick={addMedicine} className="btn btn-ghost btn-sm text-blue-600">
-                <Plus size={14} /> Add Medicine
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {medicines.map((med, i) => (
-                <div key={i} className="bg-slate-50 rounded-xl p-4 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Medicine {i + 1}</span>
-                    {medicines.length > 1 && (
-                      <button onClick={() => removeMedicine(i)} className="text-red-600 hover:text-red-700 p-1">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="sm:col-span-2">
-                      <input aria-label={`Medicine ${i + 1} name`}
-                        className="form-input"
-                        placeholder="Medicine name"
-                        value={med.name}
-                        list="medicine-suggestions"
-                        autoComplete="off"
-                        onChange={e => onNameChange(i, e.target.value)}
-                      />
-                    </div>
-                    <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-                      <input type="checkbox" checked={!!med.taper} onChange={e => toggleTaper(i, e.target.checked)} />
-                      Tapering dose (the dose changes over the course)
-                    </label>
-                    {med.taper ? (
-                      <div className="sm:col-span-2 space-y-2">
-                        {taperSchedule(med.taper.steps).map((line, j) => (
-                          <div key={j} className="grid grid-cols-12 gap-2 items-center">
-                            <span className="col-span-12 sm:col-span-2 text-xs font-medium text-slate-500">{dayRangeLabel(line)}</span>
-                            <input className="form-input col-span-6 sm:col-span-3" placeholder="Dose, e.g. 40 mg" value={med.taper!.steps[j].dose} onChange={e => updateStep(i, j, { dose: e.target.value })} aria-label={`Step ${j + 1} dose`} />
-                            <input className="form-input col-span-6 sm:col-span-4" placeholder="How often" value={med.taper!.steps[j].frequency} onChange={e => updateStep(i, j, { frequency: e.target.value })} aria-label={`Step ${j + 1} frequency`} />
-                            <input type="number" min={1} max={365} className="form-input col-span-9 sm:col-span-2" placeholder="Days" value={med.taper!.steps[j].days} onChange={e => updateStep(i, j, { days: Math.max(1, parseInt(e.target.value) || 1) })} aria-label={`Step ${j + 1} days`} />
-                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-3 sm:col-span-1 text-red-600 hover:text-red-700 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between">
-                          <button type="button" onClick={() => addStep(i)} disabled={med.taper.steps.length >= MAX_TAPER_STEPS} className="btn btn-ghost btn-sm text-blue-600"><Plus size={14} /> Add step</button>
-                          <span className="text-xs text-slate-500">Total {taperTotalDays(med.taper.steps)} days</span>
-                        </div>
-                        <input aria-label={`Medicine ${i + 1} instructions`} className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
-                      </div>
-                    ) : (
-                      <>
-                        <input aria-label={`Medicine ${i + 1} dosage`} className="form-input" placeholder="Dosage (e.g. 500mg)" value={med.dosage} onChange={e => updateMedicine(i, 'dosage', e.target.value)} />
-                        <input aria-label={`Medicine ${i + 1} frequency`} className="form-input" placeholder="Frequency (e.g. 3x daily)" value={med.frequency} onChange={e => updateMedicine(i, 'frequency', e.target.value)} />
-                        <input aria-label={`Medicine ${i + 1} duration`} className="form-input" placeholder="Duration (e.g. 5 days)" value={med.duration} onChange={e => updateMedicine(i, 'duration', e.target.value)} />
-                        <input aria-label={`Medicine ${i + 1} instructions`} className="form-input" placeholder="Instructions (optional)" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="followUpDate">Follow-up visit (optional)</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input id="followUpDate" type="date" className="form-input" style={{ maxWidth: '12rem' }} value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
-              {([['3 days', 3], ['1 week', 7], ['2 weeks', 14], ['1 month', 30]] as const).map(([label, n]) => (
-                <button key={label} type="button" className="btn btn-ghost btn-sm" onClick={() => setFollowUpDate(addDays(n))}>{label}</button>
-              ))}
-              {followUpDate && <button type="button" className="btn btn-ghost btn-sm text-red-500" onClick={() => setFollowUpDate('')}>Clear</button>}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="additional-notes" className="form-label">Additional Notes</label>
-            <textarea id="additional-notes"
-              className="form-textarea"
-              value={prescriptionNotes}
-              onChange={e => setPrescriptionNotes(e.target.value)}
-              placeholder="Diet restrictions, follow-up instructions..."
-              rows={2}
-            />
-          </div>
+          <PrescriptionFields
+            chiefComplaint={chiefComplaint} onChiefComplaint={setChiefComplaint}
+            diagnosis={diagnosis} onDiagnosis={setDiagnosis}
+            medicines={medicines} onMedicines={setMedicines}
+            followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
+            notes={prescriptionNotes} onNotes={setPrescriptionNotes}
+            baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
+          />
 
           <button onClick={savePrescription} className="btn btn-primary w-full" disabled={savingRx}>
             <Save size={16} /> {savingRx ? 'Saving...' : 'Save Prescription'}
@@ -588,13 +446,4 @@ function DocLink({ href, disabled, download, className = '', children }: {
   return download
     ? <a href={href} download className={base}>{children}</a>
     : <a href={href} target="_blank" rel="noopener" className={base}>{children}</a>
-}
-
-// The WhatsApp mark (speech bubble with a handset), drawn in the current text colour.
-function WhatsAppIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-  )
 }
