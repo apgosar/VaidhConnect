@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { message } from '@/lib/messages'
 import { cx } from './cx'
@@ -27,8 +28,10 @@ export function Modal({ open, title, onClose, children, role = 'dialog', size = 
   const panel = useRef<HTMLDivElement>(null)
   const titleId = useId()
   useFocusTrap(panel, open, onClose, initialFocus)
-  if (!open) return null
-  return (
+  if (!open || typeof document === 'undefined') return null
+  // Rendered on <body>, not where it is used: a page wrapper that is animated or transformed becomes the
+  // containing block of a fixed element, which put the dialog off-screen and scrolled the page.
+  return createPortal(
     <div role="presentation" className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div
         ref={panel} role={role} aria-modal="true" aria-labelledby={titleId} aria-describedby={describedBy} tabIndex={-1}
@@ -40,6 +43,7 @@ export function Modal({ open, title, onClose, children, role = 'dialog', size = 
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

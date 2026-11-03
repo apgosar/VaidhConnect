@@ -201,11 +201,11 @@ export default function NewAppointmentPage() {
               <p className="text-xs" style={{ color: 'var(--color-sage)' }} aria-live="polite">{slot.label} to {formatSlotLabelInTz(visitEnd, config.timezone)}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" className="btn btn-outline px-0" style={{ width: 44, height: 44 }} onClick={() => setCount(c => Math.max(1, c - 1))} disabled={count <= 1} aria-label="Shorter by one slot">
+              <button type="button" className="btn btn-outline" style={{ width: 44, height: 44, padding: 0 }} onClick={() => setCount(c => Math.max(1, c - 1))} disabled={count <= 1} aria-label="Shorter by one slot">
                 <Minus size={16} aria-hidden="true" />
               </button>
               <span className="min-w-[4.5rem] text-center font-semibold font-tabular" data-testid="visit-minutes">{minutes} min</span>
-              <button type="button" className="btn btn-outline px-0" style={{ width: 44, height: 44 }} onClick={() => setCount(c => Math.min(maxCount, c + 1))} disabled={count >= maxCount} aria-label="Longer by one slot">
+              <button type="button" className="btn btn-outline" style={{ width: 44, height: 44, padding: 0 }} onClick={() => setCount(c => Math.min(maxCount, c + 1))} disabled={count >= maxCount} aria-label="Longer by one slot">
                 <Plus size={16} aria-hidden="true" />
               </button>
             </div>

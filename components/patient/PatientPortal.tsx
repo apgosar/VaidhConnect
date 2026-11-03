@@ -17,6 +17,7 @@ interface DoctorProfile {
   clinicName: string
   logoUrl?: string | null
   photoUrl?: string | null
+  phones?: string[]
   address?: string | null
   mapsUrl?: string | null
   phone?: string | null
@@ -412,6 +413,17 @@ END:VCARD`
             </h3>
 
             
+
+            {(doctor.phones?.length ?? 0) > 1 && (
+              <div>
+                <p className="text-xs mb-0.5" style={{ color: 'var(--color-sage)' }}>Phone</p>
+                <ul className="text-sm space-y-1">
+                  {doctor.phones!.map(p => (
+                    <li key={p}><a href={`tel:${p.replace(/[^d+]/g, '')}`} className="font-tabular underline" style={{ color: 'var(--color-charcoal-mid)' }}>{p}</a></li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {doctor.address && (
               <div className="flex items-start justify-between gap-3">

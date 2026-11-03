@@ -87,6 +87,12 @@ can see or change:
 - **Full Calendar** shows past visits too (cancelled ones stay hidden) and can go back to any earlier week. Each visit shows its length.
 - **The doctor's morning summary** lists only the visits still ahead at the moment it is sent (one in progress counts), and the count matches. If every visit of the day is already over it says so.
 
+- **Edit** (replaces the old Reschedule button on a booked visit) offers **Reschedule** and **Cancel appointment**. Cancelling asks once more inside the dialog, frees the time and tells the patient on WhatsApp (the existing cancellation message). Only booked visits can be edited.
+- On the Prescription tab the **handwritten prescription** buttons (Take photo / From gallery) are at the very top of the tab.
+
+## Clinic phone numbers
+- Settings → Clinic Information takes up to 5 numbers (`phones` on the clinic profile; the first is the main one and is also kept in `phone`, which the landing page's Call and WhatsApp buttons and older code still read). **All numbers go into every patient message** that names the clinic's phone (booking, reminders, cancellation, reschedule, follow-up reminder, prescription), as one line: `+91 98765 43210, +91 91234 56789` (`clinicPhoneText` in `lib/clinicPhones.ts`). No template change was needed: it is still one variable. The prescription and receipt headers print them as `Tel: ...`, and the landing page lists them under Clinic Information. A clinic that never adds a second number behaves exactly as before.
+
 ## Patient details
 - **Age and date of birth** are entered together wherever a patient is added (Quick prescription, New Appointment, the patient's own booking form): type either and the other is worked out. An age gives an *estimated* date of birth, stored with `dobApproximate: true`; because that estimate moves every day, such a patient is matched to an existing record by **name and number** rather than by date of birth, so a returning patient is not added twice.
 - **Gender** (Male / Female / Other, as `MALE` / `FEMALE` / `OTHER`) is asked for every new patient in those three places and printed on the prescription next to the age. Older patients have none; the Quick prescription screen lets the doctor add it for them and saves it on their record. The API treats it as optional so older clients keep working.

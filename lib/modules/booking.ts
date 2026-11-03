@@ -6,6 +6,7 @@ import { rateLimit } from '../ratelimit'
 import type { BookingInput, PatientDetails } from '../validation'
 import { getDayAvailability } from './availability'
 import { isOpenRun } from '../slots'
+import { clinicPhones } from '../clinicPhones'
 import { notifyBooked, notifyCancelled, notifyRescheduled } from './notifications'
 import { patientRescheduleAllowance } from '../reschedulePolicy'
 import { getAccess, sessionOwnsAppointment, setInitialPin, verifyPin, PinError, type PatientSession } from './patientAccess'
@@ -205,6 +206,7 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
         clinicName: doctor.clinicName || 'Clinic',
         address: doctor.address || undefined,
         phone: doctor.phone || undefined,
+        phones: clinicPhones(doctor),
       },
     },
     patientId: patient.id,

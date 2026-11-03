@@ -1,4 +1,5 @@
 import { addHours } from 'date-fns'
+import { clinicPhoneText } from '../clinicPhones'
 import { tenantDb } from '../db/tenant'
 import { sendEmail, appointmentReminderHtml } from '../email'
 import { emailAccent } from '../tenant/theme'
@@ -48,7 +49,7 @@ export async function processReminders(tenant: Tenant, now = new Date()): Promis
             doctorName: doctor.name,
             clinicName: doctor.clinicName,
             appointmentTime,
-            clinicPhone: doctor.phone ?? undefined,
+            clinicPhone: clinicPhoneText(doctor) || undefined,
             accentColor: emailAccent(doctor),
             clinicAddress: doctor.address ?? undefined,
           }),
@@ -60,7 +61,7 @@ export async function processReminders(tenant: Tenant, now = new Date()): Promis
         patientName: patient.name,
         doctorName: doctor.name || 'Doctor',
         appointmentTime,
-        clinicPhone: doctor.phone || doctor.clinicName,
+        clinicPhone: clinicPhoneText(doctor, doctor.clinicName),
         directionsUrl: doctor.mapsUrl || 'Contact clinic for directions',
       })
 

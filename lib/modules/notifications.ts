@@ -1,4 +1,5 @@
 import { tenantDb } from '../db/tenant'
+import { clinicPhoneText } from '../clinicPhones'
 import { sendBookingConfirmation, sendCancellation, sendRescheduled, sendSummaryUpdate } from '../whatsapp'
 import { sendEmail } from '../email'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
@@ -21,7 +22,7 @@ export async function notifyBooked(tenant: Tenant, doctor: Doctor, patient: Pati
   try {
     const clinicName = doctor.clinicName || 'Clinic'
     const when = whenText(tenant, appt.startTime)
-    const clinicPhone = doctor.phone || clinicName
+    const clinicPhone = clinicPhoneText(doctor, clinicName)
 
     const tasks: Promise<unknown>[] = [
       sendBookingConfirmation(patient.phone, {
@@ -44,7 +45,7 @@ export async function notifyCancelled(tenant: Tenant, doctor: Doctor, patient: P
     const clinicName = doctor.clinicName || 'Clinic'
     const when = whenText(tenant, appt.startTime)
     const tasks: Promise<unknown>[] = [
-      sendCancellation(patient.phone, { patientName: patient.name, clinicName, appointmentTime: when, clinicPhone: doctor.phone || clinicName }),
+      sendCancellation(patient.phone, { patientName: patient.name, clinicName, appointmentTime: when, clinicPhone: clinicPhoneText(doctor, clinicName) }),
     ]
     if (patient.email) {
       tasks.push(sendEmail({
@@ -67,7 +68,7 @@ export async function notifyRescheduled(tenant: Tenant, doctor: Doctor, patient:
     const when = whenText(tenant, appt.startTime)
     const was = whenText(tenant, previousStart)
     const tasks: Promise<unknown>[] = [
-      sendRescheduled(patient.phone, { patientName: patient.name, clinicName, newTime: when, oldTime: was, clinicPhone: doctor.phone || clinicName }),
+      sendRescheduled(patient.phone, { patientName: patient.name, clinicName, newTime: when, oldTime: was, clinicPhone: clinicPhoneText(doctor, clinicName) }),
     ]
     if (patient.email) {
       tasks.push(sendEmail({

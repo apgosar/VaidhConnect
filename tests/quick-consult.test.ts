@@ -30,8 +30,10 @@ afterEach(() => vi.useRealTimers())
 
 describe('dobFromAge', () => {
   it('makes someone exactly that age today', () => {
-    expect(dobFromAge(36, '2026-11-05')).toBe('1990-11-05')
-    expect(dobFromAge(0, '2026-11-05')).toBe('2026-11-05')
+    expect(dobFromAge(36, '2026-11-05')).toBe('1990-06-01')
+    expect(dobFromAge(36, '2026-03-10')).toBe('1989-06-01') // born 1 June: still 36 before then
+    expect(dobFromAge(0, '2026-11-05')).toBe('2026-06-01')
+    expect(dobFromAge(36, '2026-11-05')).toBe(dobFromAge(36, '2026-12-31')) // does not move from day to day
   })
 })
 
@@ -42,7 +44,7 @@ describe('createQuickConsult', () => {
 
     const [patient] = all('patients')
     expect(patient).toMatchObject({ name: 'Asha Rao', phone: '+919800000001', dobApproximate: true, createdBy: 'staff:u1' })
-    expect(iso(patient.dob)).toBe('1990-11-05T00:00:00.000Z')
+    expect(iso(patient.dob)).toBe('1990-06-01T00:00:00.000Z')
 
     const [appt] = all('appointments')
     expect(appt).toMatchObject({ status: 'COMPLETED', visitType: 'TELECONSULTATION', patientId: r.patientId, chiefComplaint: 'Fever and cough for 3 days', reminderSent24h: true, reminderSent1h: true })
@@ -186,10 +188,10 @@ describe('age and date of birth helpers', () => {
     expect(ageFromDob('2026-11-05', '2026-11-05')).toBe(0)
     for (const age of [0, 1, 36, 99]) expect(ageFromDob(fromAge(age, '2026-11-05'), '2026-11-05')).toBe(age)
   })
-  it('handles 29 February', async () => {
+  it('keeps the age right around 29 February and before 1 June', async () => {
     const { ageFromDob, dobFromAge: fromAge } = await import('@/lib/time')
-    expect(fromAge(1, '2028-02-29')).toBe('2027-02-28') // 2027 has no 29 Feb
-    expect(fromAge(4, '2028-02-29')).toBe('2024-02-29')
+    expect(fromAge(1, '2028-02-29')).toBe('2026-06-01')
+    expect(fromAge(4, '2028-02-29')).toBe('2023-06-01')
     expect(ageFromDob(fromAge(1, '2028-02-29'), '2028-02-29')).toBe(1)
   })
 })

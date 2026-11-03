@@ -10,6 +10,7 @@ import { isUsablePrimary } from '@/lib/tenant/theme'
 import { FieldValue } from 'firebase-admin/firestore'
 import { apiError } from '@/lib/errors'
 import { cleanAdviceOptions } from '@/lib/advice'
+import { cleanClinicPhones, MAX_CLINIC_PHONES } from '@/lib/clinicPhones'
 import { MAX_ADVICE_LENGTH, MAX_ADVICE_OPTIONS } from '@/lib/constants'
 
 // SVG is deliberately not accepted: it can carry script, and these files are
@@ -192,7 +193,7 @@ export async function PATCH(request: Request) {
       theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
-      printSettings, removeLetterhead, adviceOptions,
+      printSettings, removeLetterhead, adviceOptions, phones,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -204,6 +205,13 @@ export async function PATCH(request: Request) {
     if (mapsUrl !== undefined) updateData.mapsUrl = mapsUrl?.trim() || null
     if (websiteUrl !== undefined) updateData.websiteUrl = websiteUrl?.trim() || null
     if (phone !== undefined) updateData.phone = phone?.trim() || null
+    // Several clinic numbers: the first is the main one and is also kept in `phone` for everything that shows one number.
+    if (phones !== undefined) {
+      const list = cleanClinicPhones(phones)
+      if (!list) return Response.json({ error: `Enter valid phone numbers (up to ${MAX_CLINIC_PHONES})` }, { status: 400 })
+      updateData.phones = list
+      updateData.phone = list[0] ?? null
+    }
     if (whatsappPhone !== undefined) updateData.whatsappPhone = whatsappPhone?.trim() || null
     if (specialty) updateData.specialty = specialty
     if (practiceDescription !== undefined) updateData.practiceDescription = practiceDescription?.trim() || null

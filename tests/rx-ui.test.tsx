@@ -289,3 +289,89 @@ describe('tapering doses on a phone', () => {
     expect(meds()[0]).toMatchObject({ frequency: 'Thrice daily', duration: '5 days' })
   })
 })
+
+describe('Edit: reschedule or cancel a booked visit', () => {
+  const openEdit = async (user: ReturnType<typeof userEvent.setup>) => {
+    render(<AppointmentView canPrescribe />)
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    return screen.findByRole('dialog', { name: 'Edit appointment' })
+  }
+  const patches = (calls: Call[]) => calls.filter(c => c.url === '/api/appointments/a1' && c.init?.method === 'PATCH')
+
+  it('replaces the Reschedule button with Edit, which offers both choices', async () => {
+    const user = userEvent.setup(); stubServer()
+    render(<AppointmentView canPrescribe />)
+    await screen.findByRole('button', { name: 'Edit' })
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).toBeNull()
+    const dialog = await openEdit(user)
+    expect(within(dialog).getByRole('button', { name: /Reschedule/ })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: /Cancel appointment/ })).toBeTruthy()
+  })
+
+  it('is not offered for a visit that is already over or cancelled', async () => {
+    stubServer({ appointment: { ...APPT, status: 'COMPLETED' } })
+    render(<AppointmentView canPrescribe />)
+    await screen.findByText('Asha Rao')
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+  })
+
+  it('Reschedule opens the time picker', async () => {
+    const user = userEvent.setup(); stubServer()
+    const dialog = await openEdit(user)
+    await user.click(within(dialog).getByRole('button', { name: /Reschedule/ }))
+    expect(await screen.findByRole('dialog', { name: /Choose a new time/ })).toBeTruthy()
+  })
+
+  it('Cancel asks once more, and says what will happen', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    const dialog = await openEdit(user)
+    await user.click(within(dialog).getByRole('button', { name: /Cancel appointment/ }))
+    const sure = await screen.findByRole('alertdialog', { name: 'Cancel this appointment?' })
+    expect(within(sure).getByText(/told on WhatsApp/)).toBeTruthy()
+    expect(patches(calls)).toHaveLength(0)
+  })
+
+  it('"Keep it" goes back without cancelling anything', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    const dialog = await openEdit(user)
+    await user.click(within(dialog).getByRole('button', { name: /Cancel appointment/ }))
+    await user.click(await screen.findByRole('button', { name: 'Keep it' }))
+    expect(await screen.findByRole('dialog', { name: 'Edit appointment' })).toBeTruthy()
+    expect(patches(calls)).toHaveLength(0)
+  })
+
+  it('"Yes, cancel it" cancels the appointment and closes the dialog', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    const dialog = await openEdit(user)
+    await user.click(within(dialog).getByRole('button', { name: /Cancel appointment/ }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, cancel it' }))
+    await waitFor(() => expect(patches(calls)).toHaveLength(1))
+    expect(JSON.parse(patches(calls)[0].init!.body as string)).toEqual({ status: 'CANCELLED' })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  })
+
+  it('shows the reason and stays open when cancelling fails', async () => {
+    stubServer(); const user = userEvent.setup()
+    const original = fetch as unknown as (u: string, i?: RequestInit) => Promise<Response>
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/appointments/a1' && init?.method === 'PATCH'
+      ? Response.json({ error: 'This appointment is not active' }, { status: 409 }) : original(url, init))))
+    const dialog = await openEdit(user)
+    await user.click(within(dialog).getByRole('button', { name: /Cancel appointment/ }))
+    await user.click(await screen.findByRole('button', { name: 'Yes, cancel it' }))
+    expect(await screen.findByText('This appointment is not active')).toBeTruthy()
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+  })
+})
+
+describe('the handwritten prescription buttons are at the top', () => {
+  it('come before every field of the form, so the doctor does not scroll for them', async () => {
+    const user = userEvent.setup(); await openPrescription(user)
+    const take = screen.getByRole('button', { name: /Take photo/ })
+    const gallery = screen.getByRole('button', { name: /From gallery/ })
+    const firstField = screen.getByLabelText(/Chief complaint/)
+    const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(before(take, firstField)).toBe(true)
+    expect(before(gallery, firstField)).toBe(true)
+    expect(before(take, screen.getByRole('button', { name: /Save & share on WhatsApp/ }))).toBe(true)
+  })
+})

@@ -1,4 +1,5 @@
 import { getTenant } from '@/lib/tenant/resolve'
+import { clinicPhones } from '@/lib/clinicPhones'
 import { tenantDb } from '@/lib/db/tenant'
 import { tenantHasFeature } from '@/lib/tenant/features'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -48,6 +49,7 @@ export default async function HomePage() {
         address: doctor.address ?? null,
         mapsUrl: doctor.mapsUrl ?? null,
         phone: doctor.phone ?? null,
+        phones: clinicPhones(doctor),
         qualifications: doctor.qualifications ?? null,
         practiceDescription: doctor.practiceDescription ?? null,
         photoUrl: doctor.photoUrl ?? null,

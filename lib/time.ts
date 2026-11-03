@@ -140,11 +140,13 @@ export function toClinicLocal(date: Date, tz: string): string {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
 }
 
-/** The date of birth that makes someone exactly `age` years old on `today` (both YYYY-MM-DD). */
+/**
+ * The estimated date of birth for someone `age` years old on `today` (both YYYY-MM-DD): always 1 June, so it does
+ * not move from day to day. The year is the one that makes them `age` today (a year earlier before 1 June).
+ */
 export function dobFromAge(age: number, today: string): string {
-  const dob = `${Number(today.slice(0, 4)) - age}${today.slice(4)}`
-  // 29 Feb has no twin in a year that is not a leap year.
-  return isValidYmd(dob) ? dob : dob.replace('-02-29', '-02-28')
+  const year = Number(today.slice(0, 4)) - age - (today.slice(5) < '06-01' ? 1 : 0)
+  return `${String(year).padStart(4, '0')}-06-01`
 }
 
 /** Whole years between a date of birth and `today` (both YYYY-MM-DD). */

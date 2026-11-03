@@ -260,6 +260,16 @@ async function main() {
       check('another clinic cannot open it', [401, 404].includes((await http(bHost, `/api/prescriptions/${quick.body.prescriptionId}/pdf`, { cookie: ownerCookie })).status))
     }
 
+    // ── several clinic phone numbers ────────────────────────────────────────
+    const profileRef = db.collection('clinics').doc(a)
+    const before = (await profileRef.get()).data()!
+    cleanup.push(async () => { await profileRef.update({ phone: before.phone ?? null, phones: before.phones ?? [] }) })
+    check('front desk cannot change the clinic numbers', (await staff('/api/doctor/profile', 'PATCH', { phones: ['+91 90000 00001'] })).status === 403)
+    check('a list with something that is not a number is refused', (await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { phones: ['+91 90000 00001', 'call me'] } })).status === 400)
+    const multi = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { phones: ['+91 90000 00001', '', '+91 90000 00002'] } })
+    const afterPhones = (await profileRef.get()).data()!
+    check('several clinic numbers are saved, the first one as the main number', multi.status === 200 && afterPhones.phone === '+91 90000 00001' && JSON.stringify(afterPhones.phones) === JSON.stringify(['+91 90000 00001', '+91 90000 00002']), `(${multi.status})`)
+
     // ── follow-up date, medicine suggestions, patient prescription download ──
     const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', onExamination: 'ZZ BP 120/80', investigations: 'ZZ CBC', advice: ['ZZ Avoid outside food'], adviceOther: 'ZZ Rest', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
     check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)

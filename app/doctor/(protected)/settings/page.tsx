@@ -9,6 +9,9 @@ import { Alert } from '@/components/ui/Alert'
 import { Switch } from '@/components/ui/Switch'
 import { PrintingSection } from '@/components/doctor/settings/PrintingSection'
 import { AdviceSection } from '@/components/doctor/settings/AdviceSection'
+import { ClinicPhonesField } from '@/components/doctor/settings/ClinicPhonesField'
+import { clinicPhones } from '@/lib/clinicPhones'
+import { ImageAdjustDialog } from '@/components/ui/ImageAdjustDialog'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
 import { failureText, networkFailureText } from '@/lib/clientErrors'
@@ -17,7 +20,7 @@ import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
-  address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null
+  address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null; phones?: string[]
   whatsappPhone?: string | null
   registrationNumber: string; photoUrl?: string | null;
   youtubeLinks: string[];
@@ -99,12 +102,27 @@ function SettingsPageContent() {
     })
   }
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // A picked picture is positioned first (drag, zoom, turn); what comes out is a small square, so a big phone photo is fine.
+  const [adjusting, setAdjusting] = useState<{ kind: 'logo' | 'photo'; src: string } | null>(null)
+  const [logoSource, setLogoSource] = useState<string | null>(null)
+  const [photoSource, setPhotoSource] = useState<string | null>(null)
+  const pickPicture = (kind: 'logo' | 'photo', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
-    setLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setNotice('Please choose a PNG, JPG or WebP picture'); return }
+    if (file.size > 20 * 1024 * 1024) { setNotice('That picture is too large'); return }
+    const src = URL.createObjectURL(file)
+    if (kind === 'logo') setLogoSource(src); else setPhotoSource(src)
+    setAdjusting({ kind, src })
+  }
+  const adjustSaved = (kind: 'logo' | 'photo') =>
+    setAdjusting({ kind, src: (kind === 'logo' ? logoSource : photoSource) ?? `/api/doctor/profile/image?kind=${kind}&v=${Date.now()}` })
+  const applyAdjusted = (file: File) => {
+    if (!adjusting) return
+    const preview = URL.createObjectURL(file)
+    if (adjusting.kind === 'logo') { setLogoFile(file); setLogoPreview(preview) } else { setPhotoFile(file); setPhotoPreview(preview) }
+    setAdjusting(null)
   }
 
   const handleQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,13 +133,6 @@ function SettingsPageContent() {
     setQrPreview(URL.createObjectURL(file))
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
-  }
 
   const copyMondayToWeekdays = () => {
     if (!doctor) return
@@ -216,6 +227,7 @@ function SettingsPageContent() {
           mapsUrl: doctor.mapsUrl,
           websiteUrl: doctor.websiteUrl,
           phone: doctor.phone,
+          phones: doctor.phones ?? clinicPhones(doctor),
           whatsappPhone: doctor.whatsappPhone,
           specialty: doctor.specialty,
           practiceDescription: doctor.practiceDescription,
@@ -272,6 +284,12 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-5">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Clinic Branding</h2>
 
+        <ImageAdjustDialog
+          src={adjusting?.src ?? null} mode={adjusting?.kind === 'logo' ? 'fit' : 'fill'} round={adjusting?.kind === 'photo'}
+          title={adjusting?.kind === 'logo' ? 'Adjust the clinic logo' : 'Adjust the doctor photo'}
+          onCancel={() => setAdjusting(null)} onApply={applyAdjusted}
+        />
+
         {/* Logo and Photo Uploads */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
           <div className="form-group">
@@ -285,12 +303,15 @@ function SettingsPageContent() {
                 )}
               </div>
               <div className="space-y-2">
-                <button onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
-                  <Upload size={14} /> Upload Logo
-                </button>
-                <p className="text-xs text-slate-500">Max 2MB</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                    <Upload size={14} /> {(logoPreview || doctor.logoUrl) ? 'Change' : 'Upload Logo'}
+                  </button>
+                  {(logoPreview || doctor.logoUrl) && <button type="button" onClick={() => adjustSaved('logo')} className="btn btn-outline btn-sm">Adjust</button>}
+                </div>
+                <p className="text-xs text-slate-500">Move, zoom or turn it before saving</p>
               </div>
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => pickPicture('logo', e)} />
             </div>
           </div>
 
@@ -305,12 +326,15 @@ function SettingsPageContent() {
                 )}
               </div>
               <div className="space-y-2">
-                <button onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
-                  <Upload size={14} /> Upload Photo
-                </button>
-                <p className="text-xs text-slate-500">Max 2MB</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                    <Upload size={14} /> {(photoPreview || doctor.photoUrl) ? 'Change' : 'Upload Photo'}
+                  </button>
+                  {(photoPreview || doctor.photoUrl) && <button type="button" onClick={() => adjustSaved('photo')} className="btn btn-outline btn-sm">Adjust</button>}
+                </div>
+                <p className="text-xs text-slate-500">Move, zoom or turn it before saving</p>
               </div>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={e => pickPicture('photo', e)} />
             </div>
           </div>
         </div>
@@ -386,7 +410,7 @@ function SettingsPageContent() {
                 const val = e.target.value
                 setDoctor((p: any) => p ? { ...p, whatsappPhone: val } : p)
                 if (sameAsWhatsapp) {
-                  setDoctor((p: any) => p ? { ...p, phone: val } : p)
+                  setDoctor((p: any) => p ? { ...p, phone: val, phones: [val, ...clinicPhones(p).slice(1)] } : p)
                 }
               }}
             />
@@ -397,16 +421,10 @@ function SettingsPageContent() {
 
           {/* Clinic Phone */}
           <div className="form-group">
-            <label className="form-label" htmlFor="clinicPhone">Clinic Phone</label>
-            <input
-              id="clinicPhone"
-              type="tel"
-              className="form-input"
-              placeholder="+91 98765 43210"
-              value={doctor.phone ?? ''}
-              disabled={sameAsWhatsapp}
-              style={sameAsWhatsapp ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
-              onChange={e => setDoctor((p: any) => p ? { ...p, phone: e.target.value } : p)}
+            <ClinicPhonesField
+              value={doctor.phones ?? clinicPhones(doctor)}
+              lockFirst={sameAsWhatsapp}
+              onChange={list => setDoctor((p: any) => p ? { ...p, phones: list, phone: list[0] ?? '' } : p)}
             />
             <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
               <input
@@ -416,16 +434,16 @@ function SettingsPageContent() {
                   const checked = e.target.checked
                   setSameAsWhatsapp(checked)
                   if (checked && doctor.whatsappPhone) {
-                    setDoctor((p: any) => p ? { ...p, phone: p.whatsappPhone } : p)
+                    setDoctor((p: any) => p ? { ...p, phone: p.whatsappPhone, phones: [p.whatsappPhone, ...clinicPhones(p).slice(1)] } : p)
                   }
                 }}
                 className="w-4 h-4 rounded"
                 style={{ accentColor: 'var(--color-forest)' }}
               />
-              <span className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>Same as Dr. WhatsApp number</span>
+              <span className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>Main number is the same as the Dr. WhatsApp number</span>
             </label>
             <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>
-              Shown on the patient-facing landing page and included in WhatsApp messages sent to patients.
+              The first number is the main one, shown on the Call and WhatsApp buttons of your landing page. Every number is shown in the WhatsApp messages sent to patients (booking, reminders, prescriptions).
             </p>
           </div>
           <div className="form-group sm:col-span-2">
