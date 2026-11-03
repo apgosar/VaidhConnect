@@ -212,7 +212,7 @@ export default function QuickPrescriptionPage() {
         {chosen && (
           <div className="flex items-center justify-between gap-2 rounded-lg p-3" style={{ background: 'var(--color-primary-bg)' }}>
             <p className="text-sm flex items-start gap-2"><Lock size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><span><strong>Existing patient.</strong> Their details are filled in and locked. To enter someone else, press &ldquo;Not them&rdquo;.</span></p>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={clearChosen}><X size={14} aria-hidden="true" /> Not them</button>
+            <button type="button" className="btn btn-outline btn-sm shrink-0" onClick={clearChosen}><X size={14} aria-hidden="true" /> Not them</button>
           </div>
         )}
 
