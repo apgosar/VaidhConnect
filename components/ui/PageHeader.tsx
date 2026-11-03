@@ -32,7 +32,7 @@ export function PageHeader({ title, subtitle, homeHref = '/', onBack, right, cla
         </Link>
       ) : null}
       <div className="flex-1 min-w-0">
-        <h1 className="font-bold text-white text-base truncate" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
+        <h1 className="font-bold text-white text-base leading-snug break-words" style={{ fontFamily: 'var(--font-display)' }}>{title}</h1>
         {subtitle && <p className="text-xs" style={{ color: '#FFFFFF' }}>{subtitle}</p>}
       </div>
       {right}

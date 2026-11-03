@@ -123,23 +123,23 @@ export default function PatientsPage() {
                   {patient.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}><LangText>{patient.name}</LangText></p>
                     <span
-                      className="text-xs font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide"
+                      className="text-xs font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide whitespace-nowrap"
                       style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
                     >
                       {formatPatientId(patient.id)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-sage)' }}>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                    <span className="text-xs flex items-center gap-1 whitespace-nowrap" style={{ color: 'var(--color-sage)' }}>
                       <Phone size={11} /> {patient.phone}
                     </span>
-                    <span className="text-xs font-tabular" style={{ color: 'var(--color-sage)' }}>
+                    <span className="text-xs font-tabular whitespace-nowrap" style={{ color: 'var(--color-sage)' }}>
                       {computeAge(patient.dob)} yrs
                     </span>
-                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-sage-light)' }}>
+                    <span className="text-xs flex items-center gap-1 whitespace-nowrap" style={{ color: 'var(--color-sage-light)' }}>
                       <Calendar size={11} /> {patient._count.appointments} appt{patient._count.appointments !== 1 ? 's' : ''}
                     </span>
                   </div>

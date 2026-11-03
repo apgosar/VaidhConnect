@@ -454,10 +454,10 @@ function SettingsPageContent() {
           <label htmlFor="accent-color" className="form-label flex items-center gap-2">
             <Palette size={14} /> Accent Color <span className="text-slate-500 text-xs">(auto-set by specialty, override here)</span>
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <input id="accent-color"
               type="color"
-              className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
+              className="w-10 h-10 shrink-0 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.themeColor}
               onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)}
             />
@@ -482,7 +482,7 @@ function SettingsPageContent() {
           <div className="flex items-center gap-3 flex-wrap">
             <input id="brand-colour"
               type="color"
-              className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
+              className="w-10 h-10 shrink-0 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.theme?.primary || '#0F3D2E'}
               onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
             />
@@ -649,27 +649,27 @@ function SettingsPageContent() {
                       <div className="space-y-1">
                         <p className="text-xs text-slate-500 font-medium">HOURS</p>
                         <div className="flex gap-2 items-center">
-                          <input aria-label={`${day} start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                          <input aria-label={`${day} start time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
                           <span className="text-slate-500 text-xs">–</span>
-                          <input aria-label={`${day} end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                          <input aria-label={`${day} end time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <p className="text-xs text-slate-500 font-medium">MORNING</p>
                           <div className="flex gap-2 items-center">
-                            <input aria-label={`${day} morning start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                            <input aria-label={`${day} morning start time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
                             <span className="text-slate-500 text-xs">–</span>
-                            <input aria-label={`${day} morning end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                            <input aria-label={`${day} morning end time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                           </div>
                         </div>
                         <div className="space-y-1">
                           <p className="text-xs text-slate-500 font-medium">EVENING</p>
                           <div className="flex gap-2 items-center">
-                            <input aria-label={`${day} evening start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
+                            <input aria-label={`${day} evening start time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
                             <span className="text-slate-500 text-xs">–</span>
-                            <input aria-label={`${day} evening end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
+                            <input aria-label={`${day} evening end time`} type="time" className="form-input text-sm py-1.5 flex-1 min-w-0" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
                           </div>
                         </div>
                       </div>

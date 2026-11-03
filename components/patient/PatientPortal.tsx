@@ -267,7 +267,7 @@ END:VCARD`
               </p>
               <p className="mt-1 text-sm" style={{ color: '#FFFFFF' }}>
                 {doctor.qualifications && <span>{doctor.qualifications} · </span>}
-                Reg: {doctor.registrationNumber}
+                {/^reg/i.test(doctor.registrationNumber ?? '') ? doctor.registrationNumber : `Reg: ${doctor.registrationNumber}`}
               </p>
 
               {doctor.practiceDescription && (
@@ -450,18 +450,18 @@ END:VCARD`
                 const dayData = (doctor.timings as WeeklyTimings)[day]
                 if (!dayData) return null
                 return (
-                  <div key={day} className="flex justify-between items-center text-sm">
+                  <div key={day} className="flex justify-between items-start gap-3 text-sm">
                     <span
-                      className="capitalize font-medium w-28"
+                      className="capitalize font-medium w-24 shrink-0"
                       style={{ color: 'var(--color-charcoal)' }}
                     >
                       {day}
                     </span>
                     <span
-                      className="font-tabular"
+                      className="font-tabular text-right"
                       style={{ color: dayData.open ? 'var(--color-charcoal-mid)' : '#B54A3C' }}
                     >
-                      {formatDayTiming(dayData)}
+                      {formatDayTiming(dayData).split(', ').map((range, i) => <span key={i} className="block">{range}</span>)}
                     </span>
                   </div>
                 )
