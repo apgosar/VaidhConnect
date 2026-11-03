@@ -229,6 +229,30 @@ async function main() {
     const sharedFiles = await db.collection('clinics').doc(a).collection('audit_logs').where('action', 'in', ['prescription.share', 'prescription.share_failed']).get()
     check('the attempt is recorded in the activity log', shareTry.status === 422 || sharedFiles.size >= 1)
 
+    // ── quick prescription (a consultation by phone or video) ───────────────
+    const quickBody = { patient: { name: `ZZ Quick ${stamp}`, phone: '+919800000096', ageYears: 41 }, diagnosis: 'ZZ Quick', medicines: [{ name: 'ZZ Quickmed', dosage: '1 tab', frequency: 'OD', duration: '3 days' }] }
+    check('a quick prescription needs a login', (await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', json: quickBody })).status === 401)
+    check('front desk cannot make a quick prescription', (await staff('/api/doctor/quick-prescription', 'POST', quickBody)).status === 403)
+    check('a quick prescription without a medicine is refused', (await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: { ...quickBody, medicines: [] } })).status === 400)
+    const quick = await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: quickBody })
+    check('the doctor can add a patient and a prescription in one step', quick.status === 201 && !!quick.body?.prescriptionId, `(${quick.status} ${quick.body?.error ?? ''})`)
+    if (quick.body?.appointmentId) {
+      cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(quick.body.appointmentId).delete() })
+      cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(quick.body.prescriptionId).delete() })
+      cleanup.push(async () => { await db.collection('clinics').doc(a).collection('patients').doc(quick.body.patientId).delete() })
+      const visit = (await db.collection('clinics').doc(a).collection('appointments').doc(quick.body.appointmentId).get()).data()!
+      check('it is recorded as a completed phone/video visit that takes no booking slot', visit.status === 'COMPLETED' && visit.visitType === 'TELECONSULTATION')
+      const quickPdf = await http(aHost, `/api/prescriptions/${quick.body.prescriptionId}/pdf`, { cookie: ownerCookie })
+      check('its prescription downloads as a PDF', quickPdf.status === 200 && quickPdf.res.headers.get('content-type') === 'application/pdf')
+      const quickShare = await http(aHost, `/api/prescriptions/${quick.body.prescriptionId}/whatsapp`, { method: 'POST', cookie: ownerCookie })
+      check('and it can be sent on WhatsApp', [200, 502].includes(quickShare.status) && !JSON.stringify(quickShare.body).includes('storage.googleapis.com'), `(${quickShare.status} ${quickShare.body?.error ?? ''})`)
+      const again = await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: quickBody })
+      if (again.body?.appointmentId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(again.body.appointmentId).delete() })
+      if (again.body?.prescriptionId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(again.body.prescriptionId).delete() })
+      check('the same person on the same number is not added twice', again.status === 201 && again.body?.patientId === quick.body.patientId && again.body?.patientCreated === false)
+      check('another clinic cannot open it', [401, 404].includes((await http(bHost, `/api/prescriptions/${quick.body.prescriptionId}/pdf`, { cookie: ownerCookie })).status))
+    }
+
     // ── follow-up date, medicine suggestions, patient prescription download ──
     const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
     check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)

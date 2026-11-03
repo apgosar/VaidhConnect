@@ -6,9 +6,8 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
-import { MAX_TAPER_STEPS, taperTotalDays } from '@/lib/taper'
-import { addDaysYmd, isValidYmd, ymdInTz } from '@/lib/time'
-import { rememberMedicines } from '@/lib/modules/medicineCatalog'
+import { MAX_TAPER_STEPS } from '@/lib/taper'
+import { savePrescription, PrescriptionError, type PrescriptionInput } from '@/lib/modules/prescriptions'
 import { apiError } from '@/lib/errors'
 
 const text = (max: number) => z.string().trim().max(max)
@@ -52,50 +51,18 @@ export async function POST(request: Request) {
   try {
     const a = await authorize()
     if ('error' in a) return a.error
-    const { tenant, session, db } = a
+    const { tenant, session } = a
 
     const parsed = await parseBody(request, prescriptionSchema)
     if ('error' in parsed) return parsed.error
-    const { appointmentId, patientId, diagnosis, medicines, notes } = parsed.data
-    const followUpDate = parsed.data.followUpDate || null
-
-    const appt = await db.col('appointments').doc(appointmentId).get()
-    if (!appt.exists || appt.data()?.patientId !== patientId) {
-      return Response.json({ error: 'Appointment and patient do not match' }, { status: 400 })
+    let saved
+    try {
+      saved = await savePrescription(tenant, parsed.data as PrescriptionInput)
+    } catch (e) {
+      if (e instanceof PrescriptionError) return Response.json({ error: e.message }, { status: e.status })
+      throw e
     }
-
-    // The follow-up must be a real date, no earlier than the visit itself, and not years away.
-    if (followUpDate) {
-      const visitDay = ymdInTz(appt.data()!.startTime.toDate(), tenant.timezone)
-      if (!isValidYmd(followUpDate)) return Response.json({ error: 'Choose a valid follow-up date' }, { status: 400 })
-      if (followUpDate < visitDay) return Response.json({ error: 'The follow-up date cannot be before the visit' }, { status: 400 })
-      if (followUpDate > addDaysYmd(visitDay, 731)) return Response.json({ error: 'The follow-up date is too far away' }, { status: 400 })
-    }
-
-    const existing = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
-    const previous = existing.empty ? null : (existing.docs[0].data() as any)
-    const now = new Date()
-    // A tapering medicine states its length in its steps; keep the plain fields in step with it so
-    // anything reading them (lists, search) still shows something sensible.
-    const stored = medicines.map(m => m.taper
-      ? { ...m, dosage: m.taper.steps[0].dose, frequency: 'Tapering', duration: `${taperTotalDays(m.taper.steps)} days` }
-      : m)
-    const data: Record<string, unknown> = { appointmentId, patientId, diagnosis: diagnosis ?? null, medicines: stored, notes: notes ?? null, followUpDate, updatedAt: now }
-    // A new or changed follow-up date is a new reminder to send.
-    if (followUpDate !== (previous?.followUpDate ?? null)) data.followUpReminderSent = false
-
-    let id: string
-    if (existing.empty) {
-      const ref = db.col('prescriptions').doc()
-      await ref.set({ ...data, createdAt: now })
-      id = ref.id
-    } else {
-      await existing.docs[0].ref.update(data)
-      id = existing.docs[0].id
-    }
-
-    // Remember the medicines for next time's suggestions. A failure here must never lose the prescription.
-    await rememberMedicines(db, stored as any, (previous?.medicines ?? []).map((m: any) => m.name)).catch(e => console.error('[medicine-catalog]', e))
+    const { id, data } = saved
 
     await audit(tenant, session, 'prescription.save', `prescriptions/${id}`)
     return Response.json({ prescription: { id, ...data } }, { status: 201 })

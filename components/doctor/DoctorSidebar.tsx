@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Calendar, Users, Settings, LogOut,
-  Menu, X, CalendarOff, MessageSquare, CalendarPlus, UserCog, ScrollText
+  Menu, X, CalendarOff, MessageSquare, CalendarPlus, UserCog, ScrollText, FilePlus2
 } from 'lucide-react'
 import { can, type Role, type Permission } from '@/lib/auth/access'
 import { useFocusTrap } from '@/components/ui/useFocusTrap'
@@ -23,6 +23,7 @@ interface DoctorSidebarProps {
 const navItems: Array<{ href: string; icon: typeof Calendar; label: string; permission?: Permission }> = [
   { href: '/doctor/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/doctor/appointments/new', icon: CalendarPlus, label: 'New Appointment', permission: 'appointments:manage' },
+  { href: '/doctor/quick-prescription', icon: FilePlus2, label: 'Quick Prescription', permission: 'prescriptions:manage' },
   { href: '/doctor/calendar', icon: Calendar, label: 'Calendar', permission: 'appointments:manage' },
   { href: '/doctor/blocked-slots', icon: CalendarOff, label: 'Block Schedule', permission: 'blocked:manage' },
   { href: '/doctor/patients', icon: Users, label: 'Patients', permission: 'patients:manage' },
