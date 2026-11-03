@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { FakeFirestore, fakeTenantDb } from './helpers/fakeFirestore'
 
-const h = vi.hoisted(() => ({ db: null as any }))
+const h = vi.hoisted(() => ({ db: null as any, lastRx: null as any }))
 vi.mock('@/lib/db/tenant', () => ({ tenantDb: () => h.db }))
 vi.mock('@/lib/storage', () => ({ downloadFile: async () => null }))
+// Remember what the PDF was built from, so a test can check the wording that goes on the page.
+vi.mock('@/lib/pdf/prescriptionDocument', async importOriginal => {
+  const real = await importOriginal<typeof import('@/lib/pdf/prescriptionDocument')>()
+  return { ...real, PrescriptionDocument: (props: any) => { h.lastRx = props; return real.PrescriptionDocument(props) } }
+})
 
 import { registerPdfFonts, scriptRuns, FONT_DEVANAGARI, FONT_GUJARATI, FONT_LATIN } from '@/lib/pdf/fonts'
 import { PrescriptionDocument, type PrescriptionDocProps } from '@/lib/pdf/prescriptionDocument'
@@ -18,7 +23,7 @@ const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPh
 
 const baseDoc = (over: Partial<PrescriptionDocProps> = {}): PrescriptionDocProps => ({
   prescription: { id: 'rx123456789', diagnosis: 'Viral fever', medicines: [{ name: 'Paracetamol', dosage: '500 mg', frequency: 'Twice daily', duration: '3 days', instructions: 'After food' }], notes: 'Rest' },
-  patient: { name: 'Asha Rao', phone: '+919800000001', dob: '01 May 1990' },
+  patient: { name: 'Asha Rao', phone: '+919800000001', age: '36 years' },
   visit: { dateText: '02 Nov 2026', chiefComplaint: 'Fever' },
   doctor: { name: 'Shah', clinicName: 'Shah Clinic', qualifications: 'MBBS', address: 'MG Road', phone: '+919900000000' },
   ...over,
@@ -65,7 +70,7 @@ describe('prescription document', () => {
 
   it('draws Gujarati and Hindi text with the bundled fonts', async () => {
     const buf = await renderToBuffer(PrescriptionDocument(baseDoc({
-      patient: { name: 'આશા રાવ', phone: '+919800000001', dob: '01 May 1990' },
+      patient: { name: 'આશા રાવ', phone: '+919800000001', age: '36 years' },
       prescription: { id: 'rx1', diagnosis: 'बुखार', medicines: [{ name: 'દવા', dosage: '1', frequency: '₹', duration: '3', instructions: 'ખાધા પછી' }], notes: 'आराम करें' },
     })))
     const text = asText(buf)
@@ -108,6 +113,38 @@ describe('receipt document', () => {
   })
 })
 
+// Every piece of text placed on the page, found by walking the element tree (the PDF itself stores glyphs, not words).
+function textOf(node: any): string[] {
+  if (node == null || typeof node === 'boolean') return []
+  if (typeof node === 'string' || typeof node === 'number') return [String(node)]
+  if (Array.isArray(node)) return node.flatMap(textOf)
+  return textOf(node.props?.children)
+}
+
+describe('the chief complaint on the prescription', () => {
+  const words = (over: Partial<PrescriptionDocProps>) => textOf(PrescriptionDocument(baseDoc(over))).join(' ')
+
+  it('is printed with its heading when there is one', () => {
+    const t = words({ visit: { dateText: '02 Nov 2026', chiefComplaint: 'Fever for 3 days' } })
+    expect(t).toContain('Chief Complaint')
+    expect(t).toContain('Fever for 3 days')
+  })
+
+  it('is left out entirely, heading and all, when it is empty, missing or only spaces', () => {
+    for (const blank of [null, undefined, '', '   ']) {
+      const t = words({ visit: { dateText: '02 Nov 2026', chiefComplaint: blank } })
+      expect(t, JSON.stringify(blank)).not.toContain('Chief Complaint')
+    }
+  })
+
+  it('shows the age, not a date of birth', () => {
+    const t = words({})
+    expect(t).toContain('AGE')
+    expect(t).toContain('36 years')
+    expect(t).not.toContain('DATE OF BIRTH')
+  })
+})
+
 describe('rendering from saved data', () => {
   let fs: FakeFirestore
   beforeEach(async () => {
@@ -128,6 +165,19 @@ describe('rendering from saved data', () => {
     expect(asText(pdf!.buffer)).toContain('/Subtype /Image') // the logo
   })
 
+  it('puts the patient age on the prescription, worked out for the day of the visit, and never their date of birth', async () => {
+    await renderPrescriptionPdf(tenant, 'rx1') // born 1 May 1990, visit 2 Nov 2026
+    expect(h.lastRx.patient).toEqual({ name: 'Asha Rao', phone: '+919800000001', age: '36 years' })
+    expect(JSON.stringify(h.lastRx.patient)).not.toContain('1990')
+    expect(h.lastRx.visit.chiefComplaint).toBe('Fever')
+  })
+
+  it('words a baby age in months', async () => {
+    await h.db.col('patients').doc('p1').set({ name: 'Baby Rao', phone: '+919800000001', dob: new Date('2026-04-02T00:00:00Z') })
+    await renderPrescriptionPdf(tenant, 'rx1')
+    expect(h.lastRx.patient.age).toBe('7 months')
+  })
+
   it('builds a receipt PDF', async () => {
     const pdf = await renderReceiptPdf(tenant, 'pay1')
     expect(isPdf(pdf!.buffer)).toBe(true)
@@ -144,6 +194,7 @@ describe('rendering from saved data', () => {
   it('still produces a PDF when the patient has no date of birth', async () => {
     await h.db.col('patients').doc('p1').set({ name: 'Asha Rao', phone: '+919800000001' })
     expect(isPdf((await renderPrescriptionPdf(tenant, 'rx1'))!.buffer)).toBe(true)
+    expect(h.lastRx.patient.age).toBe('')
   })
 })
 

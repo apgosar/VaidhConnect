@@ -152,3 +152,13 @@ export function ageFromDob(dob: string, today: string): number {
   const years = Number(today.slice(0, 4)) - Number(dob.slice(0, 4))
   return today.slice(5) < dob.slice(5) ? years - 1 : years
 }
+
+/** "36 years", "1 year", "7 months", "Under 1 month": how old someone was on `on` (both YYYY-MM-DD). */
+export function ageText(dob: string, on: string): string {
+  const years = ageFromDob(dob, on)
+  if (years >= 1) return years === 1 ? '1 year' : `${years} years`
+  let months = (Number(on.slice(0, 4)) - Number(dob.slice(0, 4))) * 12 + Number(on.slice(5, 7)) - Number(dob.slice(5, 7))
+  if (on.slice(8) < dob.slice(8)) months -= 1
+  if (months < 1) return 'Under 1 month'
+  return months === 1 ? '1 month' : `${months} months`
+}

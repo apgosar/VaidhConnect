@@ -37,7 +37,7 @@ describe('dobFromAge', () => {
 
 describe('createQuickConsult', () => {
   it('adds a new patient from an age, records a completed visit and saves the prescription', async () => {
-    const r = await createQuickConsult(tenant, 'u1', { patient: { name: ' Asha Rao ', phone: '+919800000001', ageYears: 36 }, diagnosis: 'Fever', medicines: [med] })
+    const r = await createQuickConsult(tenant, 'u1', { patient: { name: ' Asha Rao ', phone: '+919800000001', ageYears: 36 }, chiefComplaint: ' Fever and cough for 3 days ', diagnosis: 'Viral fever', medicines: [med] })
     expect(r.patientCreated).toBe(true)
 
     const [patient] = all('patients')
@@ -45,13 +45,19 @@ describe('createQuickConsult', () => {
     expect(iso(patient.dob)).toBe('1990-11-05T00:00:00.000Z')
 
     const [appt] = all('appointments')
-    expect(appt).toMatchObject({ status: 'COMPLETED', visitType: 'TELECONSULTATION', patientId: r.patientId, chiefComplaint: 'Teleconsultation', reminderSent24h: true, reminderSent1h: true })
+    expect(appt).toMatchObject({ status: 'COMPLETED', visitType: 'TELECONSULTATION', patientId: r.patientId, chiefComplaint: 'Fever and cough for 3 days', reminderSent24h: true, reminderSent1h: true })
     expect(iso(appt.startTime)).toBe(NOW.toISOString())
     expect(iso(appt.endTime)).toBe(new Date(NOW.getTime() + 20 * 60_000).toISOString())
 
     const [rx] = all('prescriptions')
-    expect(rx).toMatchObject({ appointmentId: r.appointmentId, patientId: r.patientId, diagnosis: 'Fever' })
+    expect(rx).toMatchObject({ appointmentId: r.appointmentId, patientId: r.patientId, diagnosis: 'Viral fever' })
     expect(rx.medicines).toHaveLength(1)
+  })
+
+  it('has no chief complaint unless the doctor wrote one (it is never filled in for them)', async () => {
+    await createQuickConsult(tenant, 'u1', { patient: { name: 'Asha Rao', phone: '+919800000001', ageYears: 36 }, medicines: [med] })
+    await createQuickConsult(tenant, 'u1', { patient: { name: 'Ravi Shah', phone: '+919800000002', ageYears: 40 }, chiefComplaint: '   ', medicines: [med] })
+    expect(all('appointments').map(a => a.chiefComplaint)).toEqual([null, null])
   })
 
   it('keeps a given date of birth as recorded, not as an estimate', async () => {
@@ -139,6 +145,13 @@ describe('POST /api/doctor/quick-prescription', () => {
     expect(audit).toHaveBeenCalledWith(tenant, h.session, 'consult.quick', expect.stringMatching(/^appointments\//), { patientCreated: true })
   })
 
+  it('passes the chief complaint through to the visit', async () => {
+    h.session = { uid: 'u1', role: 'DOCTOR' }
+    expect((await call({ ...good, chiefComplaint: 'Fever' })).status).toBe(201)
+    expect(all('appointments')[0].chiefComplaint).toBe('Fever')
+    expect((await call({ ...good, chiefComplaint: 'x'.repeat(501) })).status).toBe(400)
+  })
+
   it('answers bad input with a clear 400 and writes nothing', async () => {
     h.session = { uid: 'u1', role: 'OWNER' }
     for (const bad of [
@@ -178,5 +191,28 @@ describe('age and date of birth helpers', () => {
     expect(fromAge(1, '2028-02-29')).toBe('2027-02-28') // 2027 has no 29 Feb
     expect(fromAge(4, '2028-02-29')).toBe('2024-02-29')
     expect(ageFromDob(fromAge(1, '2028-02-29'), '2028-02-29')).toBe(1)
+  })
+})
+
+describe('saving a prescription updates the chief complaint of the visit', () => {
+  const setup = async (complaint: string | null) => {
+    await fs.collection('clinics/c1/appointments').doc('a1').set({ patientId: 'p1', startTime: NOW, endTime: NOW, status: 'BOOKED', chiefComplaint: complaint })
+  }
+  const complaintNow = () => all('appointments')[0].chiefComplaint
+  const base = { appointmentId: 'a1', patientId: 'p1', medicines: [med] }
+
+  it('writes what the doctor entered (even where the patient gave one when booking)', async () => {
+    const { savePrescription } = await import('@/lib/modules/prescriptions')
+    await setup('fever')
+    await savePrescription(tenant, { ...base, chiefComplaint: ' Fever and body ache ' })
+    expect(complaintNow()).toBe('Fever and body ache')
+  })
+  it('leaves it alone when the field was not sent, and clears it when it was emptied', async () => {
+    const { savePrescription } = await import('@/lib/modules/prescriptions')
+    await setup('fever')
+    await savePrescription(tenant, base)
+    expect(complaintNow()).toBe('fever')
+    await savePrescription(tenant, { ...base, chiefComplaint: '  ' })
+    expect(complaintNow()).toBeNull()
   })
 })

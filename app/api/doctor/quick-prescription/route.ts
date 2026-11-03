@@ -37,6 +37,7 @@ const bodySchema = z.object({
     ageYears: z.number().int().min(0, 'Enter a valid age').max(120, 'Enter a valid age').optional(),
     dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date of birth').optional(),
   }).optional(),
+  chiefComplaint: text(500).optional().nullable(),
   diagnosis: text(2000).optional().nullable(),
   medicines: z.array(medicineSchema).max(50).default([]),
   notes: text(2000).optional().nullable(),

@@ -8,11 +8,12 @@ import { MedicineList } from '@/components/doctor/MedicineList'
 const FOLLOW_UP_CHOICES = [['3 days', 3], ['5 days', 5], ['1 week', 7], ['2 weeks', 14], ['1 month', 30]] as const
 
 /**
- * What a prescription says: diagnosis, medicines, follow-up and notes. One component for the appointment page
+ * What a prescription says: chief complaint, diagnosis, medicines, follow-up and notes. One component for the appointment page
  * and Quick prescription, so the two can never drift apart.
  * `baseDate` (YYYY-MM-DD) is the day the follow-up choices count from: the visit.
  */
-export function PrescriptionFields({ diagnosis, onDiagnosis, medicines, onMedicines, followUpDate, onFollowUpDate, notes, onNotes, baseDate }: {
+export function PrescriptionFields({ chiefComplaint, onChiefComplaint, diagnosis, onDiagnosis, medicines, onMedicines, followUpDate, onFollowUpDate, notes, onNotes, baseDate }: {
+  chiefComplaint: string; onChiefComplaint: (v: string) => void
   diagnosis: string; onDiagnosis: (v: string) => void
   medicines: Medicine[]; onMedicines: (v: Medicine[]) => void
   followUpDate: string; onFollowUpDate: (v: string) => void
@@ -21,6 +22,18 @@ export function PrescriptionFields({ diagnosis, onDiagnosis, medicines, onMedici
 }) {
   return (
     <>
+      <div className="form-group">
+        <label htmlFor="chief-complaint" className="form-label">Chief complaint <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span></label>
+        <textarea id="chief-complaint"
+          className="form-textarea"
+          value={chiefComplaint}
+          onChange={e => onChiefComplaint(e.target.value)}
+          placeholder="Why the patient came, e.g. Fever and headache for 3 days"
+          maxLength={500}
+          rows={2}
+        />
+      </div>
+
       <div className="form-group">
         <label htmlFor="diagnosis" className="form-label">Diagnosis <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span></label>
         <textarea id="diagnosis"

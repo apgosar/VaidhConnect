@@ -14,6 +14,8 @@ export interface QuickConsultInput {
   /** An existing patient on the clinic's books, or the details of a new one (age OR date of birth). */
   patientId?: string
   patient?: { name: string; phone: string; ageYears?: number; dob?: string }
+  /** Why the patient called; printed on the prescription. */
+  chiefComplaint?: string | null
   diagnosis?: string | null
   medicines: Medicine[]
   notes?: string | null
@@ -74,7 +76,7 @@ export async function createQuickConsult(tenant: Tenant, actorUid: string, input
     endTime: new Date(now.getTime() + minutes * 60_000),
     status: 'COMPLETED',
     visitType: 'TELECONSULTATION',
-    chiefComplaint: 'Teleconsultation',
+    chiefComplaint: input.chiefComplaint?.trim() || null,
     // Nothing to remind anyone about: the visit has already happened.
     reminderSent24h: true,
     reminderSent1h: true,

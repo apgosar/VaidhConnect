@@ -12,6 +12,8 @@ export class PrescriptionError extends Error {
 export interface PrescriptionInput {
   appointmentId: string
   patientId: string
+  /** Why the patient came. Updates the visit's chief complaint; leave undefined to keep what it already says. */
+  chiefComplaint?: string | null
   diagnosis?: string | null
   medicines: Medicine[]
   notes?: string | null
@@ -40,6 +42,8 @@ export async function savePrescription(tenant: Tenant, input: PrescriptionInput)
     if (followUpDate < visitDay) throw new PrescriptionError(400, 'The follow-up date cannot be before the visit')
     if (followUpDate > addDaysYmd(visitDay, 731)) throw new PrescriptionError(400, 'The follow-up date is too far away')
   }
+
+  if (input.chiefComplaint !== undefined) await appt.ref.update({ chiefComplaint: input.chiefComplaint?.trim() || null, updatedAt: new Date() })
 
   const existing = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
   const previous = existing.empty ? null : (existing.docs[0].data() as any)

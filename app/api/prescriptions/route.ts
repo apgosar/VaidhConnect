@@ -20,6 +20,7 @@ const taperStepSchema = z.object({
 const prescriptionSchema = z.object({
   appointmentId: z.string().min(1).max(128),
   patientId: z.string().min(1).max(128),
+  chiefComplaint: text(500).optional().nullable(),
   diagnosis: text(2000).optional().nullable(),
   medicines: z.array(z.object({
     name: text(200),

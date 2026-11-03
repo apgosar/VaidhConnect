@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
 
 export interface PrescriptionDocProps {
   prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null; /** Already formatted, e.g. "12 Nov 2026". */ followUpText?: string }
-  patient: { name: string; phone: string; /** Already formatted, empty when unknown. */ dob?: string }
+  patient: { name: string; phone: string; /** Their age at the visit, already worded ("36 years"); empty when unknown. */ age?: string }
   visit: { /** Already formatted in the clinic's timezone. */ dateText: string; chiefComplaint?: string | null }
   doctor: {
     name: string
@@ -149,10 +149,10 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
             <Text style={styles.fieldLabel}>PATIENT NAME</Text>
             <Txt style={styles.fieldValue}>{patient.name}</Txt>
           </View>
-          {patient.dob ? (
+          {patient.age ? (
             <View style={styles.patientField}>
-              <Text style={styles.fieldLabel}>DATE OF BIRTH</Text>
-              <Text style={styles.fieldValue}>{patient.dob}</Text>
+              <Text style={styles.fieldLabel}>AGE</Text>
+              <Text style={styles.fieldValue}>{patient.age}</Text>
             </View>
           ) : null}
           <View style={styles.patientField}>
@@ -161,10 +161,11 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
           </View>
         </View>
 
-        {visit.chiefComplaint ? (
+        {/* Only when there is something to say: no empty heading */}
+        {visit.chiefComplaint?.trim() ? (
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.sectionTitle}>Chief Complaint</Text>
-            <Txt style={{ fontSize: 10, color: '#475569' }}>{visit.chiefComplaint}</Txt>
+            <Txt style={{ fontSize: 10, color: '#475569' }}>{visit.chiefComplaint.trim()}</Txt>
           </View>
         ) : null}
 

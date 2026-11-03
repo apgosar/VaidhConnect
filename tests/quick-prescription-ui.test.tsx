@@ -208,13 +208,14 @@ describe('finding an existing patient while typing', () => {
 describe('the prescription section', () => {
   it('shows the optional fields straight away, nothing is hidden behind a click', () => {
     render(<QuickPrescriptionPage />)
-    for (const label of [/^Diagnosis/, /Follow-up visit/, /Additional Notes/]) {
+    for (const label of [/Chief complaint/, /^Diagnosis/, /Follow-up visit/, /Additional Notes/]) {
       const el = screen.getByLabelText(label)
       expect(el.closest('details')).toBeNull()
     }
     expect(screen.getByText('Follow-up visit').textContent).toContain('(optional)')
     expect(screen.getByLabelText(/Additional Notes/).closest('.form-group')!.textContent).toContain('(optional)')
     expect(screen.getByLabelText(/^Diagnosis/).closest('.form-group')!.textContent).toContain('(optional)')
+    expect(screen.getByLabelText(/Chief complaint/).closest('.form-group')!.textContent).toContain('(optional)')
   })
 
   it('has the same quick follow-up choices as the appointment page, counted from today', async () => {
@@ -229,6 +230,29 @@ describe('the prescription section', () => {
     expect(field(/Follow-up visit/).value).toBe('2026-12-05')
     await user.click(screen.getByRole('button', { name: 'Clear' }))
     expect(field(/Follow-up visit/).value).toBe('')
+  })
+
+  it('has a place for the chief complaint, above the diagnosis, and sends it', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    render(<QuickPrescriptionPage />)
+    const complaint = screen.getByLabelText(/Chief complaint/)
+    const diagnosis = screen.getByLabelText(/^Diagnosis/)
+    expect(complaint.compareDocumentPosition(diagnosis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await fillNewPatient(user)
+    await user.type(complaint, 'Fever and cough for 3 days')
+    await user.click(screen.getByRole('button', { name: /Save only/ }))
+    await screen.findByText(/Prescription saved/)
+    expect(JSON.parse(saves(calls)[0].init!.body as string).chiefComplaint).toBe('Fever and cough for 3 days')
+  })
+
+  it('sends no chief complaint when it was left blank (nothing is made up)', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    render(<QuickPrescriptionPage />)
+    await fillNewPatient(user)
+    await user.type(screen.getByLabelText(/Chief complaint/), '   ')
+    await user.click(screen.getByRole('button', { name: /Save only/ }))
+    await screen.findByText(/Prescription saved/)
+    expect(JSON.parse(saves(calls)[0].init!.body as string).chiefComplaint).toBeNull()
   })
 
   it('sends the diagnosis, follow-up date and notes with the prescription', async () => {

@@ -241,11 +241,16 @@ async function main() {
       cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(quick.body.prescriptionId).delete() })
       cleanup.push(async () => { await db.collection('clinics').doc(a).collection('patients').doc(quick.body.patientId).delete() })
       const visit = (await db.collection('clinics').doc(a).collection('appointments').doc(quick.body.appointmentId).get()).data()!
-      check('it is recorded as a completed phone/video visit that takes no booking slot', visit.status === 'COMPLETED' && visit.visitType === 'TELECONSULTATION')
+      check('it is recorded as a completed phone/video visit that takes no booking slot, with no made-up chief complaint', visit.status === 'COMPLETED' && visit.visitType === 'TELECONSULTATION' && !visit.chiefComplaint)
       const quickPdf = await http(aHost, `/api/prescriptions/${quick.body.prescriptionId}/pdf`, { cookie: ownerCookie })
       check('its prescription downloads as a PDF', quickPdf.status === 200 && quickPdf.res.headers.get('content-type') === 'application/pdf')
       const quickShare = await http(aHost, `/api/prescriptions/${quick.body.prescriptionId}/whatsapp`, { method: 'POST', cookie: ownerCookie })
       check('and it can be sent on WhatsApp', [200, 502].includes(quickShare.status) && !JSON.stringify(quickShare.body).includes('storage.googleapis.com'), `(${quickShare.status} ${quickShare.body?.error ?? ''})`)
+      const withComplaint = await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: { ...quickBody, chiefComplaint: 'ZZ Fever for 3 days' } })
+      if (withComplaint.body?.appointmentId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(withComplaint.body.appointmentId).delete() })
+      if (withComplaint.body?.prescriptionId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(withComplaint.body.prescriptionId).delete() })
+      const complaintVisit = withComplaint.body?.appointmentId ? (await db.collection('clinics').doc(a).collection('appointments').doc(withComplaint.body.appointmentId).get()).data() : undefined
+      check('a chief complaint typed for a quick prescription is kept on the visit', withComplaint.status === 201 && complaintVisit?.chiefComplaint === 'ZZ Fever for 3 days')
       const again = await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: quickBody })
       if (again.body?.appointmentId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('appointments').doc(again.body.appointmentId).delete() })
       if (again.body?.prescriptionId) cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(again.body.prescriptionId).delete() })

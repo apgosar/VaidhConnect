@@ -51,6 +51,7 @@ export default function QuickPrescriptionPage() {
   const [searchFor, setSearchFor] = useState<{ source: 'name' | 'phone'; q: string } | null>(null)
   const [hits, setHits] = useState<KnownPatient[]>([])
 
+  const [chiefComplaint, setChiefComplaint] = useState('')
   const [diagnosis, setDiagnosis] = useState('')
   const [medicines, setMedicines] = useState<Medicine[]>([emptyMedicine()])
   const [followUpDate, setFollowUpDate] = useState('')
@@ -147,6 +148,7 @@ export default function QuickPrescriptionPage() {
           ...(chosen ? { patientId: chosen.id } : {
             patient: { name: name.trim(), phone, ...(entered === 'age' ? { ageYears: Number(age) } : { dob }) },
           }),
+          chiefComplaint: chiefComplaint.trim() || null,
           diagnosis: diagnosis.trim() || null,
           medicines: meds,
           notes: notes.trim() || null,
@@ -167,7 +169,7 @@ export default function QuickPrescriptionPage() {
 
   const startAnother = () => {
     setCode(DEFAULT_CODE); setNumber(''); setName(''); setAge(''); setDob(''); setEntered('age'); setChosen(null); setSearchFor(null); setHits([])
-    setDiagnosis(''); setMedicines([emptyMedicine()]); setNotes(''); setFollowUpDate('')
+    setChiefComplaint(''); setDiagnosis(''); setMedicines([emptyMedicine()]); setNotes(''); setFollowUpDate('')
     setSaved(null); setShare({ state: 'idle' }); setError('')
   }
 
@@ -252,6 +254,7 @@ export default function QuickPrescriptionPage() {
       <section className="card p-5 space-y-5" aria-labelledby="qp-rx">
         <h2 id="qp-rx" className="font-semibold text-slate-800">Prescription</h2>
         <PrescriptionFields
+          chiefComplaint={chiefComplaint} onChiefComplaint={setChiefComplaint}
           diagnosis={diagnosis} onDiagnosis={setDiagnosis}
           medicines={medicines} onMedicines={setMedicines}
           followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}

@@ -40,6 +40,7 @@ export default function AppointmentDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false)
 
   // Prescription state
+  const [chiefComplaint, setChiefComplaint] = useState('')
   const [diagnosis, setDiagnosis] = useState('')
   const [medicines, setMedicines] = useState<Medicine[]>([{ name: '', dosage: '', frequency: '', duration: '' }])
   const [prescriptionNotes, setPrescriptionNotes] = useState('')
@@ -77,6 +78,8 @@ export default function AppointmentDetailPage() {
       const data = await res.json()
       setAppt(data.appointment)
       setNotes(data.appointment?.consultationNotes ?? '')
+      // The complaint belongs to the visit (the patient may have given it when booking), so it is there before a prescription exists.
+      setChiefComplaint(data.appointment?.chiefComplaint ?? '')
       if (data.appointment?.prescription) {
         const rx = data.appointment.prescription
         const meds = rx.medicines?.length ? rx.medicines : [{ name: '', dosage: '', frequency: '', duration: '' }]
@@ -84,7 +87,7 @@ export default function AppointmentDetailPage() {
         setMedicines(meds)
         setPrescriptionNotes(rx.notes ?? '')
         setFollowUpDate(rx.followUpDate ?? '')
-        setSavedRx(JSON.stringify([rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
+        setSavedRx(JSON.stringify([data.appointment?.chiefComplaint ?? '', rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
       }
       if (data.appointment?.payment) {
         const pay = data.appointment.payment
@@ -135,6 +138,7 @@ export default function AppointmentDetailPage() {
       const ok = await write('/api/prescriptions', 'POST', {
         appointmentId: appt.id,
         patientId: appt.patient.id,
+        chiefComplaint,
         diagnosis,
         medicines: medicines.filter(m => m.name),
         notes: prescriptionNotes,
@@ -190,7 +194,7 @@ export default function AppointmentDetailPage() {
   }
 
   const age = computeAge(appt.patient.dob)
-  const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
+  const rxDirty = JSON.stringify([chiefComplaint, diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
   const sharing = share.state === 'sending'
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
@@ -363,6 +367,7 @@ export default function AppointmentDetailPage() {
           )}
 
           <PrescriptionFields
+            chiefComplaint={chiefComplaint} onChiefComplaint={setChiefComplaint}
             diagnosis={diagnosis} onDiagnosis={setDiagnosis}
             medicines={medicines} onMedicines={setMedicines}
             followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
