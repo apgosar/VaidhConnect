@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import QuickPrescriptionPage from '@/app/doctor/(protected)/quick-prescription/page'
@@ -32,6 +32,9 @@ const saves = (calls: Call[]) => calls.filter(c => c.url === '/api/doctor/quick-
 const shares = (calls: Call[]) => calls.filter(c => c.url.endsWith('/whatsapp'))
 const searches = (calls: Call[]) => calls.filter(c => c.url.startsWith('/api/patients/search')).map(c => new URL(c.url, 'http://x').searchParams.get('q'))
 const field = (label: RegExp | string) => screen.getByLabelText(label) as HTMLInputElement
+// Each medicine card repeats the same labels; these are the first medicine's.
+const medicineName = () => screen.getAllByLabelText('Medicine name')[0] as HTMLInputElement
+const followUpChoice = (label: string) => within(screen.getByRole('group', { name: 'Follow-up after' })).getByRole('button', { name: label })
 
 beforeEach(() => { stubServer() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -40,7 +43,7 @@ async function fillNewPatient(user: ReturnType<typeof userEvent.setup>, { number
   await user.type(field(/Mobile number/), number)
   await user.type(field(/^Name/), name)
   await user.type(field(/^Age/), age)
-  await user.type(field('Medicine 1 name'), medicine)
+  await user.type(medicineName(), medicine)
 }
 
 describe('the patient section', () => {
@@ -83,7 +86,7 @@ describe('the patient section', () => {
     await user.type(field(/Mobile number/), '9811100000')
     await user.type(field(/^Name/), 'Meera Joshi')
     fireEvent.change(field(/Date of birth/), { target: { value: '1985-02-03' } })
-    await user.type(field('Medicine 1 name'), 'Syrup')
+    await user.type(medicineName(), 'Syrup')
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     await screen.findByText(/Prescription saved/)
     expect(JSON.parse(saves(calls2)[0].init!.body as string).patient).toEqual({ name: 'Meera Joshi', phone: '+919811100000', dob: '1985-02-03' })
@@ -94,13 +97,13 @@ describe('the patient section', () => {
     render(<QuickPrescriptionPage />)
     fireEvent.change(field('Country code'), { target: { value: '+44' } })
     await user.type(field(/Mobile number/), '7700900123')
-    expect(screen.getByText('Will be sent to +447700900123')).toBeTruthy()
+    expect(screen.getByText('Goes to +447700900123')).toBeTruthy()
 
     await user.clear(field(/Mobile number/))
     fireEvent.change(field(/Mobile number/), { target: { value: '+971501234567' } })
     expect(field('Country code').value).toBe('+971')
     expect(field(/Mobile number/).value).toBe('501234567')
-    expect(screen.getByText('Will be sent to +971501234567')).toBeTruthy()
+    expect(screen.getByText('Goes to +971501234567')).toBeTruthy()
     expect(saves(calls)).toHaveLength(0)
   })
 })
@@ -153,7 +156,7 @@ describe('finding an existing patient while typing', () => {
     expect(screen.getByText(/Existing patient/)).toBeTruthy()
     expect(screen.queryByRole('listbox')).toBeNull()
 
-    await user.type(field('Medicine 1 name'), 'Paracetamol')
+    await user.type(medicineName(), 'Paracetamol')
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     await screen.findByText(/Prescription saved for Asha Rao/)
     const body = JSON.parse(saves(calls)[0].init!.body as string)
@@ -221,12 +224,12 @@ describe('the prescription section', () => {
   it('has the same quick follow-up choices as the appointment page, counted from today', async () => {
     const user = userEvent.setup()
     render(<QuickPrescriptionPage />)
-    for (const label of ['3 days', '5 days', '1 week', '2 weeks', '1 month']) expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '5 days' }))
+    for (const label of ['3 days', '5 days', '1 week', '2 weeks', '1 month']) expect(followUpChoice(label)).toBeTruthy()
+    await user.click(followUpChoice('5 days'))
     expect(field(/Follow-up visit/).value).toBe('2026-11-10')
-    await user.click(screen.getByRole('button', { name: '1 week' }))
+    await user.click(followUpChoice('1 week'))
     expect(field(/Follow-up visit/).value).toBe('2026-11-12')
-    await user.click(screen.getByRole('button', { name: '1 month' }))
+    await user.click(followUpChoice('1 month'))
     expect(field(/Follow-up visit/).value).toBe('2026-12-05')
     await user.click(screen.getByRole('button', { name: 'Clear' }))
     expect(field(/Follow-up visit/).value).toBe('')
@@ -260,7 +263,7 @@ describe('the prescription section', () => {
     render(<QuickPrescriptionPage />)
     await fillNewPatient(user)
     await user.type(field(/^Diagnosis/), 'Fever')
-    await user.click(screen.getByRole('button', { name: '1 week' }))
+    await user.click(followUpChoice('1 week'))
     await user.type(field(/Additional Notes/), 'Plenty of fluids')
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     await screen.findByText(/Prescription saved/)
@@ -274,10 +277,10 @@ describe('saving and sending', () => {
     const calls = stubServer(); const user = userEvent.setup()
     render(<QuickPrescriptionPage />)
     await fillNewPatient(user)
-    await user.type(field('Medicine 1 dosage'), '500 mg')
-    expect(screen.getByText('Will be sent to +919811100000')).toBeTruthy()
+    await user.type(screen.getAllByLabelText('Dosage')[0] as HTMLInputElement, '500 mg')
+    expect(screen.getByText('Goes to +919811100000')).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: /Save and send on WhatsApp/ }))
+    await user.click(screen.getByRole('button', { name: /Save & share on WhatsApp/ }))
     expect(await screen.findByText(/Prescription saved for Meera Joshi/)).toBeTruthy()
     expect(await screen.findByText(/Sent to \+91\*+001/)).toBeTruthy()
     const body = JSON.parse(saves(calls)[0].init!.body as string)
@@ -324,7 +327,7 @@ describe('saving and sending', () => {
     await fillNewPatient(user)
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     expect((await screen.findByRole('alert')).textContent).toContain('follow-up date cannot be before')
-    expect(field('Medicine 1 name').value).toBe('Paracetamol')
+    expect(medicineName().value).toBe('Paracetamol')
     expect(field(/^Name/).value).toBe('Meera Joshi')
   })
 
@@ -334,7 +337,7 @@ describe('saving and sending', () => {
     const user = userEvent.setup()
     render(<QuickPrescriptionPage />)
     await fillNewPatient(user)
-    await user.click(screen.getByRole('button', { name: /Save and send on WhatsApp/ }))
+    await user.click(screen.getByRole('button', { name: /Save & share on WhatsApp/ }))
     expect((await screen.findByRole('alert')).textContent).toContain('not available right now')
     expect(screen.getByText(/Prescription saved for Meera Joshi/)).toBeTruthy()
 
@@ -355,6 +358,26 @@ describe('saving and sending', () => {
     expect(field(/Mobile number/).value).toBe('')
     expect(field('Country code').value).toBe('+91')
     expect(field(/^Age/).value).toBe('')
-    expect(field('Medicine 1 name').value).toBe('')
+    expect(medicineName().value).toBe('')
+  })
+})
+
+describe('opened from a patient page', () => {
+  afterEach(() => { window.history.pushState({}, '', '/') })
+
+  it('has that patient already picked and locked, so the doctor can go straight to the medicines', async () => {
+    window.history.pushState({}, '', '/doctor/quick-prescription?patient=p1&phone=%2B919800000001')
+    render(<QuickPrescriptionPage />)
+    await waitFor(() => expect(field(/^Name/).value).toBe('Asha Rao'))
+    expect(field(/^Name/).disabled).toBe(true)
+    expect(field(/Mobile number/).value).toBe('9800000001')
+  })
+
+  it('stays an ordinary empty form when the patient cannot be found', async () => {
+    const calls = stubServer()
+    window.history.pushState({}, '', '/doctor/quick-prescription?patient=nobody&phone=9800000001')
+    render(<QuickPrescriptionPage />)
+    await waitFor(() => expect(searches(calls).length).toBeGreaterThan(0))
+    expect(field(/^Name/).disabled).toBe(false)
   })
 })

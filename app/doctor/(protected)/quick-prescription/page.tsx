@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, FilePlus2, Lock, Save, UserRound, X } from 'lucide-react'
-import type { Medicine } from '@/lib/constants'
+import { CheckCircle2, Download, FilePlus2, Lock, UserRound, X } from 'lucide-react'
 import { ageFromDob, dobFromAge } from '@/lib/time'
-import { emptyMedicine } from '@/components/doctor/MedicineList'
+import { emptyRx, rxToPayload, type RxContent } from '@/lib/rxContent'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
+import { SaveShareBar, type ShareState } from '@/components/doctor/SaveShareBar'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { SuggestInput, type Suggestion } from '@/components/ui/SuggestInput'
@@ -14,7 +14,7 @@ import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { readFailure, networkFailureText } from '@/lib/clientErrors'
 
 interface KnownPatient { id: string; name: string; phone: string; dob?: string }
-type Share = { state: 'idle' | 'sending' | 'sent' | 'failed'; message?: string }
+type Share = ShareState
 interface Saved { appointmentId: string; prescriptionId: string; patientName: string; phone: string }
 
 const DEFAULT_CODE = '+91'
@@ -51,11 +51,7 @@ export default function QuickPrescriptionPage() {
   const [searchFor, setSearchFor] = useState<{ source: 'name' | 'phone'; q: string } | null>(null)
   const [hits, setHits] = useState<KnownPatient[]>([])
 
-  const [chiefComplaint, setChiefComplaint] = useState('')
-  const [diagnosis, setDiagnosis] = useState('')
-  const [medicines, setMedicines] = useState<Medicine[]>([emptyMedicine()])
-  const [followUpDate, setFollowUpDate] = useState('')
-  const [notes, setNotes] = useState('')
+  const [rx, setRx] = useState<RxContent>(emptyRx)
 
   const [busy, setBusy] = useState<'save' | 'send' | null>(null)
   const [error, setError] = useState('')
@@ -64,6 +60,18 @@ export default function QuickPrescriptionPage() {
 
   useEffect(() => {
     fetch('/api/public/config').then(r => r.json()).then(d => { if (d.config?.today) setToday(d.config.today) }).catch(() => {})
+  }, [])
+
+  // Opened from a patient's page (?patient=<id>&phone=<number>): that patient is already picked, no typing at all.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('patient'); const phone = digits(params.get('phone') ?? '').slice(-10)
+    if (!id || phone.length < 3) return
+    fetch(`/api/patients/search?q=${encodeURIComponent(phone)}&limit=20`)
+      .then(r => (r.ok ? r.json() : { patients: [] }))
+      .then(d => { const p = (d.patients ?? []).find((x: KnownPatient) => x.id === id); if (p) choose(p) })
+      .catch(() => { /* the form still works by typing */ })
+    // runs once, on arrival
   }, [])
 
   // Search the clinic's patients while the doctor types a name or a number.
@@ -99,14 +107,16 @@ export default function QuickPrescriptionPage() {
     setAge(v ? String(Math.max(0, ageFromDob(v, today))) : '')
   }
 
-  const pick = (id: string) => {
-    const p = hits.find(h => h.id === id)
-    if (!p) return
+  const choose = (p: KnownPatient) => {
     const phone = splitPhone(p.phone)
     setChosen(p); setName(p.name); setCode(phone.code); setNumber(phone.number)
     const ymd = p.dob?.slice(0, 10) ?? ''
     setDob(ymd); setAge(ymd ? String(ageFromDob(ymd, today)) : ''); setEntered('dob')
     setSearchFor(null); setHits([])
+  }
+  const pick = (id: string) => {
+    const p = hits.find(h => h.id === id)
+    if (p) choose(p)
   }
   const clearChosen = () => {
     setChosen(null); setName(''); setNumber(''); setAge(''); setDob(''); setSearchFor(null); setHits([])
@@ -114,7 +124,7 @@ export default function QuickPrescriptionPage() {
 
   const phone = `${code}${number}`
   const phoneOk = /^\+\d{1,4}$/.test(code) && /^\+\d{8,15}$/.test(phone)
-  const meds = medicines.filter(m => m.name.trim())
+  const meds = rx.medicines.filter(m => m.name.trim())
   const ageOk = age !== '' && Number(age) >= 0 && Number(age) <= 120
   const problem =
     !phoneOk ? 'Enter the patient\'s mobile number.'
@@ -148,11 +158,7 @@ export default function QuickPrescriptionPage() {
           ...(chosen ? { patientId: chosen.id } : {
             patient: { name: name.trim(), phone, ...(entered === 'age' ? { ageYears: Number(age) } : { dob }) },
           }),
-          chiefComplaint: chiefComplaint.trim() || null,
-          diagnosis: diagnosis.trim() || null,
-          medicines: meds,
-          notes: notes.trim() || null,
-          followUpDate: followUpDate || null,
+          ...rxToPayload(rx),
         }),
       })
       if (!res.ok) { setError(await readFailure(res, 'Could not save the prescription.')); return }
@@ -169,7 +175,7 @@ export default function QuickPrescriptionPage() {
 
   const startAnother = () => {
     setCode(DEFAULT_CODE); setNumber(''); setName(''); setAge(''); setDob(''); setEntered('age'); setChosen(null); setSearchFor(null); setHits([])
-    setChiefComplaint(''); setDiagnosis(''); setMedicines([emptyMedicine()]); setNotes(''); setFollowUpDate('')
+    setRx(emptyRx())
     setSaved(null); setShare({ state: 'idle' }); setError('')
   }
 
@@ -253,25 +259,17 @@ export default function QuickPrescriptionPage() {
 
       <section className="card p-5 space-y-5" aria-labelledby="qp-rx">
         <h2 id="qp-rx" className="font-semibold text-slate-800">Prescription</h2>
-        <PrescriptionFields
-          chiefComplaint={chiefComplaint} onChiefComplaint={setChiefComplaint}
-          diagnosis={diagnosis} onDiagnosis={setDiagnosis}
-          medicines={medicines} onMedicines={setMedicines}
-          followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
-          notes={notes} onNotes={setNotes}
-          baseDate={today}
-        />
+        <PrescriptionFields value={rx} onChange={patch => setRx(prev => ({ ...prev, ...patch }))} baseDate={today} />
       </section>
 
-      {error && <Alert variant="error">{error}</Alert>}
-
-      <div className="space-y-2">
-        <button type="button" onClick={() => submit(true)} disabled={busy !== null} className="btn btn-lg w-full disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
-          <WhatsAppIcon size={18} /> {busy === 'send' ? 'Saving and sending...' : 'Save and send on WhatsApp'}
-        </button>
-        {phoneOk && <p className="text-xs text-center" style={{ color: 'var(--color-sage)' }}>Will be sent to {phone}</p>}
-        <Button variant="outline" block loading={busy === 'save'} disabled={busy !== null} onClick={() => submit(false)}><Save size={16} aria-hidden="true" /> Save only</Button>
-      </div>
+      <SaveShareBar
+        busy={busy}
+        canShare={phoneOk}
+        sendTo={phone}
+        problem={error}
+        onSaveAndShare={() => submit(true)}
+        onSave={() => submit(false)}
+      />
     </div>
   )
 }

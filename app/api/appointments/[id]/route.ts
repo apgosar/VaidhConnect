@@ -48,6 +48,7 @@ export async function GET(
 
     const aptData = appointmentDoc.data() as any
     delete aptData.cancelTokenHash // secret-derived; never leaves the server
+    delete aptData.rxScans // storage paths of the handwritten prescription photos; they are read through /rx-scans with short-lived links
     const appointment = {
       id: appointmentDoc.id,
       ...aptData,

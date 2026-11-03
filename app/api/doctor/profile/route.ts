@@ -9,6 +9,8 @@ import { audit } from '@/lib/audit'
 import { isUsablePrimary } from '@/lib/tenant/theme'
 import { FieldValue } from 'firebase-admin/firestore'
 import { apiError } from '@/lib/errors'
+import { cleanAdviceOptions } from '@/lib/advice'
+import { MAX_ADVICE_LENGTH, MAX_ADVICE_OPTIONS } from '@/lib/constants'
 
 // SVG is deliberately not accepted: it can carry script, and these files are
 // served from our storage domain. Only raster formats, verified by signature.
@@ -190,7 +192,7 @@ export async function PATCH(request: Request) {
       theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
-      printSettings, removeLetterhead,
+      printSettings, removeLetterhead, adviceOptions,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -253,6 +255,13 @@ export async function PATCH(request: Request) {
       updateData.products = products
     }
     if (pageViews !== undefined) updateData.pageViews = pageViews
+
+    // The advice the doctor ticks on a prescription: trimmed, no blanks, no repeats.
+    if (adviceOptions !== undefined) {
+      const list = cleanAdviceOptions(adviceOptions)
+      if (!list) return Response.json({ error: `Advice can have at most ${MAX_ADVICE_OPTIONS} items of ${MAX_ADVICE_LENGTH} characters each` }, { status: 400 })
+      updateData.adviceOptions = list
+    }
 
     // Spacing, in mm, left clear for a letterhead's printed artwork.
     if (printSettings !== undefined) {

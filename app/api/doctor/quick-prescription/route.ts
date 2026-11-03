@@ -8,27 +8,11 @@ import { parseBody, phoneSchema } from '@/lib/validation'
 import { audit } from '@/lib/audit'
 import { rateLimit } from '@/lib/ratelimit'
 import { apiError } from '@/lib/errors'
-import { MAX_TAPER_STEPS } from '@/lib/taper'
+import { prescriptionContentShape } from '@/lib/modules/prescriptionSchema'
 import { createQuickConsult, QuickConsultError, type QuickConsultInput } from '@/lib/modules/quickConsult'
 import { PrescriptionError } from '@/lib/modules/prescriptions'
 
 const text = (max: number) => z.string().trim().max(max)
-const medicineSchema = z.object({
-  name: text(200),
-  dosage: text(100).optional().default(''),
-  frequency: text(100).optional().default(''),
-  duration: text(100).optional().default(''),
-  instructions: text(500).optional(),
-  taper: z.object({
-    steps: z.array(z.object({
-      dose: text(100).min(1, 'Each step needs a dose'),
-      frequency: text(100).optional().default(''),
-      days: z.number().int().min(1, 'Each step needs at least 1 day').max(365),
-      instructions: text(300).optional(),
-    })).min(1).max(MAX_TAPER_STEPS),
-  }).optional(),
-})
-
 const bodySchema = z.object({
   patientId: z.string().min(1).max(128).optional(),
   patient: z.object({
@@ -37,11 +21,7 @@ const bodySchema = z.object({
     ageYears: z.number().int().min(0, 'Enter a valid age').max(120, 'Enter a valid age').optional(),
     dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date of birth').optional(),
   }).optional(),
-  chiefComplaint: text(500).optional().nullable(),
-  diagnosis: text(2000).optional().nullable(),
-  medicines: z.array(medicineSchema).max(50).default([]),
-  notes: text(2000).optional().nullable(),
-  followUpDate: z.string().trim().optional().nullable(),
+  ...prescriptionContentShape,
 }).refine(b => !!b.patientId !== !!b.patient, 'Choose an existing patient or enter the new patient\'s details')
 
 const CONSULTS_PER_HOUR = 60

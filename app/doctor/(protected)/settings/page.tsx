@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { Alert } from '@/components/ui/Alert'
 import { Switch } from '@/components/ui/Switch'
 import { PrintingSection } from '@/components/doctor/settings/PrintingSection'
+import { AdviceSection } from '@/components/doctor/settings/AdviceSection'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
 import { failureText, networkFailureText } from '@/lib/clientErrors'
@@ -33,6 +34,7 @@ interface Doctor {
   summaryHour?: number
   printSettings?: PrintMargins
   letterheadPath?: string | null
+  adviceOptions?: string[]
 }
 
 export default function SettingsPage() {
@@ -232,6 +234,8 @@ function SettingsPageContent() {
           followUpFee: doctor.followUpFee,
           summaryHour: doctor.summaryHour ?? 10,
           printSettings: { ...DEFAULT_MARGINS, ...(doctor.printSettings ?? {}) },
+          // Sent only once the doctor has made a list of their own; until then the starter list applies everywhere.
+          ...(doctor.adviceOptions ? { adviceOptions: doctor.adviceOptions } : {}),
           theme: { primary: doctor.theme?.primary || null },
         }),
       })
@@ -713,6 +717,8 @@ function SettingsPageContent() {
           </div>
         </div>
       </div>
+
+      <AdviceSection value={doctor.adviceOptions} onChange={adviceOptions => setDoctor(p => (p ? { ...p, adviceOptions } : p))} />
 
       <PrintingSection value={doctor} onChange={patch => setDoctor(p => (p ? { ...p, ...patch } : p))} />
 

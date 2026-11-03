@@ -6,33 +6,14 @@ import { getSession } from '@/lib/auth/session'
 import { forbid } from '@/lib/auth/access'
 import { parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
-import { MAX_TAPER_STEPS } from '@/lib/taper'
+import { prescriptionContentShape } from '@/lib/modules/prescriptionSchema'
 import { savePrescription, PrescriptionError, type PrescriptionInput } from '@/lib/modules/prescriptions'
 import { apiError } from '@/lib/errors'
 
-const text = (max: number) => z.string().trim().max(max)
-const taperStepSchema = z.object({
-  dose: text(100).min(1, 'Each step needs a dose'),
-  frequency: text(100).optional().default(''),
-  days: z.number().int().min(1, 'Each step needs at least 1 day').max(365),
-  instructions: text(300).optional(),
-})
 const prescriptionSchema = z.object({
   appointmentId: z.string().min(1).max(128),
   patientId: z.string().min(1).max(128),
-  chiefComplaint: text(500).optional().nullable(),
-  diagnosis: text(2000).optional().nullable(),
-  medicines: z.array(z.object({
-    name: text(200),
-    dosage: text(100).optional().default(''),
-    frequency: text(100).optional().default(''),
-    duration: text(100).optional().default(''),
-    instructions: text(500).optional(),
-    taper: z.object({ steps: z.array(taperStepSchema).min(1).max(MAX_TAPER_STEPS) }).optional(),
-  })).max(50).default([]),
-  notes: text(2000).optional().nullable(),
-  // Clinic-calendar date (YYYY-MM-DD) the patient should come back; null/empty = none.
-  followUpDate: z.string().trim().optional().nullable(),
+  ...prescriptionContentShape,
 })
 
 async function authorize() {
