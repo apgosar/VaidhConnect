@@ -24,7 +24,7 @@ export function SaveShareBar({ onSaveAndShare, onSave, busy, canShare, sendTo, p
   bleed?: boolean
 }) {
   return (
-    <div className={`sticky bottom-0 z-30 ${bleed ? '-mx-4 sm:-mx-5 -mb-4 sm:-mb-5 px-4 sm:px-5' : '-mx-4 px-4 md:-mx-6 md:px-6'} border-t border-slate-200 bg-white/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]`}>
+    <div className={`sticky bottom-0 z-30 ${bleed ? '-mx-4 sm:-mx-5 -mb-4 sm:-mb-5 px-4 sm:px-5' : '-mx-4 px-4 md:-mx-6 md:px-6'} border-t border-slate-200 bg-white/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur space-y-1 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]`}>
       {problem && <Alert variant="error">{problem}</Alert>}
       {share?.state === 'sent' && <Alert variant="success">{share.message}. The patient has the prescription on WhatsApp.</Alert>}
       {share?.state === 'failed' && <Alert variant="error">{share.message} The prescription is saved. You can try again.</Alert>}
@@ -33,12 +33,13 @@ export function SaveShareBar({ onSaveAndShare, onSave, busy, canShare, sendTo, p
         style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
         <WhatsAppIcon size={18} /> {busy === 'send' ? 'Saving and sending...' : 'Save & share on WhatsApp'}
       </button>
-      <p className="text-xs text-center text-slate-500">
-        {canShare ? (sendTo ? `Goes to ${sendTo}` : '') : 'Add a valid mobile number to send on WhatsApp'}
-      </p>
-      <button type="button" onClick={onSave} disabled={busy !== null} className="btn btn-outline w-full disabled:opacity-60">
-        <Save size={16} aria-hidden="true" /> {busy === 'save' ? 'Saving...' : 'Save only'}
-      </button>
+      {/* one short line under the main button, so the bar stays small on a phone */}
+      <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+        <span className="min-w-0 truncate">{canShare ? (sendTo ? `Goes to ${sendTo}` : '') : 'Add a valid mobile number to send on WhatsApp'}</span>
+        <button type="button" onClick={onSave} disabled={busy !== null} className="btn btn-ghost btn-sm shrink-0 disabled:opacity-60">
+          <Save size={14} aria-hidden="true" /> {busy === 'save' ? 'Saving...' : 'Save only'}
+        </button>
+      </div>
     </div>
   )
 }
