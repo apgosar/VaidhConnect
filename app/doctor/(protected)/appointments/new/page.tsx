@@ -2,14 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Search, UserPlus, CheckCircle2, Clock, X } from 'lucide-react'
-import { addDaysYmd, describeYmd } from '@/lib/time'
+import { Search, UserPlus, CheckCircle2, Clock, X, Minus, Plus } from 'lucide-react'
+import { addDaysYmd, describeYmd, formatSlotLabelInTz } from '@/lib/time'
+import { MAX_SLOTS_PER_VISIT } from '@/lib/slots'
+import type { Gender } from '@/lib/gender'
+import { AgeDobFields, ageDobAsDob, ageDobComplete, emptyAgeDob, type AgeDob } from '@/components/ui/AgeDobFields'
+import { GenderField } from '@/components/ui/GenderField'
 import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface PatientHit { id: string; name: string; phone: string; dob?: string }
 interface Slot { start: string; end: string; label: string }
 
-const emptyNew = { name: '', phone: '+91', dob: '', email: '', medicalHistory: '' }
+const emptyNew = { name: '', phone: '+91', email: '', medicalHistory: '' }
 
 export default function NewAppointmentPage() {
   const [config, setConfig] = useState<{ today: string; timezone: string; enableChiefComplaint: boolean } | null>(null)
@@ -18,14 +22,18 @@ export default function NewAppointmentPage() {
   const [hits, setHits] = useState<PatientHit[]>([])
   const [patient, setPatient] = useState<PatientHit | null>(null)
   const [fresh, setFresh] = useState(emptyNew)
+  const [ageDob, setAgeDob] = useState<AgeDob>(emptyAgeDob)
+  const [gender, setGender] = useState<Gender | ''>('')
   const [date, setDate] = useState('')
   const [slots, setSlots] = useState<Slot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [slot, setSlot] = useState<Slot | null>(null)
+  // How many slots long the visit is. One is the usual; staff can lengthen it a slot at a time.
+  const [count, setCount] = useState(1)
   const [complaint, setComplaint] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [booked, setBooked] = useState<{ label: string; name: string } | null>(null)
+  const [booked, setBooked] = useState<{ label: string; name: string; minutes: number } | null>(null)
   const searchSeq = useRef(0)
 
   useEffect(() => {
@@ -48,7 +56,7 @@ export default function NewAppointmentPage() {
   }, [query, mode])
 
   const loadSlots = (d: string) => {
-    setLoadingSlots(true); setSlot(null)
+    setLoadingSlots(true); setSlot(null); setCount(1)
     return fetch(`/api/appointments?mode=slots&date=${d}`)
       .then(r => r.json())
       .then(r => setSlots(r.slots ?? []))
@@ -59,17 +67,26 @@ export default function NewAppointmentPage() {
 
   const dates = config ? Array.from({ length: 14 }, (_, i) => addDaysYmd(config.today, i)) : []
 
+  // Longer visits: each extra slot must be open straight after the chosen one, so the length stops where the free time stops.
+  const slotMs = slot ? new Date(slot.end).getTime() - new Date(slot.start).getTime() : 0
+  const openAt = new Set(slots.map(s => s.start))
+  let maxCount = 1
+  if (slot) while (maxCount < MAX_SLOTS_PER_VISIT && openAt.has(new Date(new Date(slot.start).getTime() + maxCount * slotMs).toISOString())) maxCount++
+  const visitEnd = slot ? new Date(new Date(slot.start).getTime() + count * slotMs) : null
+  const minutes = (count * slotMs) / 60_000
+  const pickSlot = (s: Slot) => { setSlot(s); setCount(1) }
+
   const canBook =
-    !!slot && (mode === 'existing' ? !!patient : fresh.name.trim().length >= 2 && fresh.phone.length >= 8 && !!fresh.dob)
+    !!slot && (mode === 'existing' ? !!patient : fresh.name.trim().length >= 2 && fresh.phone.length >= 8 && ageDobComplete(ageDob) && !!gender)
 
   const book = async () => {
     if (!slot) return
     setSaving(true); setError('')
     const body: Record<string, unknown> = {
-      startTime: slot.start, endTime: slot.end, chiefComplaint: complaint || undefined,
+      startTime: slot.start, endTime: visitEnd!.toISOString(), chiefComplaint: complaint || undefined,
       ...(mode === 'existing'
         ? { patientId: patient!.id }
-        : { patient: { ...fresh, email: fresh.email || undefined, medicalHistory: fresh.medicalHistory || undefined } }),
+        : { patient: { ...fresh, ...ageDobAsDob(ageDob, config!.today), gender, email: fresh.email || undefined, medicalHistory: fresh.medicalHistory || undefined } }),
     }
     const res = await fetch('/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json()
@@ -79,11 +96,11 @@ export default function NewAppointmentPage() {
       if (res.status === 409) loadSlots(date) // someone took it — show what is still open
       return
     }
-    setBooked({ label: `${describeYmd(date).weekdayLong}, ${describeYmd(date).day} ${describeYmd(date).monthShort} at ${slot.label}`, name: mode === 'existing' ? patient!.name : fresh.name })
+    setBooked({ label: `${describeYmd(date).weekdayLong}, ${describeYmd(date).day} ${describeYmd(date).monthShort} at ${slot.label}`, name: mode === 'existing' ? patient!.name : fresh.name, minutes })
   }
 
   const reset = () => {
-    setBooked(null); setPatient(null); setQuery(''); setFresh(emptyNew); setComplaint(''); setSlot(null); setError('')
+    setBooked(null); setPatient(null); setQuery(''); setFresh(emptyNew); setAgeDob(emptyAgeDob()); setGender(''); setCount(1); setComplaint(''); setSlot(null); setError('')
     if (config) setDate(config.today)
   }
 
@@ -95,7 +112,7 @@ export default function NewAppointmentPage() {
         <CheckCircle2 size={44} className="mx-auto" style={{ color: 'var(--color-pine)' }} />
         <h1 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Appointment booked</h1>
         <p className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>
-          <strong>{booked.name}</strong> · {booked.label}
+          <strong>{booked.name}</strong> · {booked.label}{booked.minutes > 0 ? ` · ${booked.minutes} min` : ''}
         </p>
         <p className="text-xs" style={{ color: 'var(--color-sage)' }}>A WhatsApp confirmation has been sent to the patient.</p>
         <div className="flex gap-3 justify-center pt-2">
@@ -143,7 +160,8 @@ export default function NewAppointmentPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="form-group"><label htmlFor="full-name" className="form-label">Full name *</label><input id="full-name" className="form-input" value={fresh.name} onChange={e => setFresh(f => ({ ...f, name: e.target.value }))} /></div>
             <div className="form-group"><label htmlFor="mobile" className="form-label">Mobile (with country code) *</label><input id="mobile" className="form-input" inputMode="tel" value={fresh.phone} onChange={e => setFresh(f => ({ ...f, phone: e.target.value }))} /></div>
-            <div className="form-group"><label htmlFor="date-of-birth" className="form-label">Date of birth *</label><input id="date-of-birth" type="date" className="form-input" value={fresh.dob} max={config.today} onChange={e => setFresh(f => ({ ...f, dob: e.target.value }))} /></div>
+            <div className="sm:col-span-2"><AgeDobFields value={ageDob} onChange={setAgeDob} today={config.today} /></div>
+            <div className="sm:col-span-2"><GenderField value={gender} onChange={setGender} /></div>
             <div className="form-group"><label htmlFor="email" className="form-label">Email (optional)</label><input id="email" type="email" className="form-input" value={fresh.email} onChange={e => setFresh(f => ({ ...f, email: e.target.value }))} /></div>
           </div>
         )}
@@ -168,13 +186,32 @@ export default function NewAppointmentPage() {
           : (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {slots.map(s => (
-                <button key={s.start} onClick={() => setSlot(s)} className="py-2 rounded-lg text-sm font-medium"
+                <button key={s.start} onClick={() => pickSlot(s)} className="py-2 rounded-lg text-sm font-medium"
                   style={{ background: slot?.start === s.start ? 'var(--color-forest)' : 'transparent', color: slot?.start === s.start ? 'white' : 'var(--color-charcoal-mid)', border: `1.5px solid ${slot?.start === s.start ? 'var(--color-forest)' : 'var(--color-sage-border)'}` }}>
                   {s.label}
                 </button>
               ))}
             </div>
           )}
+
+        {slot && visitEnd && (
+          <div className="rounded-lg p-3 flex flex-wrap items-center justify-between gap-3" style={{ background: 'var(--color-primary-bg)' }} role="group" aria-label="Appointment length">
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-charcoal)' }}>Appointment length</p>
+              <p className="text-xs" style={{ color: 'var(--color-sage)' }} aria-live="polite">{slot.label} to {formatSlotLabelInTz(visitEnd, config.timezone)}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" className="btn btn-outline px-0" style={{ width: 44, height: 44 }} onClick={() => setCount(c => Math.max(1, c - 1))} disabled={count <= 1} aria-label="Shorter by one slot">
+                <Minus size={16} aria-hidden="true" />
+              </button>
+              <span className="min-w-[4.5rem] text-center font-semibold font-tabular" data-testid="visit-minutes">{minutes} min</span>
+              <button type="button" className="btn btn-outline px-0" style={{ width: 44, height: 44 }} onClick={() => setCount(c => Math.min(maxCount, c + 1))} disabled={count >= maxCount} aria-label="Longer by one slot">
+                <Plus size={16} aria-hidden="true" />
+              </button>
+            </div>
+            {count >= maxCount && maxCount < MAX_SLOTS_PER_VISIT && <p className="w-full text-xs" style={{ color: 'var(--color-sage)' }}>The next slot is not free, so this is as long as it can be here.</p>}
+          </div>
+        )}
       </section>
 
       {config.enableChiefComplaint && (

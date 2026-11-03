@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         name: data.name,
         phone: data.phone,
         dob: data.dob?.toDate(),
+        gender: data.gender,
         medicalHistory: data.medicalHistory,
         email: data.email,
       }

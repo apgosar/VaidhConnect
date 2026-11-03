@@ -43,6 +43,7 @@ async function fillNewPatient(user: ReturnType<typeof userEvent.setup>, { number
   await user.type(field(/Mobile number/), number)
   await user.type(field(/^Name/), name)
   await user.type(field(/^Age/), age)
+  await user.click(screen.getByLabelText('Female'))
   await user.type(medicineName(), medicine)
 }
 
@@ -79,17 +80,18 @@ describe('the patient section', () => {
     await fillNewPatient(user)
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     await screen.findByText(/Prescription saved/)
-    expect(JSON.parse(saves(calls)[0].init!.body as string).patient).toEqual({ name: 'Meera Joshi', phone: '+919811100000', ageYears: 36 })
+    expect(JSON.parse(saves(calls)[0].init!.body as string).patient).toEqual({ name: 'Meera Joshi', phone: '+919811100000', ageYears: 36, gender: 'FEMALE' })
 
     cleanup(); const calls2 = stubServer()
     render(<QuickPrescriptionPage />)
     await user.type(field(/Mobile number/), '9811100000')
     await user.type(field(/^Name/), 'Meera Joshi')
     fireEvent.change(field(/Date of birth/), { target: { value: '1985-02-03' } })
+    await user.click(screen.getByLabelText('Male'))
     await user.type(medicineName(), 'Syrup')
     await user.click(screen.getByRole('button', { name: /Save only/ }))
     await screen.findByText(/Prescription saved/)
-    expect(JSON.parse(saves(calls2)[0].init!.body as string).patient).toEqual({ name: 'Meera Joshi', phone: '+919811100000', dob: '1985-02-03' })
+    expect(JSON.parse(saves(calls2)[0].init!.body as string).patient).toEqual({ name: 'Meera Joshi', phone: '+919811100000', dob: '1985-02-03', gender: 'MALE' })
   })
 
   it('uses another country code when it is changed, and splits a pasted international number', async () => {
@@ -316,6 +318,10 @@ describe('saving and sending', () => {
 
     await user.type(field(/^Age/), '36')
     await user.click(screen.getByRole('button', { name: /Save only/ }))
+    expect((await screen.findByRole('alert')).textContent).toContain('gender')
+
+    await user.click(screen.getByLabelText('Other'))
+    await user.click(screen.getByRole('button', { name: /Save only/ }))
     expect((await screen.findByRole('alert')).textContent).toContain('medicine')
     expect(saves(calls)).toHaveLength(0)
   })
@@ -379,5 +385,54 @@ describe('opened from a patient page', () => {
     render(<QuickPrescriptionPage />)
     await waitFor(() => expect(searches(calls).length).toBeGreaterThan(0))
     expect(field(/^Name/).disabled).toBe(false)
+  })
+})
+
+describe('gender', () => {
+  const radios = () => ['Male', 'Female', 'Other'].map(l => screen.getByLabelText(l) as HTMLInputElement)
+
+  it('is three radio buttons, none chosen to begin with', () => {
+    render(<QuickPrescriptionPage />)
+    expect(radios().map(r => r.type)).toEqual(['radio', 'radio', 'radio'])
+    expect(radios().some(r => r.checked)).toBe(false)
+  })
+
+  it('takes one choice at a time', async () => {
+    const user = userEvent.setup(); render(<QuickPrescriptionPage />)
+    await user.click(screen.getByLabelText('Male')); await user.click(screen.getByLabelText('Other'))
+    expect(radios().map(r => r.checked)).toEqual([false, false, true])
+  })
+
+  it('is filled in and locked for a patient who has one on record', async () => {
+    const user = userEvent.setup(); stubServer({ search: () => Response.json({ patients: [{ ...ASHA, gender: 'FEMALE' }] }) })
+    render(<QuickPrescriptionPage />)
+    await user.type(field(/^Name/), 'Asha')
+    await user.click(await screen.findByRole('option', { name: /Asha Rao/ }))
+    expect(radios().map(r => r.checked)).toEqual([false, true, false])
+    expect(radios().every(r => r.matches(':disabled'))).toBe(true)
+  })
+
+  it('can be added for an older patient who has none, and is then saved on their record', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    render(<QuickPrescriptionPage />)
+    await user.type(field(/^Name/), 'Asha')
+    await user.click(await screen.findByRole('option', { name: /Asha Rao/ }))
+    expect(radios().every(r => !r.matches(':disabled'))).toBe(true)
+    await user.click(screen.getByLabelText('Female'))
+    await user.type(medicineName(), 'Paracetamol')
+    await user.click(screen.getByRole('button', { name: /Save only/ }))
+    await screen.findByText(/Prescription saved/)
+    expect(JSON.parse(saves(calls)[0].init!.body as string)).toMatchObject({ patientId: 'p1', gender: 'FEMALE' })
+  })
+
+  it('does not hold up an older patient who has none: it is optional for them', async () => {
+    const calls = stubServer(); const user = userEvent.setup()
+    render(<QuickPrescriptionPage />)
+    await user.type(field(/^Name/), 'Asha')
+    await user.click(await screen.findByRole('option', { name: /Asha Rao/ }))
+    await user.type(medicineName(), 'Paracetamol')
+    await user.click(screen.getByRole('button', { name: /Save only/ }))
+    await screen.findByText(/Prescription saved/)
+    expect(JSON.parse(saves(calls)[0].init!.body as string).gender).toBeUndefined()
   })
 })

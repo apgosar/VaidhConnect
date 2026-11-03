@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import { tenantDb } from '../db/tenant'
 import { downloadFile } from '../storage'
 import { ageText, formatDateShortInTz, formatDateTimeInTz, ymdInTz } from '../time'
+import { genderLabel } from '../gender'
 import { registerPdfFonts } from '../pdf/fonts'
 import { PrescriptionDocument, type PrescriptionDocProps } from '../pdf/prescriptionDocument'
 import { ReceiptDocument } from '../pdf/receiptDocument'
@@ -119,6 +120,7 @@ export async function renderPrescriptionPdf(tenant: Tenant, prescriptionId: stri
     patient: {
       name: String(patient.name ?? ''),
       phone: String(patient.phone ?? ''),
+      gender: genderLabel(patient.gender),
       // dates of birth are stored as UTC midnight; the prescription shows the age on the day of the visit, not the date itself
       age: patient.dob ? ageText(patient.dob.toDate().toISOString().slice(0, 10), ymdInTz(appt.startTime.toDate(), tenant.timezone)) : '',
     },
@@ -158,7 +160,7 @@ export async function renderSamplePrescriptionPdf(tenant: Tenant, mode: PrintMod
       advice: ['Avoid outside food', 'Drink plenty of water'],
       notes: 'This is a test page for checking spacing. It is not a real prescription.',
     },
-    patient: { name: 'Sample Patient', phone: '+91 98765 43210', age: '45 years' },
+    patient: { name: 'Sample Patient', phone: '+91 98765 43210', age: '45 years', gender: 'Female' },
     visit: { dateText: formatDateShortInTz(new Date(), tenant.timezone), chiefComplaint: 'Sample complaint' },
   })
   return { buffer, filename: `Print_test_${mode}.pdf` }

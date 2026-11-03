@@ -17,7 +17,7 @@ vi.mock('@/lib/db/tenant', () => ({
           where: () => q, orderBy: () => q,
           get: async () => ({
             size: appointments.length,
-            docs: appointments.map(a => ({ data: () => ({ patientId: 'p1', startTime: { toDate: () => a } }) })),
+            docs: appointments.map(a => ({ data: () => ({ patientId: 'p1', startTime: { toDate: () => a }, endTime: { toDate: () => new Date(a.getTime() + 15 * 60_000) } }) })),
           }),
         }
         return q
@@ -51,6 +51,26 @@ describe('processDailySummary', () => {
     expect(sendDailySummary.mock.calls[0][1]).toMatchObject({ appointmentCount: '1', date: 'October 28, 2026' })
     expect(sendDailySummary.mock.calls[0][1].scheduleList).toContain('11:00 AM - Asha')
     expect(profileUpdates).toEqual([{ lastDailySummaryOn: '2026-10-28' }])
+  })
+
+  it('lists only the visits still ahead at the time of sending, not the ones already over', async () => {
+    appointments = [
+      new Date('2026-10-28T03:30:00Z'), // 09:00 local, finished
+      new Date('2026-10-28T04:40:00Z'), // 10:10 local, in progress at 10:15
+      new Date('2026-10-28T05:30:00Z'), // 11:00 local
+    ]
+    await processDailySummary(kolkata, at1015)
+    const sent = sendDailySummary.mock.calls[0][1]
+    expect(sent.appointmentCount).toBe('2')
+    expect(sent.scheduleList).not.toContain('09:00 AM')
+    expect(sent.scheduleList).toContain('10:10 AM - Asha')
+    expect(sent.scheduleList).toContain('11:00 AM - Asha')
+  })
+
+  it('says so when every visit of the day is already over, rather than "none scheduled"', async () => {
+    appointments = [new Date('2026-10-28T03:30:00Z')]
+    await processDailySummary(kolkata, at1015)
+    expect(sendDailySummary.mock.calls[0][1]).toMatchObject({ appointmentCount: '0', scheduleList: 'No more appointments for the rest of today.' })
   })
 
   it('does not send before the summary hour, in the clinic\'s zone', async () => {

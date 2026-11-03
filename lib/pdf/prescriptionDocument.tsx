@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
 
 export interface PrescriptionDocProps {
   prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null; onExamination?: string | null; investigations?: string | null; advice?: string[]; adviceOther?: string | null; /** Already formatted, e.g. "12 Nov 2026". */ followUpText?: string }
-  patient: { name: string; phone: string; /** Their age at the visit, already worded ("36 years"); empty when unknown. */ age?: string }
+  patient: { name: string; phone: string; /** Their age at the visit, already worded ("36 years"); empty when unknown. */ age?: string; /** "Male", "Female" or "Other"; empty when not recorded. */ gender?: string }
   visit: { /** Already formatted in the clinic's timezone. */ dateText: string; chiefComplaint?: string | null }
   doctor: {
     name: string
@@ -154,6 +154,12 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
             <View style={styles.patientField}>
               <Text style={styles.fieldLabel}>AGE</Text>
               <Text style={styles.fieldValue}>{patient.age}</Text>
+            </View>
+          ) : null}
+          {patient.gender ? (
+            <View style={styles.patientField}>
+              <Text style={styles.fieldLabel}>GENDER</Text>
+              <Text style={styles.fieldValue}>{patient.gender}</Text>
             </View>
           ) : null}
           <View style={styles.patientField}>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay, isBefore } from 'date-fns'
+import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay } from 'date-fns'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
 import { formatDate, computeAge, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
@@ -25,6 +25,9 @@ interface BlockedSlot {
   reason?: string | null
 }
 
+/** How long the visit is booked for, in minutes. */
+const visitMinutes = (a: { startTime: string; endTime: string }) => Math.round((parseISO(a.endTime).getTime() - parseISO(a.startTime).getTime()) / 60_000)
+
 export default function CalendarPage() {
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()))
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -39,7 +42,7 @@ export default function CalendarPage() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(startDate, i))
   const weekStart = weekDays[0]
   const weekEnd = endOfDay(weekDays[6])
-  const isCurrentPeriod = isSameDay(startDate, startOfDay(new Date())) || isBefore(startDate, startOfDay(new Date()))
+  const showingToday = isSameDay(startDate, startOfDay(new Date()))
 
   useEffect(() => {
     fetchAppointments()
@@ -71,13 +74,8 @@ export default function CalendarPage() {
     }
   }
 
-  // Filter out past and cancelled appointments
-  const now = new Date()
-  const activeAppointments = appointments.filter(a => {
-    if (a.status === 'CANCELLED') return false
-    const end = parseISO(a.endTime || a.startTime)
-    return end >= now
-  })
+  // Everything that happened or is booked, past included (only cancelled visits are left out)
+  const activeAppointments = appointments.filter(a => a.status !== 'CANCELLED')
 
   const getApptsForDay = (day: Date) =>
     activeAppointments.filter(a => isSameDay(parseISO(a.startTime), day))
@@ -91,11 +89,7 @@ export default function CalendarPage() {
   }
 
   const handlePrevWeek = () => {
-    setStartDate(prev => {
-      const target = subDays(prev, 7)
-      const todayStart = startOfDay(new Date())
-      return isBefore(target, todayStart) ? todayStart : target
-    })
+    setStartDate(prev => subDays(prev, 7))
   }
 
   const handleNextWeek = () => {
@@ -157,9 +151,9 @@ export default function CalendarPage() {
       <div className="flex items-center justify-between card px-4 py-3">
         <button
           onClick={handlePrevWeek}
-          disabled={isCurrentPeriod}
-          className="btn btn-ghost p-2 disabled:opacity-30 disabled:cursor-not-allowed"
-          title={isCurrentPeriod ? 'Cannot navigate to past dates' : 'Previous 7 days'}
+          className="btn btn-ghost p-2"
+          title="Previous 7 days"
+          aria-label="Previous 7 days"
         >
           <ChevronLeft size={18} />
         </button>
@@ -169,14 +163,14 @@ export default function CalendarPage() {
           </p>
           <button
             onClick={handleToday}
-            disabled={isCurrentPeriod}
-            className={`text-xs mt-0.5 font-medium ${isCurrentPeriod ? 'opacity-40 cursor-default' : 'hover:underline'}`}
+            disabled={showingToday}
+            className={`text-xs mt-0.5 font-medium ${showingToday ? 'opacity-40 cursor-default' : 'hover:underline'}`}
             style={{ color: 'var(--color-link)' }}
           >
             Today
           </button>
         </div>
-        <button onClick={handleNextWeek} className="btn btn-ghost p-2" title="Next 7 days">
+        <button onClick={handleNextWeek} className="btn btn-ghost p-2" title="Next 7 days" aria-label="Next 7 days">
           <ChevronRight size={18} />
         </button>
       </div>
@@ -267,6 +261,7 @@ export default function CalendarPage() {
                         </div>
                         <div className="text-right text-xs shrink-0 ml-2">
                           <p className="font-medium font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
+                          {visitMinutes(appt) > 0 && <p className="opacity-70 font-tabular">{visitMinutes(appt)} min</p>}
                           <div className="flex gap-1 justify-end mt-1">
                             {appt.prescription && <span className="badge badge-green" style={{ fontSize: 12 }}>Rx</span>}
                             {appt.payment && <span className="badge badge-blue" style={{ fontSize: 12 }}>Paid</span>}

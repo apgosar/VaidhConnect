@@ -3,6 +3,7 @@ import type { Tenant } from '@/lib/tenant/types'
 import type { Medicine } from '@/lib/constants'
 import { savePrescription, type PrescriptionInput } from '@/lib/modules/prescriptions'
 import { dobFromAge, ymdInTz } from '@/lib/time'
+import type { Gender } from '@/lib/gender'
 
 export { dobFromAge }
 
@@ -13,7 +14,9 @@ export class QuickConsultError extends Error {
 export interface QuickConsultInput {
   /** An existing patient on the clinic's books, or the details of a new one (age OR date of birth). */
   patientId?: string
-  patient?: { name: string; phone: string; ageYears?: number; dob?: string }
+  patient?: { name: string; phone: string; ageYears?: number; dob?: string; gender?: Gender }
+  /** For a patient already on the books who has no gender recorded yet: it is saved on their record. */
+  gender?: Gender
   /** Why the patient called; printed on the prescription. */
   chiefComplaint?: string | null
   onExamination?: string | null
@@ -42,6 +45,7 @@ export async function createQuickConsult(tenant: Tenant, actorUid: string, input
     const snap = await db.col('patients').doc(input.patientId).get()
     if (!snap.exists) throw new QuickConsultError(404, 'Patient not found')
     patientId = snap.id
+    if (input.gender && !snap.data()?.gender) await snap.ref.update({ gender: input.gender, updatedAt: now })
   } else if (input.patient) {
     const { name, phone, ageYears } = input.patient
     const today = ymdInTz(now, tenant.timezone)
@@ -54,12 +58,14 @@ export async function createQuickConsult(tenant: Tenant, actorUid: string, input
     const match = sameNumber.docs.find(d => String(d.data().name ?? '').trim().toLowerCase() === name.trim().toLowerCase())
     if (match) {
       patientId = match.id
+      if (input.patient.gender && !match.data().gender) await match.ref.update({ gender: input.patient.gender, updatedAt: now })
     } else {
       const ref = db.col('patients').doc()
       await ref.set({
         phone, name: name.trim(), dob: new Date(`${dob}T00:00:00Z`),
         // An age is an estimate; keep that visible so nobody mistakes it for a recorded birth date.
         ...(input.patient.dob ? {} : { dobApproximate: true }),
+        ...(input.patient.gender ? { gender: input.patient.gender } : {}),
         medicalHistory: null, email: null,
         createdAt: now, updatedAt: now, createdBy: `staff:${actorUid}`,
       })

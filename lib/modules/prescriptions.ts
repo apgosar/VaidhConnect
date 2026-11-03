@@ -51,7 +51,11 @@ export async function savePrescription(tenant: Tenant, input: PrescriptionInput)
     if (followUpDate > addDaysYmd(visitDay, 731)) throw new PrescriptionError(400, 'The follow-up date is too far away')
   }
 
-  if (input.chiefComplaint !== undefined) await appt.ref.update({ chiefComplaint: input.chiefComplaint?.trim() || null, updatedAt: new Date() })
+  // Writing the prescription means the consultation has happened: a booked visit is marked done, so nobody has to tap Done.
+  const visit: Record<string, unknown> = {}
+  if (input.chiefComplaint !== undefined) visit.chiefComplaint = input.chiefComplaint?.trim() || null
+  if (appt.data()?.status === 'BOOKED') visit.status = 'COMPLETED'
+  if (Object.keys(visit).length) await appt.ref.update({ ...visit, updatedAt: new Date() })
 
   const existing = await db.col('prescriptions').where('appointmentId', '==', appointmentId).limit(1).get()
   const previous = existing.empty ? null : (existing.docs[0].data() as any)
