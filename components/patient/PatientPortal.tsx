@@ -590,7 +590,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
               <User size={20} />
-              <span className="text-[11px] min-[360px]:text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">About</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">About</span>
             </button>
           </div>
           
@@ -598,7 +598,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!(doctor.products?.length)} onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: (doctor.products?.length) ? 1 : 0.5 }}>
               <Package size={20} />
-              <span className="text-[11px] min-[360px]:text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Products</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Products</span>
             </button>
           </div>
 
@@ -608,7 +608,7 @@ END:VCARD`
               <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
                 <Calendar size={22} />
               </div>
-              <span className="text-[11px] min-[360px]:text-xs font-bold uppercase tracking-normal min-[360px]:tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
+              <span className="text-xs font-bold uppercase tracking-normal min-[360px]:tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
             </button>
           </div>
 
@@ -616,7 +616,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!(doctor.youtubeLinks?.length)} onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.youtubeLinks?.length) ? 1 : 0.5 }}>
               <PlaySquare size={20} />
-              <span className="text-[11px] min-[360px]:text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Videos</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Videos</span>
             </button>
           </div>
 
@@ -624,7 +624,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)))} onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: ((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))) ? 1 : 0.5 }}>
               <CreditCard size={20} />
-              <span className="text-[11px] min-[360px]:text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Payment</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Payment</span>
             </button>
           </div>
 
