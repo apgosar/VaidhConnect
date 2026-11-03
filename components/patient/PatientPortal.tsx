@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { upiPayLink } from '@/lib/upi'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { PageShell } from '@/components/ui/PageShell'
@@ -531,7 +532,13 @@ END:VCARD`
                     {pay.upiId && (
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">UPI ID</p>
-                        <p className="font-medium text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-sm tracking-wide break-all">{pay.upiId}</p>
+                        <div className="flex items-stretch gap-2">
+                          <p className="min-w-0 flex-1 font-medium text-slate-800 bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-sm tracking-wide break-all">{pay.upiId}</p>
+                          {upiPayLink(pay.upiId, doctor.clinicName) && (
+                            <a href={upiPayLink(pay.upiId, doctor.clinicName)!} className="btn btn-primary btn-sm shrink-0">Pay now</a>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">On a phone, Pay now opens your UPI app with this ID filled in.</p>
                       </div>
                     )}
                     {pay.bankDetails && (
