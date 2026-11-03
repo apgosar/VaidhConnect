@@ -9,7 +9,9 @@ export interface Suggestion { key: string; primary: string; secondary?: string }
  * works with a keyboard (Up/Down to move, Enter to choose, Escape to close) and with a screen reader.
  * The page decides what the matches are; this only shows them and reports the one picked.
  */
-export function SuggestInput({ suggestions, onPick, listLabel, className, onKeyDown, onFocus, onBlur, ...input }: {
+export function SuggestInput({ id, suggestions, onPick, listLabel, className, onKeyDown, onFocus, onBlur, ...input }: {
+  /** Required: the id a <label htmlFor> points at, so the box always has a name. */
+  id: string
   suggestions: Suggestion[]
   onPick: (key: string) => void
   /** What the list is called for a screen reader, e.g. "Matching patients". */
@@ -25,6 +27,7 @@ export function SuggestInput({ suggestions, onPick, listLabel, className, onKeyD
     <div className="relative">
       <input
         {...input}
+        id={id}
         className={className}
         role="combobox"
         aria-expanded={showing}
