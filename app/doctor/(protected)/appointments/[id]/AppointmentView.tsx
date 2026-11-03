@@ -8,6 +8,7 @@ import {
   Download, Printer, Phone, CalendarClock
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
+import { genderLabel } from '@/lib/gender'
 import { format, parseISO } from 'date-fns'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { SaveShareBar, type ShareState } from '@/components/doctor/SaveShareBar'
@@ -19,7 +20,7 @@ import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 
 interface Patient {
-  id: string; name: string; phone: string; dob: string; medicalHistory?: string; email?: string
+  id: string; name: string; phone: string; dob: string; gender?: string; medicalHistory?: string; email?: string
 }
 interface Appointment {
   id: string; startTime: string; endTime: string; status: string; visitType?: string;
@@ -221,7 +222,7 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
           </button>
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-slate-800 [overflow-wrap:anywhere]"><LangText>{appt.patient.name}</LangText></h1>
-            <p className="text-sm text-slate-500">{age} yrs · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
+            <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">

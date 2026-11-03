@@ -38,21 +38,25 @@ export async function processDailySummary(tenant: Tenant, now = new Date()): Pro
     .orderBy('startTime', 'asc')
     .get()
 
+  // Only what is still ahead at the moment of sending: a visit that has finished is of no use in a morning plan.
+  // One still in progress counts as remaining.
+  const remaining = snap.docs.filter(d => d.data().endTime.toDate() > now)
+
   const patientDocs = await Promise.all(
-    snap.docs.map(d => d.data().patientId ? db.col('patients').doc(d.data().patientId).get() : null),
+    remaining.map(d => d.data().patientId ? db.col('patients').doc(d.data().patientId).get() : null),
   )
   let scheduleList = ''
-  snap.docs.forEach((d, i) => {
+  remaining.forEach((d, i) => {
     const p = patientDocs[i]
     if (!p) return
     scheduleList += `${formatTimeInTz(d.data().startTime.toDate(), tenant.timezone)} - ${p.data()?.name || 'Unknown'} - ${p.data()?.phone || ''}\n`
   })
-  if (!scheduleList) scheduleList = 'No appointments scheduled for today.'
+  if (!scheduleList) scheduleList = snap.size > 0 ? 'No more appointments for the rest of today.' : 'No appointments scheduled for today.'
 
   const ok = await sendDailySummary(notifyPhone, {
     doctorName: doctor.name || 'Doctor',
     clinicName: doctor.clinicName || 'Clinic',
-    appointmentCount: snap.size.toString(),
+    appointmentCount: remaining.length.toString(),
     date: formatDateLongInTz(now, tenant.timezone),
     scheduleList: scheduleList.trim(),
   })

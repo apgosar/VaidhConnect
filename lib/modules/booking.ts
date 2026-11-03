@@ -5,6 +5,7 @@ import { dayBoundsInTz, ymdInTz } from '../time'
 import { rateLimit } from '../ratelimit'
 import type { BookingInput, PatientDetails } from '../validation'
 import { getDayAvailability } from './availability'
+import { isOpenRun } from '../slots'
 import { notifyBooked, notifyCancelled, notifyRescheduled } from './notifications'
 import { patientRescheduleAllowance } from '../reschedulePolicy'
 import { getAccess, sessionOwnsAppointment, setInitialPin, verifyPin, PinError, type PatientSession } from './patientAccess'
@@ -39,7 +40,9 @@ async function resolvePatient(db: TenantDb, details: PatientDetails, actor: Acto
   const dob = details.dob
   const match = existing.docs.find(d => {
     const x = d.data()
-    return x.name?.trim().toLowerCase() === name && x.dob?.toDate().toISOString().slice(0, 10) === dob
+    // A date of birth worked out from an age moves every day, so it cannot tell two people apart: name and number decide.
+    const sameDob = x.dob?.toDate().toISOString().slice(0, 10) === dob || details.dobApproximate || x.dobApproximate
+    return x.name?.trim().toLowerCase() === name && sameDob
   })
 
   if (match) {
@@ -47,6 +50,7 @@ async function resolvePatient(db: TenantDb, details: PatientDetails, actor: Acto
       const patch: Record<string, unknown> = {}
       if (details.email) patch.email = details.email
       if (details.medicalHistory) patch.medicalHistory = details.medicalHistory
+      if (details.gender && !match.data().gender) patch.gender = details.gender
       if (Object.keys(patch).length) await match.ref.update({ ...patch, updatedAt: new Date() })
     }
     return { id: match.id, data: match.data() }
@@ -57,6 +61,8 @@ async function resolvePatient(db: TenantDb, details: PatientDetails, actor: Acto
     phone,
     name: details.name.trim(),
     dob: new Date(`${dob}T00:00:00Z`),
+    ...(details.dobApproximate ? { dobApproximate: true } : {}),
+    ...(details.gender ? { gender: details.gender } : {}),
     medicalHistory: details.medicalHistory || null,
     email: details.email || null,
     createdAt: now,
@@ -81,7 +87,8 @@ export async function bookAppointment(tenant: Tenant, input: BookingInput, actor
   // 1. The requested slot must be a real, currently-open slot for this clinic.
   const ymd = ymdInTz(start, tenant.timezone)
   const day = await getDayAvailability(tenant, db, doctor as { id: string; timings: WeeklyTimings; slotDurationMins: number }, ymd)
-  if (!day.slots.some(s => s.start === start.toISOString() && s.end === end.toISOString())) {
+  // Patients book one slot; clinic staff may book a longer visit, which needs every slot it spans to be free.
+  if (!isOpenRun(day.slots, start, end, doctor.slotDurationMins, actor.kind === 'staff' ? undefined : 1)) {
     throw new BookingError(409, 'This slot is no longer available')
   }
 
@@ -276,17 +283,22 @@ export async function rescheduleAppointment(tenant: Tenant, id: string, input: R
   const db = tenantDb(tenant)
   const doctor = await loadDoctor(db)
   const newStart = new Date(input.startTime)
-  const newEnd = new Date(input.endTime)
-  if (Number.isNaN(newStart.getTime()) || Number.isNaN(newEnd.getTime()) || newEnd <= newStart) throw new BookingError(400, 'Choose a valid time')
+  const chosenEnd = new Date(input.endTime)
+  if (Number.isNaN(newStart.getTime()) || Number.isNaN(chosenEnd.getTime()) || chosenEnd <= newStart) throw new BookingError(400, 'Choose a valid time')
 
   const ref = db.col('appointments').doc(id)
   const before = await ref.get()
   if (!before.exists) throw new BookingError(404, 'Appointment not found')
 
-  // The new slot must be a real, currently open one for this clinic (same rule as booking).
+  // A longer visit keeps its length when it moves (the patient picks where it starts); every slot it needs must be open.
+  const slotMs = (Number(doctor.slotDurationMins) || 0) * 60_000
+  const heldMs = before.data()!.endTime.toDate().getTime() - before.data()!.startTime.toDate().getTime()
+  const newEnd = slotMs > 0 && heldMs > slotMs && heldMs % slotMs === 0 ? new Date(newStart.getTime() + heldMs) : chosenEnd
+
+  // The new time must be real, currently open slot(s) for this clinic (same rule as booking).
   const day = await getDayAvailability(tenant, db, doctor as { id: string; timings: WeeklyTimings; slotDurationMins: number }, ymdInTz(newStart, tenant.timezone))
-  if (!day.slots.some(s => s.start === newStart.toISOString() && s.end === newEnd.toISOString())) {
-    throw new BookingError(409, 'This slot is no longer available', 'SLOT_TAKEN')
+  if (!isOpenRun(day.slots, newStart, newEnd, doctor.slotDurationMins)) {
+    throw new BookingError(409, newEnd.getTime() - newStart.getTime() > slotMs ? 'That time is not free for the whole visit. Choose another.' : 'This slot is no longer available', 'SLOT_TAKEN')
   }
 
   const now = new Date()

@@ -10,6 +10,8 @@ export interface SavedPatient {
   name: string
   phone: string
   dob: string // YYYY-MM-DD
+  dobApproximate?: boolean
+  gender?: 'MALE' | 'FEMALE' | 'OTHER'
   email?: string
   medicalHistory?: string
 }
@@ -41,7 +43,7 @@ const session = () => (typeof window === 'undefined' ? undefined : window.sessio
 export const getSavedPatients = (): SavedPatient[] => read(local(), PROFILES, [])
 
 export function savePatient(p: SavedPatient) {
-  const same = (a: SavedPatient) => a.phone === p.phone && a.name.toLowerCase() === p.name.toLowerCase() && a.dob === p.dob
+  const same = (a: SavedPatient) => a.phone === p.phone && a.name.toLowerCase() === p.name.toLowerCase() && (a.dob === p.dob || a.dobApproximate || p.dobApproximate)
   write(local(), PROFILES, [p, ...getSavedPatients().filter(x => !same(x))].slice(0, 6))
 }
 

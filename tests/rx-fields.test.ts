@@ -226,3 +226,25 @@ describe('photos of a handwritten prescription', () => {
     expect(JSON.stringify(await res.json())).not.toContain('rx-scans')
   })
 })
+
+describe('saving a prescription marks the visit done', () => {
+  const status = async () => (await h.db.col('appointments').doc('a1').get()).data().status
+
+  it('turns a booked visit into a completed one, so nobody has to tap Done', async () => {
+    await h.db.col('appointments').doc('a1').update({ status: 'BOOKED' })
+    expect((await save({})).status).toBe(201)
+    expect(await status()).toBe('COMPLETED')
+  })
+
+  it('leaves a cancelled visit as it is', async () => {
+    await h.db.col('appointments').doc('a1').update({ status: 'CANCELLED' })
+    await save({})
+    expect(await status()).toBe('CANCELLED')
+  })
+
+  it('does not undo anything when the prescription is saved a second time', async () => {
+    await h.db.col('appointments').doc('a1').update({ status: 'BOOKED' })
+    await save({}); await save({ diagnosis: 'Flu' })
+    expect(await status()).toBe('COMPLETED')
+  })
+})

@@ -25,13 +25,15 @@ export async function POST(request: Request) {
 
     const dup = (await db.col('patients').where('phone', '==', d.phone).get()).docs.find(x => {
       const p = x.data()
-      return p.name?.trim().toLowerCase() === d.name.trim().toLowerCase() && p.dob?.toDate().toISOString().slice(0, 10) === d.dob
+      return p.name?.trim().toLowerCase() === d.name.trim().toLowerCase() &&
+        (d.dobApproximate || p.dobApproximate || p.dob?.toDate().toISOString().slice(0, 10) === d.dob)
     })
     if (dup) return Response.json({ patient: { id: dup.id, ...dup.data(), dob: dup.data().dob?.toDate() } })
 
     const now = new Date()
     const data = {
       phone: d.phone, name: d.name.trim(), dob: new Date(`${d.dob}T00:00:00Z`),
+      ...(d.dobApproximate ? { dobApproximate: true } : {}), ...(d.gender ? { gender: d.gender } : {}),
       medicalHistory: d.medicalHistory || null, email: d.email || null,
       createdAt: now, updatedAt: now, createdBy: `staff:${session.uid}`,
     }
@@ -57,7 +59,7 @@ export async function PUT(request: Request) {
 
     const parsed = await parseBody(request, patientDetailsSchema.partial().extend({ id: patientDetailsSchema.shape.name.min(1) }))
     if ('error' in parsed) return parsed.error
-    const { id, name, dob, medicalHistory, email } = parsed.data
+    const { id, name, dob, medicalHistory, email, gender } = parsed.data
 
     const ref = tenantDb(tenant).col('patients').doc(id)
     if (!(await ref.get()).exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
@@ -65,6 +67,7 @@ export async function PUT(request: Request) {
     const update: Record<string, unknown> = { updatedAt: new Date() }
     if (name) update.name = name.trim()
     if (dob) update.dob = new Date(`${dob}T00:00:00Z`)
+    if (gender) update.gender = gender
     if (medicalHistory !== undefined) update.medicalHistory = medicalHistory || null
     if (email !== undefined) update.email = email || null
     await ref.update(update)

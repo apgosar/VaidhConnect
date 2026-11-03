@@ -137,6 +137,13 @@ describe('the chief complaint on the prescription', () => {
     }
   })
 
+  it('shows the gender next to the age, and nothing when it is not recorded', () => {
+    const t = textOf(PrescriptionDocument(baseDoc({ patient: { name: 'Asha Rao', phone: '+919800000001', age: '36 years', gender: 'Female' } }))).join(' ')
+    expect(t).toContain('GENDER')
+    expect(t).toContain('Female')
+    expect(words({})).not.toContain('GENDER')
+  })
+
   it('shows the age, not a date of birth', () => {
     const t = words({})
     expect(t).toContain('AGE')
@@ -167,9 +174,15 @@ describe('rendering from saved data', () => {
 
   it('puts the patient age on the prescription, worked out for the day of the visit, and never their date of birth', async () => {
     await renderPrescriptionPdf(tenant, 'rx1') // born 1 May 1990, visit 2 Nov 2026
-    expect(h.lastRx.patient).toEqual({ name: 'Asha Rao', phone: '+919800000001', age: '36 years' })
+    expect(h.lastRx.patient).toEqual({ name: 'Asha Rao', phone: '+919800000001', age: '36 years', gender: '' })
     expect(JSON.stringify(h.lastRx.patient)).not.toContain('1990')
     expect(h.lastRx.visit.chiefComplaint).toBe('Fever')
+  })
+
+  it('puts the patient gender on the prescription when it is recorded', async () => {
+    await h.db.col('patients').doc('p1').update({ gender: 'FEMALE' })
+    await renderPrescriptionPdf(tenant, 'rx1')
+    expect(h.lastRx.patient.gender).toBe('Female')
   })
 
   it('words a baby age in months', async () => {

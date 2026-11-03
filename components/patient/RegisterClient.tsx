@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Home, User, Calendar, Heart, Phone, Mail } from 'lucide-react'
-import { computeAge } from '@/lib/slots'
+import { Home, User, Heart, Phone, Mail } from 'lucide-react'
+import { ageFromDob } from '@/lib/time'
+import type { Gender } from '@/lib/gender'
+import { AgeDobFields, ageDobAsDob, ageDobComplete, ageDobFromDob, emptyAgeDob, type AgeDob } from '@/components/ui/AgeDobFields'
+import { GenderField } from '@/components/ui/GenderField'
 import { getDraft, setDraft } from '@/lib/patientDevice'
 import { splitPhone } from '@/lib/phoneSplit'
 import { PageShell, Container } from '@/components/ui/PageShell'
@@ -22,16 +25,18 @@ export default function RegisterClient({ config }: RegisterClientProps) {
   const router = useRouter()
   const [countryCode, setCountryCode] = useState('+91')
   const [phoneNumber, setPhoneNumber] = useState('')
+  // Age and date of birth keep each other up to date; the date is sent either way (an estimate when only the age was typed).
+  const [ageDob, setAgeDob] = useState<AgeDob>(emptyAgeDob)
+  const [gender, setGender] = useState<Gender | ''>('')
+  const today = new Date().toLocaleDateString('en-CA')
   const [form, setForm] = useState({
     name: '',
-    dob: '',
     medicalHistory: '',
     email: '',
     chiefComplaint: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [age, setAge] = useState<number | null>(null)
 
   useEffect(() => {
     const d = getDraft()
@@ -39,24 +44,16 @@ export default function RegisterClient({ config }: RegisterClientProps) {
     const p = d.patient
     const split = splitPhone(p.phone)
     if (split) { setCountryCode(split.countryCode); setPhoneNumber(split.national) }
-    setForm({ name: p.name, dob: p.dob, medicalHistory: p.medicalHistory ?? '', email: p.email ?? '', chiefComplaint: d.chiefComplaint ?? '' })
+    setAgeDob(p.dobApproximate ? { ...ageDobFromDob(p.dob, today), age: String(ageFromDob(p.dob, today)), entered: 'age' } : ageDobFromDob(p.dob, today))
+    setGender(p.gender ?? '')
+    setForm({ name: p.name, medicalHistory: p.medicalHistory ?? '', email: p.email ?? '', chiefComplaint: d.chiefComplaint ?? '' })
   }, [])
-
-  useEffect(() => {
-    if (form.dob) {
-      try {
-        setAge(computeAge(form.dob))
-      } catch {
-        setAge(null)
-      }
-    }
-  }, [form.dob])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
     const digits = phoneNumber.replace(/[\s\-()]/g, '')
-    if (!form.name.trim() || !form.dob || !digits || (config?.enableChiefComplaint !== false && !form.chiefComplaint.trim())) {
+    if (!form.name.trim() || !ageDobComplete(ageDob) || !gender || !digits || (config?.enableChiefComplaint !== false && !form.chiefComplaint.trim())) {
       setError('Please fill in all required fields')
       return
     }
@@ -72,7 +69,8 @@ export default function RegisterClient({ config }: RegisterClientProps) {
       patient: {
         name: form.name.trim(),
         phone,
-        dob: form.dob,
+        ...ageDobAsDob(ageDob, today),
+        gender,
         email: form.email.trim() || undefined,
         medicalHistory: form.medicalHistory.trim() || undefined,
       },
@@ -141,29 +139,10 @@ export default function RegisterClient({ config }: RegisterClientProps) {
               <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Your confirmation and reminders are sent on WhatsApp to this number.</p>
             </div>
 
-            {/* Date of Birth */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="dob">
-                Date of Birth <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-sage)' }} />
-                <input
-                  id="dob"
-                  type="date"
-                  className="form-input pl-9"
-                  value={form.dob}
-                  onChange={e => setForm((p: any) => ({ ...p, dob: e.target.value }))}
-                  max={new Date().toISOString().split('T')[0]}
-                  required
-                />
-              </div>
-              {age !== null && (
-                <p className="text-sm mt-1" style={{ color: 'var(--color-sage)' }}>
-                  Age: <strong style={{ color: 'var(--color-charcoal)' }}>{age} years</strong>
-                </p>
-              )}
-            </div>
+            {/* Age and date of birth: type either, the other is worked out */}
+            <AgeDobFields value={ageDob} onChange={setAgeDob} today={today} />
+
+            <GenderField value={gender} onChange={setGender} />
 
             {/* Chief Complaint */}
             {config?.enableChiefComplaint !== false && (

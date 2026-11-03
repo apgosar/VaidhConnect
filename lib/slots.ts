@@ -74,6 +74,24 @@ export function generateAvailableSlots({
   return slots
 }
 
+/** The most slots one visit may span when staff book a longer appointment (8 x 15 min = 2 hours). */
+export const MAX_SLOTS_PER_VISIT = 8
+
+/**
+ * Is [start, end) made of consecutive open slots? A visit longer than one slot is booked as a run of slots
+ * that must ALL be free; a single slot is the usual case (n = 1). `maxSlots` caps the length (patients get 1).
+ */
+export function isOpenRun(slots: TimeSlot[], start: Date, end: Date, slotMins: number, maxSlots = MAX_SLOTS_PER_VISIT): boolean {
+  const step = slotMins * 60_000
+  const total = end.getTime() - start.getTime()
+  if (!(step > 0) || total <= 0 || total % step !== 0) return false
+  const count = total / step
+  if (count > maxSlots) return false
+  const open = new Set(slots.map(s => s.start))
+  for (let k = 0; k < count; k++) if (!open.has(new Date(start.getTime() + k * step).toISOString())) return false
+  return true
+}
+
 /**
  * Format a date for display
  */

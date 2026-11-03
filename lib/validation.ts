@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isValidYmd } from './time'
+import { GENDERS } from './gender'
 
 /** E.164-style phone: strips spaces/dashes/brackets; a bare 10-digit number is treated as Indian. */
 export function normalizePhone(raw: string): string {
@@ -19,6 +20,9 @@ export const patientDetailsSchema = z.object({
   phone: phoneSchema,
   dob: z.string().refine(isValidYmd, 'Enter a valid date of birth')
     .refine(s => new Date(s) <= new Date() && new Date(s).getUTCFullYear() > 1900, 'Enter a valid date of birth'),
+  /** True when the date of birth was worked out from an age, so it is an estimate. */
+  dobApproximate: z.boolean().optional(),
+  gender: z.enum(GENDERS, { message: 'Choose Male, Female or Other' }).optional(),
   email: z.union([z.literal(''), z.string().trim().email().max(120)]).optional(),
   medicalHistory: trimmed(2000).optional(),
 })

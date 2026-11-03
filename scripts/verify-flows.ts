@@ -230,7 +230,7 @@ async function main() {
     check('the attempt is recorded in the activity log', shareTry.status === 422 || sharedFiles.size >= 1)
 
     // ── quick prescription (a consultation by phone or video) ───────────────
-    const quickBody = { patient: { name: `ZZ Quick ${stamp}`, phone: '+919800000096', ageYears: 41 }, diagnosis: 'ZZ Quick', medicines: [{ name: 'ZZ Quickmed', dosage: '1 tab', frequency: 'OD', duration: '3 days' }] }
+    const quickBody = { patient: { name: `ZZ Quick ${stamp}`, phone: '+919800000096', ageYears: 41, gender: 'FEMALE' }, diagnosis: 'ZZ Quick', medicines: [{ name: 'ZZ Quickmed', dosage: '1 tab', frequency: 'OD', duration: '3 days' }] }
     check('a quick prescription needs a login', (await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', json: quickBody })).status === 401)
     check('front desk cannot make a quick prescription', (await staff('/api/doctor/quick-prescription', 'POST', quickBody)).status === 403)
     check('a quick prescription without a medicine is refused', (await http(aHost, '/api/doctor/quick-prescription', { method: 'POST', cookie: ownerCookie, json: { ...quickBody, medicines: [] } })).status === 400)
@@ -241,6 +241,8 @@ async function main() {
       cleanup.push(async () => { await db.collection('clinics').doc(a).collection('prescriptions').doc(quick.body.prescriptionId).delete() })
       cleanup.push(async () => { await db.collection('clinics').doc(a).collection('patients').doc(quick.body.patientId).delete() })
       const visit = (await db.collection('clinics').doc(a).collection('appointments').doc(quick.body.appointmentId).get()).data()!
+      const quickPatient = (await db.collection('clinics').doc(a).collection('patients').doc(quick.body.patientId).get()).data()!
+      check('the new patient is saved with the gender and an estimated date of birth', quickPatient.gender === 'FEMALE' && quickPatient.dobApproximate === true)
       check('it is recorded as a completed phone/video visit that takes no booking slot, with no made-up chief complaint', visit.status === 'COMPLETED' && visit.visitType === 'TELECONSULTATION' && !visit.chiefComplaint)
       const quickPdf = await http(aHost, `/api/prescriptions/${quick.body.prescriptionId}/pdf`, { cookie: ownerCookie })
       check('its prescription downloads as a PDF', quickPdf.status === 200 && quickPdf.res.headers.get('content-type') === 'application/pdf')
@@ -259,10 +261,12 @@ async function main() {
     }
 
     // ── follow-up date, medicine suggestions, patient prescription download ──
-    const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
+    const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', onExamination: 'ZZ BP 120/80', investigations: 'ZZ CBC', advice: ['ZZ Avoid outside food'], adviceOther: 'ZZ Rest', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
     check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)
     const fuBad = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, medicines: [], followUpDate: '2020-01-01' } })
     check('a follow-up date before the visit is refused', fuBad.status === 400, `(${fuBad.status})`)
+    const rxStored = (await db.collection('clinics').doc(a).collection('prescriptions').where('appointmentId', '==', rxApptId).get()).docs[0]?.data()
+    check('the examination, investigations and advice are kept with the prescription', rxStored?.onExamination === 'ZZ BP 120/80' && rxStored?.investigations === 'ZZ CBC' && rxStored?.advice?.[0] === 'ZZ Avoid outside food' && rxStored?.adviceOther === 'ZZ Rest')
     cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('medicine_catalog').get(); await Promise.all(s.docs.map(d => d.ref.delete())) })
     const sug = await http(aHost, '/api/prescriptions/medicines?q=zz+para', { cookie: ownerCookie })
     check('medicines already prescribed are suggested', sug.status === 200 && sug.body?.medicines?.[0]?.name === 'ZZ Paracetamol' && sug.body.medicines[0].dosage === '500 mg', `(${sug.status})`)
@@ -283,6 +287,8 @@ async function main() {
     // ── rescheduling ───────────────────────────────────────────────────────
     const s3 = slots[2]
     const apptAt = async () => (await db.collection('clinics').doc(a).collection('appointments').doc(rxApptId).get()).data()!
+    check('saving a prescription marked the booked visit as done', (await apptAt()).status === 'COMPLETED')
+    await db.collection('clinics').doc(a).collection('appointments').doc(rxApptId).update({ status: 'BOOKED' }) // a finished visit cannot be moved, and this one is moved next
     const moveBy = (cookie: string | undefined, host: string, slot: { start: string; end: string }) => http(host, `/api/appointments/${rxApptId}/reschedule`, { method: 'POST', cookie, json: { startTime: slot.start, endTime: slot.end } })
     check('rescheduling needs a login', (await moveBy(undefined, aHost, s3)).status === 401)
     check('a PIN session cannot move an appointment on another clinic', (await moveBy(pinCookie, bHost, s3)).status === 401)

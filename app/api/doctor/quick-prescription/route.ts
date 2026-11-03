@@ -11,13 +11,16 @@ import { apiError } from '@/lib/errors'
 import { prescriptionContentShape } from '@/lib/modules/prescriptionSchema'
 import { createQuickConsult, QuickConsultError, type QuickConsultInput } from '@/lib/modules/quickConsult'
 import { PrescriptionError } from '@/lib/modules/prescriptions'
+import { GENDERS } from '@/lib/gender'
 
 const text = (max: number) => z.string().trim().max(max)
 const bodySchema = z.object({
   patientId: z.string().min(1).max(128).optional(),
+  gender: z.enum(GENDERS).optional(),
   patient: z.object({
     name: text(100).min(2, 'Enter the patient\'s full name'),
     phone: phoneSchema,
+    gender: z.enum(GENDERS).optional(),
     ageYears: z.number().int().min(0, 'Enter a valid age').max(120, 'Enter a valid age').optional(),
     dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date of birth').optional(),
   }).optional(),

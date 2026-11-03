@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Download, FilePlus2, Lock, UserRound, X } from 'lucide-react'
-import { ageFromDob, dobFromAge } from '@/lib/time'
+import { ageFromDob } from '@/lib/time'
+import { isGender, type Gender } from '@/lib/gender'
+import { AgeDobFields, ageDobComplete, ageDobFromDob, ageDobPayload, emptyAgeDob, type AgeDob } from '@/components/ui/AgeDobFields'
+import { GenderField } from '@/components/ui/GenderField'
 import { emptyRx, rxToPayload, type RxContent } from '@/lib/rxContent'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { SaveShareBar, type ShareState } from '@/components/doctor/SaveShareBar'
@@ -13,7 +16,7 @@ import { SuggestInput, type Suggestion } from '@/components/ui/SuggestInput'
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { readFailure, networkFailureText } from '@/lib/clientErrors'
 
-interface KnownPatient { id: string; name: string; phone: string; dob?: string }
+interface KnownPatient { id: string; name: string; phone: string; dob?: string; gender?: string }
 type Share = ShareState
 interface Saved { appointmentId: string; prescriptionId: string; patientName: string; phone: string }
 
@@ -41,10 +44,9 @@ export default function QuickPrescriptionPage() {
   const [code, setCode] = useState(DEFAULT_CODE)
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
-  const [age, setAge] = useState('')
-  const [dob, setDob] = useState('')
-  // Whichever of the two the doctor typed last is the one that is sent; the other is worked out from it.
-  const [entered, setEntered] = useState<'age' | 'dob'>('age')
+  // Age and date of birth keep each other up to date; whichever was typed last is what is sent.
+  const [ageDob, setAgeDob] = useState<AgeDob>(emptyAgeDob)
+  const [gender, setGender] = useState<Gender | ''>('')
   // An existing patient picked from the dropdown: their details are filled in and locked.
   const [chosen, setChosen] = useState<KnownPatient | null>(null)
 
@@ -97,21 +99,11 @@ export default function QuickPrescriptionPage() {
     const d = digits(raw).slice(-10)
     setSearchFor(d.length >= 3 ? { source: 'phone', q: d } : null)
   }
-  const typeAge = (v: string) => {
-    const clean = v.replace(/\D/g, '').slice(0, 3)
-    setAge(clean); setEntered('age')
-    setDob(clean !== '' && Number(clean) <= 120 ? dobFromAge(Number(clean), today) : '')
-  }
-  const typeDob = (v: string) => {
-    setDob(v); setEntered('dob')
-    setAge(v ? String(Math.max(0, ageFromDob(v, today))) : '')
-  }
-
   const choose = (p: KnownPatient) => {
     const phone = splitPhone(p.phone)
     setChosen(p); setName(p.name); setCode(phone.code); setNumber(phone.number)
-    const ymd = p.dob?.slice(0, 10) ?? ''
-    setDob(ymd); setAge(ymd ? String(ageFromDob(ymd, today)) : ''); setEntered('dob')
+    setAgeDob(ageDobFromDob(p.dob?.slice(0, 10) ?? '', today))
+    setGender(isGender(p.gender) ? p.gender : '')
     setSearchFor(null); setHits([])
   }
   const pick = (id: string) => {
@@ -119,18 +111,19 @@ export default function QuickPrescriptionPage() {
     if (p) choose(p)
   }
   const clearChosen = () => {
-    setChosen(null); setName(''); setNumber(''); setAge(''); setDob(''); setSearchFor(null); setHits([])
+    setChosen(null); setName(''); setNumber(''); setAgeDob(emptyAgeDob()); setGender(''); setSearchFor(null); setHits([])
   }
+  // A patient already on the books keeps the gender on their record; an older record without one can be given it here.
+  const genderLocked = !!chosen && isGender(chosen.gender)
 
   const phone = `${code}${number}`
   const phoneOk = /^\+\d{1,4}$/.test(code) && /^\+\d{8,15}$/.test(phone)
   const meds = rx.medicines.filter(m => m.name.trim())
-  const ageOk = age !== '' && Number(age) >= 0 && Number(age) <= 120
   const problem =
     !phoneOk ? 'Enter the patient\'s mobile number.'
     : !chosen && name.trim().length < 2 ? 'Enter the patient\'s name.'
-    : !chosen && entered === 'age' && !ageOk ? 'Enter the patient\'s age or date of birth.'
-    : !chosen && entered === 'dob' && !dob ? 'Enter the patient\'s age or date of birth.'
+    : !chosen && !ageDobComplete(ageDob) ? 'Enter the patient\'s age or date of birth.'
+    : !chosen && !gender ? 'Choose the patient\'s gender.'
     : meds.length === 0 ? 'Add at least one medicine.'
     : ''
 
@@ -155,8 +148,8 @@ export default function QuickPrescriptionPage() {
       const res = await fetch('/api/doctor/quick-prescription', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(chosen ? { patientId: chosen.id } : {
-            patient: { name: name.trim(), phone, ...(entered === 'age' ? { ageYears: Number(age) } : { dob }) },
+          ...(chosen ? { patientId: chosen.id, ...(gender && !genderLocked ? { gender } : {}) } : {
+            patient: { name: name.trim(), phone, ...ageDobPayload(ageDob), gender },
           }),
           ...rxToPayload(rx),
         }),
@@ -174,7 +167,7 @@ export default function QuickPrescriptionPage() {
   }
 
   const startAnother = () => {
-    setCode(DEFAULT_CODE); setNumber(''); setName(''); setAge(''); setDob(''); setEntered('age'); setChosen(null); setSearchFor(null); setHits([])
+    setCode(DEFAULT_CODE); setNumber(''); setName(''); setAgeDob(emptyAgeDob()); setGender(''); setChosen(null); setSearchFor(null); setHits([])
     setRx(emptyRx())
     setSaved(null); setShare({ state: 'idle' }); setError('')
   }
@@ -244,17 +237,9 @@ export default function QuickPrescriptionPage() {
             suggestions={nameSuggestions} onPick={pick} listLabel="Matching patients" />
         </div>
 
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 6.5rem) minmax(0, 1fr)' }}>
-          <div className="form-group">
-            <label htmlFor="qp-age" className="form-label">Age {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
-            <input id="qp-age" className="form-input" inputMode="numeric" placeholder="Years" value={age} disabled={!!chosen} onChange={e => typeAge(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="qp-dob" className="form-label">Date of birth {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
-            <input id="qp-dob" className="form-input" type="date" max={today} value={dob} disabled={!!chosen} onChange={e => typeDob(e.target.value)} />
-          </div>
-        </div>
-        {!chosen && <p className="text-xs -mt-2" style={{ color: 'var(--color-sage)' }}>Enter either one. The other is worked out for you{entered === 'age' && dob ? ' (the date of birth is an estimate from the age)' : ''}.</p>}
+        <AgeDobFields value={ageDob} onChange={setAgeDob} today={today} disabled={!!chosen} />
+
+        <GenderField value={gender} onChange={setGender} disabled={genderLocked} required={!chosen} />
       </section>
 
       <section className="card p-5 space-y-5" aria-labelledby="qp-rx">
