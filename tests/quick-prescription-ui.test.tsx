@@ -143,8 +143,13 @@ describe('finding an existing patient while typing', () => {
     expect(field(/Mobile number/).value).toBe('9800000001')
     expect(field(/^Age/).value).toBe('36')
     expect(field(/Date of birth/).value).toBe('1990-11-05')
-    expect(field(/^Name/).readOnly).toBe(true)
-    expect(field(/Mobile number/).readOnly).toBe(true)
+    expect(field(/^Name/).disabled).toBe(true)
+    expect(field(/Mobile number/).disabled).toBe(true)
+    expect(field('Country code').disabled).toBe(true)
+    expect(field(/^Age/).disabled).toBe(true)
+    expect(field(/Date of birth/).disabled).toBe(true)
+    expect(screen.getAllByRole('img', { name: 'locked' })).toHaveLength(4)
+    expect(screen.getByText(/press .Not them./)).toBeTruthy()
     expect(screen.getByText(/Existing patient/)).toBeTruthy()
     expect(screen.queryByRole('listbox')).toBeNull()
 
@@ -174,7 +179,7 @@ describe('finding an existing patient while typing', () => {
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(field(/^Name/).value).toBe('as')
-    expect(field(/^Name/).readOnly).toBe(false)
+    expect(field(/^Name/).disabled).toBe(false)
   })
 
   it('"Not them" lets the doctor start again with a new patient', async () => {
@@ -184,8 +189,10 @@ describe('finding an existing patient while typing', () => {
     await user.click(await screen.findByRole('option', { name: /Asha Rao/ }))
     await user.click(screen.getByRole('button', { name: /Not them/ }))
     expect(field(/^Name/).value).toBe('')
-    expect(field(/^Name/).readOnly).toBe(false)
+    expect(field(/^Name/).disabled).toBe(false)
+    expect(field(/Mobile number/).disabled).toBe(false)
     expect(field(/^Age/).value).toBe('')
+    expect(screen.queryAllByRole('img', { name: 'locked' })).toHaveLength(0)
   })
 
   it('a failed search does not get in the way of typing a new patient', async () => {

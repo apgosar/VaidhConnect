@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, FilePlus2, Save, UserRound, X } from 'lucide-react'
+import { CheckCircle2, Download, FilePlus2, Lock, Save, UserRound, X } from 'lucide-react'
 import type { Medicine } from '@/lib/constants'
 import { ageFromDob, dobFromAge } from '@/lib/time'
 import { emptyMedicine } from '@/components/doctor/MedicineList'
@@ -211,18 +211,18 @@ export default function QuickPrescriptionPage() {
 
         {chosen && (
           <div className="flex items-center justify-between gap-2 rounded-lg p-3" style={{ background: 'var(--color-primary-bg)' }}>
-            <p className="text-sm"><strong>Existing patient.</strong> Their details are filled in.</p>
+            <p className="text-sm flex items-start gap-2"><Lock size={16} className="mt-0.5 shrink-0" aria-hidden="true" /><span><strong>Existing patient.</strong> Their details are filled in and locked. To enter someone else, press &ldquo;Not them&rdquo;.</span></p>
             <button type="button" className="btn btn-ghost btn-sm" onClick={clearChosen}><X size={14} aria-hidden="true" /> Not them</button>
           </div>
         )}
 
         <div className="form-group">
-          <label htmlFor="qp-number" className="form-label">Mobile number <span aria-hidden="true" className="text-red-600">*</span></label>
+          <label htmlFor="qp-number" className="form-label">Mobile number {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
           <div className="flex gap-2">
-            <input aria-label="Country code" className="form-input text-center" style={{ width: '5rem', flexShrink: 0 }} inputMode="tel" value={code} readOnly={!!chosen}
+            <input aria-label="Country code" className="form-input text-center" style={{ width: '5rem', flexShrink: 0 }} inputMode="tel" value={code} disabled={!!chosen}
               onChange={e => setCode(`+${digits(e.target.value).slice(0, 4)}`)} />
             <div className="flex-1 min-w-0">
-              <SuggestInput id="qp-number" className="form-input" type="tel" inputMode="tel" placeholder="98765 43210" value={number} readOnly={!!chosen}
+              <SuggestInput id="qp-number" className="form-input" type="tel" inputMode="tel" placeholder="98765 43210" value={number} disabled={!!chosen}
                 aria-describedby="qp-number-hint" onChange={e => typeNumber(e.target.value)}
                 suggestions={phoneSuggestions} onPick={pick} listLabel="Matching patients" />
             </div>
@@ -231,19 +231,19 @@ export default function QuickPrescriptionPage() {
         </div>
 
         <div className="form-group">
-          <label htmlFor="qp-name" className="form-label">Name <span aria-hidden="true" className="text-red-600">*</span></label>
-          <SuggestInput id="qp-name" className="form-input" value={name} readOnly={!!chosen} onChange={e => typeName(e.target.value)}
+          <label htmlFor="qp-name" className="form-label">Name {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
+          <SuggestInput id="qp-name" className="form-input" value={name} disabled={!!chosen} onChange={e => typeName(e.target.value)}
             suggestions={nameSuggestions} onPick={pick} listLabel="Matching patients" />
         </div>
 
         <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 6.5rem) minmax(0, 1fr)' }}>
           <div className="form-group">
-            <label htmlFor="qp-age" className="form-label">Age <span aria-hidden="true" className="text-red-600">*</span></label>
-            <input id="qp-age" className="form-input" inputMode="numeric" placeholder="Years" value={age} readOnly={!!chosen} onChange={e => typeAge(e.target.value)} />
+            <label htmlFor="qp-age" className="form-label">Age {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
+            <input id="qp-age" className="form-input" inputMode="numeric" placeholder="Years" value={age} disabled={!!chosen} onChange={e => typeAge(e.target.value)} />
           </div>
           <div className="form-group">
-            <label htmlFor="qp-dob" className="form-label">Date of birth <span aria-hidden="true" className="text-red-600">*</span></label>
-            <input id="qp-dob" className="form-input" type="date" max={today} value={dob} readOnly={!!chosen} onChange={e => typeDob(e.target.value)} />
+            <label htmlFor="qp-dob" className="form-label">Date of birth {chosen ? <LockMark /> : <span aria-hidden="true" className="text-red-600">*</span>}</label>
+            <input id="qp-dob" className="form-input" type="date" max={today} value={dob} disabled={!!chosen} onChange={e => typeDob(e.target.value)} />
           </div>
         </div>
         {!chosen && <p className="text-xs -mt-2" style={{ color: 'var(--color-sage)' }}>Enter either one. The other is worked out for you{entered === 'age' && dob ? ' (the date of birth is an estimate from the age)' : ''}.</p>}
@@ -271,6 +271,11 @@ export default function QuickPrescriptionPage() {
       </div>
     </div>
   )
+}
+
+/** Next to a field's label when the field is locked because an existing patient was picked. */
+function LockMark() {
+  return <Lock size={12} className="inline -mt-0.5" aria-label="locked" role="img" />
 }
 
 function toSuggestion(p: KnownPatient, today: string): Suggestion {
