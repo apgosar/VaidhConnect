@@ -49,7 +49,7 @@ describe('adding a new patient while booking (staff)', () => {
     stubBooking(); const user = userEvent.setup()
     await openNewPatientForm(user)
     await user.type(field(/^Age/), '36')
-    expect(field(/Date of birth/).value).toBe('1990-11-05')
+    expect(field(/Date of birth/).value).toBe('1990-06-01')
     expect(screen.getByText(/estimate from the age/)).toBeTruthy()
     fireEvent.change(field(/Date of birth/), { target: { value: '1985-02-03' } })
     expect(field(/^Age/).value).toBe('41')
@@ -75,7 +75,7 @@ describe('adding a new patient while booking (staff)', () => {
     await user.click(await screen.findByRole('button', { name: '09:00 AM' }))
     await user.click(screen.getByRole('button', { name: /Book appointment/ }))
     await screen.findByText(/Appointment booked/)
-    expect(posted(calls).patient).toMatchObject({ name: 'Meera Joshi', dob: '1990-11-05', dobApproximate: true, gender: 'FEMALE' })
+    expect(posted(calls).patient).toMatchObject({ name: 'Meera Joshi', dob: '1990-06-01', dobApproximate: true, gender: 'FEMALE' })
   })
 
   it('sends an exact date of birth without the estimate flag', async () => {

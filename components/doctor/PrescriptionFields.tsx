@@ -9,7 +9,7 @@ import { useAdviceOptions } from '@/components/doctor/useAdviceOptions'
 import { Chip, ChipRow } from '@/components/ui/Chip'
 
 /** How soon the patient should come back, as one-tap choices next to the date. */
-const FOLLOW_UP_CHOICES = [['3 days', 3], ['5 days', 5], ['1 week', 7], ['2 weeks', 14], ['1 month', 30]] as const
+const FOLLOW_UP_CHOICES = [['3 days', 3], ['1 week', 7], ['1 month', 30], ['3 months', 90]] as const
 
 const Optional = () => <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span>
 

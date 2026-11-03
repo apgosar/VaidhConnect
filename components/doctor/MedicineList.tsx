@@ -150,13 +150,13 @@ export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; o
                             <label htmlFor={`${sid}-days`} className="form-label">For how many days</label>
                             <div className="flex items-center gap-2">
                               <button type="button" onClick={() => updateStep(i, j, { days: Math.max(1, line.days - 1) })} disabled={line.days <= 1}
-                                className="btn btn-outline shrink-0 px-0 disabled:opacity-40" style={{ width: 44, height: 44 }} aria-label={`One day less for step ${j + 1}`}>
+                                className="btn btn-outline shrink-0 disabled:opacity-40" style={{ width: 44, height: 44, padding: 0 }} aria-label={`One day less for step ${j + 1}`}>
                                 <Minus size={16} aria-hidden="true" />
                               </button>
                               <input id={`${sid}-days`} type="number" inputMode="numeric" min={1} max={365} className="form-input text-center min-w-0" style={{ maxWidth: '6rem' }} value={step.days}
                                 onChange={e => updateStep(i, j, { days: Math.min(365, Math.max(1, parseInt(e.target.value) || 1)) })} />
                               <button type="button" onClick={() => updateStep(i, j, { days: Math.min(365, line.days + 1) })} disabled={line.days >= 365}
-                                className="btn btn-outline shrink-0 px-0 disabled:opacity-40" style={{ width: 44, height: 44 }} aria-label={`One day more for step ${j + 1}`}>
+                                className="btn btn-outline shrink-0 disabled:opacity-40" style={{ width: 44, height: 44, padding: 0 }} aria-label={`One day more for step ${j + 1}`}>
                                 <Plus size={16} aria-hidden="true" />
                               </button>
                               <span className="text-sm text-slate-600">{line.days === 1 ? 'day' : 'days'}</span>
