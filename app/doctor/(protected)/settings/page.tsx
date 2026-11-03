@@ -451,14 +451,14 @@ function SettingsPageContent() {
           </select>
         </div>
         <div className="form-group">
-          <label htmlFor="accent-color" className="form-label flex items-center gap-2">
+          <label htmlFor="accent-color" className="form-label flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Palette size={14} /> Accent Color <span className="text-slate-500 text-xs">(auto-set by specialty, override here)</span>
           </label>
           <div className="flex items-center gap-3 flex-wrap">
             <input id="accent-color"
               type="color"
               className="w-10 h-10 shrink-0 rounded-lg border border-slate-200 cursor-pointer"
-              value={doctor.themeColor}
+              value={doctor.themeColor || "#3B82F6"}
               onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)}
             />
             <input aria-label="Theme colour, hex value" className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
@@ -476,7 +476,7 @@ function SettingsPageContent() {
           </div>
         </div>
         <div className="form-group">
-          <label htmlFor="brand-colour" className="form-label flex items-center gap-2">
+          <label htmlFor="brand-colour" className="form-label flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Palette size={14} /> Brand Colour <span className="text-slate-500 text-xs">(buttons, headers, PDFs and emails)</span>
           </label>
           <div className="flex items-center gap-3 flex-wrap">
