@@ -91,7 +91,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
         <Link href="/doctor/patients" className="btn btn-ghost p-2 -ml-2 mt-1" style={{ color: 'var(--color-sage)' }}>
           <ArrowLeft size={20} />
         </Link>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
@@ -99,9 +99,9 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
             >
               {patient.name.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h1 className="text-xl font-bold [overflow-wrap:anywhere]" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>
                   {patient.name}
                 </h1>
                 <span
@@ -112,7 +112,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
                 </span>
               </div>
               <p className="text-sm font-tabular mt-0.5" style={{ color: 'var(--color-sage)' }}>{age} years · {patient.phone}</p>
-              {patient.email && <p className="text-xs mt-0.5" style={{ color: 'var(--color-sage-light)' }}>{patient.email}</p>}
+              {patient.email && <p className="text-xs mt-0.5 break-all" style={{ color: 'var(--color-sage-light)' }}>{patient.email}</p>}
             </div>
           </div>
         </div>

@@ -112,7 +112,7 @@ export default function NewAppointmentPage() {
 
       {/* 1. Patient */}
       <section className="card p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">1. Patient</h2>
           <div className="flex gap-1 text-sm">
             <button className={`btn btn-sm ${mode === 'existing' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode('existing')}><Search size={14} /> Find</button>
@@ -128,7 +128,7 @@ export default function NewAppointmentPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <input aria-label="Search patients by name or phone" className="form-input" placeholder="Search by name or phone (min 2 characters)" value={query} onChange={e => setQuery(e.target.value)} />
+              <input aria-label="Search patients by name or phone" className="form-input" placeholder="Name or phone (2+ letters)" value={query} onChange={e => setQuery(e.target.value)} />
               {hits.map(h => (
                 <button key={h.id} className="w-full text-left rounded-lg p-3 hover:bg-[var(--color-primary-bg)] border" style={{ borderColor: 'var(--color-sage-border)' }} onClick={() => setPatient(h)}>
                   <span className="font-medium">{h.name}</span> <span className="text-xs" style={{ color: 'var(--color-sage)' }}>{h.phone}</span>

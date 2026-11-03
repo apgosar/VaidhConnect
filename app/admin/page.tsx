@@ -62,7 +62,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: 'var(--color-linen)' }}>
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>Clinics <span className="text-base font-normal" style={{ color: 'var(--color-sage)' }}>({clinics.length})</span></h1>
           <div className="flex gap-2">
             <button className="btn btn-primary" onClick={() => setShowForm(s => !s)}><Plus size={16} /> New clinic</button>
@@ -101,7 +101,7 @@ export default function AdminPage() {
                   <h2 className="font-semibold">{c.clinicName} <span className="text-xs font-normal" style={{ color: 'var(--color-sage)' }}>· {c.id} · {c.storage}</span></h2>
                   <p className="text-sm" style={{ color: 'var(--color-sage)' }}>{c.doctor ? `Dr. ${c.doctor}` : ''} {c.email ? `· ${c.email}` : ''} · {c.timezone}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: c.status === 'active' ? 'rgba(28,92,70,0.12)' : 'rgba(181,74,60,0.12)', color: c.status === 'active' ? 'var(--color-pine)' : '#B54A3C' }}>{c.status}</span>
                   <button className="btn btn-outline btn-sm" onClick={() => patch(c.id, { status: c.status === 'active' ? 'suspended' : 'active' })}>{c.status === 'active' ? 'Suspend' : 'Reactivate'}</button>
                   {c.email && <button className="btn btn-ghost btn-sm" onClick={() => patch(c.id, { resetOwnerPassword: true }, `Password link for ${c.email}`)}>Reset owner password</button>}

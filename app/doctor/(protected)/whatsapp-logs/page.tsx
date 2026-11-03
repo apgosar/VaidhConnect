@@ -54,7 +54,7 @@ function LogCard({ log }: { log: WhatsAppLog }) {
       style={{ borderLeft: `3px solid ${isSent ? 'var(--color-pine)' : '#B54A3C'}` }}
     >
       {/* Header row */}
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2 p-4">
         {/* Status icon */}
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
@@ -67,7 +67,7 @@ function LogCard({ log }: { log: WhatsAppLog }) {
         </div>
 
         {/* Main info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-40">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             {/* Message type pill */}
             <span
@@ -107,48 +107,10 @@ function LogCard({ log }: { log: WhatsAppLog }) {
               {log.errorDetail}
             </p>
           )}
-
-          {/* Message Body Content */}
-          {log.messageBody && (
-            <div
-              className="mt-3 p-3 rounded-lg text-sm whitespace-pre-wrap relative group"
-              style={{
-                background: 'rgba(255, 255, 255, 0.75)',
-                border: '1px solid var(--color-sage-border)',
-                color: 'var(--color-charcoal)',
-              }}
-            >
-              <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 text-xs font-semibold uppercase tracking-wider text-[var(--color-sage)]">
-                <span className="flex items-center gap-1">
-                  <MessageSquare size={11} />
-                  Message Body
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyBody}
-                  className="flex items-center gap-1 text-xs font-normal hover:text-[var(--color-forest)] transition-colors px-1.5 py-0.5 rounded hover:bg-black/5"
-                  title="Copy message text"
-                >
-                  {copied ? (
-                    <>
-                      <Check size={11} className="text-green-600" />
-                      <span className="text-green-600">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={11} />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="leading-relaxed text-[13px]">{log.messageBody}</p>
-            </div>
-          )}
         </div>
 
         {/* Timestamp + expand */}
-        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-auto">
           {log.sentAt && (
             <p className="text-xs font-tabular" style={{ color: 'var(--color-sage)' }}>
               {format(parseISO(log.sentAt), 'dd MMM, hh:mm a')}
@@ -166,6 +128,46 @@ function LogCard({ log }: { log: WhatsAppLog }) {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="px-4 pb-4">
+    {/* Message body: full width of the card */}
+    {log.messageBody && (
+      <div
+        className="p-3 rounded-lg text-sm whitespace-pre-wrap relative group"
+        style={{
+          background: 'rgba(255, 255, 255, 0.75)',
+          border: '1px solid var(--color-sage-border)',
+          color: 'var(--color-charcoal)',
+        }}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 text-xs font-semibold uppercase tracking-wider text-[var(--color-sage)]">
+          <span className="flex items-center gap-1">
+            <MessageSquare size={11} />
+            Message Body
+          </span>
+          <button
+            type="button"
+            onClick={handleCopyBody}
+            className="flex items-center gap-1 text-xs font-normal hover:text-[var(--color-forest)] transition-colors px-1.5 py-0.5 rounded hover:bg-black/5"
+            title="Copy message text"
+          >
+            {copied ? (
+              <>
+                <Check size={11} className="text-green-600" />
+                <span className="text-green-600">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy size={11} />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+        </div>
+        <p className="leading-relaxed text-[13px]">{log.messageBody}</p>
+      </div>
+    )}
       </div>
 
       {/* Expanded params */}

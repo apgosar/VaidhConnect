@@ -267,7 +267,7 @@ END:VCARD`
               </p>
               <p className="mt-1 text-sm" style={{ color: '#FFFFFF' }}>
                 {doctor.qualifications && <span>{doctor.qualifications} · </span>}
-                Reg: {doctor.registrationNumber}
+                {/^reg/i.test(doctor.registrationNumber ?? '') ? doctor.registrationNumber : `Reg: ${doctor.registrationNumber}`}
               </p>
 
               {doctor.practiceDescription && (
@@ -450,18 +450,18 @@ END:VCARD`
                 const dayData = (doctor.timings as WeeklyTimings)[day]
                 if (!dayData) return null
                 return (
-                  <div key={day} className="flex justify-between items-center text-sm">
+                  <div key={day} className="flex justify-between items-start gap-3 text-sm">
                     <span
-                      className="capitalize font-medium w-28"
+                      className="capitalize font-medium w-24 shrink-0"
                       style={{ color: 'var(--color-charcoal)' }}
                     >
                       {day}
                     </span>
                     <span
-                      className="font-tabular"
+                      className="font-tabular text-right"
                       style={{ color: dayData.open ? 'var(--color-charcoal-mid)' : '#B54A3C' }}
                     >
-                      {formatDayTiming(dayData)}
+                      {formatDayTiming(dayData).split(', ').map((range, i) => <span key={i} className="block">{range}</span>)}
                     </span>
                   </div>
                 )
@@ -584,13 +584,13 @@ END:VCARD`
 
       {/* ── Sticky Bottom Navigation ── */}
       <nav aria-label="Sections" className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 z-50 pb-safe">
-        <div className="max-w-md mx-auto grid grid-cols-5 items-center px-2 py-3">
+        <div className="max-w-md mx-auto grid grid-cols-5 items-center px-1 py-3">
           
           {/* 1. About */}
           <div className="flex justify-center">
             <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
               <User size={20} />
-              <span className="text-xs font-medium uppercase tracking-wider">About</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">About</span>
             </button>
           </div>
           
@@ -598,7 +598,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!(doctor.products?.length)} onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: (doctor.products?.length) ? 1 : 0.5 }}>
               <Package size={20} />
-              <span className="text-xs font-medium uppercase tracking-wider">Products</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Products</span>
             </button>
           </div>
 
@@ -608,7 +608,7 @@ END:VCARD`
               <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
                 <Calendar size={22} />
               </div>
-              <span className="text-xs font-bold uppercase tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
+              <span className="text-xs font-bold uppercase tracking-normal min-[360px]:tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
             </button>
           </div>
 
@@ -616,7 +616,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!(doctor.youtubeLinks?.length)} onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.youtubeLinks?.length) ? 1 : 0.5 }}>
               <PlaySquare size={20} />
-              <span className="text-xs font-medium uppercase tracking-wider">Videos</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Videos</span>
             </button>
           </div>
 
@@ -624,7 +624,7 @@ END:VCARD`
           <div className="flex justify-center">
             <button disabled={!((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)))} onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: ((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))) ? 1 : 0.5 }}>
               <CreditCard size={20} />
-              <span className="text-xs font-medium uppercase tracking-wider">Payment</span>
+              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Payment</span>
             </button>
           </div>
 

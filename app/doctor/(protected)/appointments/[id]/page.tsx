@@ -245,7 +245,7 @@ export default function AppointmentDetailPage() {
   const sharing = share.state === 'sending'
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
-    { key: 'notes', label: 'Consultation Notes', icon: FileText },
+    { key: 'notes', label: 'Notes', icon: FileText },
     { key: 'prescription', label: 'Prescription', icon: Pill },
     { key: 'payment', label: 'Payment', icon: CreditCard },
   ] as const
@@ -253,17 +253,17 @@ export default function AppointmentDetailPage() {
   return (
     <div className="space-y-5 animate-fade-in max-w-3xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button onClick={() => router.back()} className="btn btn-ghost p-2 -ml-2">
             <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-800"><LangText>{appt.patient.name}</LangText></h1>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-slate-800 [overflow-wrap:anywhere]"><LangText>{appt.patient.name}</LangText></h1>
             <p className="text-sm text-slate-500">{age} yrs · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className={`badge ${
             appt.status === 'BOOKED' ? 'badge-blue' :
             appt.status === 'COMPLETED' ? 'badge-green' : 'badge-red'
@@ -315,14 +315,14 @@ export default function AppointmentDetailPage() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
+            className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
               activeTab === key
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Icon size={14} />
-            <span className="hidden sm:inline">{label}</span>
+            <span>{label}</span>
           </button>
         ))}
       </div>
@@ -446,8 +446,8 @@ export default function AppointmentDetailPage() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
                       <input aria-label={`Medicine ${i + 1} name`}
                         className="form-input"
                         placeholder="Medicine name"
@@ -457,19 +457,19 @@ export default function AppointmentDetailPage() {
                         onChange={e => onNameChange(i, e.target.value)}
                       />
                     </div>
-                    <label className="col-span-2 flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                    <label className="sm:col-span-2 flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
                       <input type="checkbox" checked={!!med.taper} onChange={e => toggleTaper(i, e.target.checked)} />
                       Tapering dose (the dose changes over the course)
                     </label>
                     {med.taper ? (
-                      <div className="col-span-2 space-y-2">
+                      <div className="sm:col-span-2 space-y-2">
                         {taperSchedule(med.taper.steps).map((line, j) => (
                           <div key={j} className="grid grid-cols-12 gap-2 items-center">
                             <span className="col-span-12 sm:col-span-2 text-xs font-medium text-slate-500">{dayRangeLabel(line)}</span>
-                            <input className="form-input col-span-5 sm:col-span-3" placeholder="Dose (e.g. 40 mg)" value={med.taper!.steps[j].dose} onChange={e => updateStep(i, j, { dose: e.target.value })} aria-label={`Step ${j + 1} dose`} />
-                            <input className="form-input col-span-5 sm:col-span-4" placeholder="How often" value={med.taper!.steps[j].frequency} onChange={e => updateStep(i, j, { frequency: e.target.value })} aria-label={`Step ${j + 1} frequency`} />
-                            <input type="number" min={1} max={365} className="form-input col-span-2 sm:col-span-2" placeholder="Days" value={med.taper!.steps[j].days} onChange={e => updateStep(i, j, { days: Math.max(1, parseInt(e.target.value) || 1) })} aria-label={`Step ${j + 1} days`} />
-                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-12 sm:col-span-1 text-red-600 hover:text-red-700 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
+                            <input className="form-input col-span-6 sm:col-span-3" placeholder="Dose, e.g. 40 mg" value={med.taper!.steps[j].dose} onChange={e => updateStep(i, j, { dose: e.target.value })} aria-label={`Step ${j + 1} dose`} />
+                            <input className="form-input col-span-6 sm:col-span-4" placeholder="How often" value={med.taper!.steps[j].frequency} onChange={e => updateStep(i, j, { frequency: e.target.value })} aria-label={`Step ${j + 1} frequency`} />
+                            <input type="number" min={1} max={365} className="form-input col-span-9 sm:col-span-2" placeholder="Days" value={med.taper!.steps[j].days} onChange={e => updateStep(i, j, { days: Math.max(1, parseInt(e.target.value) || 1) })} aria-label={`Step ${j + 1} days`} />
+                            <button type="button" onClick={() => removeStep(i, j)} disabled={med.taper!.steps.length === 1} className="col-span-3 sm:col-span-1 text-red-600 hover:text-red-700 disabled:opacity-30 justify-self-end" aria-label={`Remove step ${j + 1}`}>
                               <Trash2 size={14} />
                             </button>
                           </div>

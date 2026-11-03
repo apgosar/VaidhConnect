@@ -451,14 +451,14 @@ function SettingsPageContent() {
           </select>
         </div>
         <div className="form-group">
-          <label htmlFor="accent-color" className="form-label flex items-center gap-2">
+          <label htmlFor="accent-color" className="form-label flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Palette size={14} /> Accent Color <span className="text-slate-500 text-xs">(auto-set by specialty, override here)</span>
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <input id="accent-color"
               type="color"
-              className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
-              value={doctor.themeColor}
+              className="w-10 h-10 shrink-0 rounded-lg border border-slate-200 cursor-pointer"
+              value={doctor.themeColor || "#3B82F6"}
               onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)}
             />
             <input aria-label="Theme colour, hex value" className="form-input w-36" value={doctor.themeColor} onChange={e => setDoctor((p: any) => p ? { ...p, themeColor: e.target.value } : p)} placeholder="#3B82F6" />
@@ -476,13 +476,13 @@ function SettingsPageContent() {
           </div>
         </div>
         <div className="form-group">
-          <label htmlFor="brand-colour" className="form-label flex items-center gap-2">
+          <label htmlFor="brand-colour" className="form-label flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Palette size={14} /> Brand Colour <span className="text-slate-500 text-xs">(buttons, headers, PDFs and emails)</span>
           </label>
           <div className="flex items-center gap-3 flex-wrap">
             <input id="brand-colour"
               type="color"
-              className="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer"
+              className="w-10 h-10 shrink-0 rounded-lg border border-slate-200 cursor-pointer"
               value={doctor.theme?.primary || '#0F3D2E'}
               onChange={e => setDoctor((p: any) => p ? { ...p, theme: { primary: e.target.value } } : p)}
             />
@@ -614,7 +614,7 @@ function SettingsPageContent() {
                 </div>
 
                 {timing.open && (
-                  <div className="pl-12 space-y-2">
+                  <div className="pl-0 min-[480px]:pl-12 space-y-2">
                     {/* Mode toggle */}
                     <div className="flex gap-2">
                       <button
@@ -649,27 +649,27 @@ function SettingsPageContent() {
                       <div className="space-y-1">
                         <p className="text-xs text-slate-500 font-medium">HOURS</p>
                         <div className="flex gap-2 items-center">
-                          <input aria-label={`${day} start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                          <input aria-label={`${day} start time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
                           <span className="text-slate-500 text-xs">–</span>
-                          <input aria-label={`${day} end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                          <input aria-label={`${day} end time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <p className="text-xs text-slate-500 font-medium">MORNING</p>
                           <div className="flex gap-2 items-center">
-                            <input aria-label={`${day} morning start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
+                            <input aria-label={`${day} morning start time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.morning?.start ?? ''} onChange={e => handleTimingChange(day, 'morning', 'start', e.target.value)} />
                             <span className="text-slate-500 text-xs">–</span>
-                            <input aria-label={`${day} morning end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
+                            <input aria-label={`${day} morning end time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.morning?.end ?? ''} onChange={e => handleTimingChange(day, 'morning', 'end', e.target.value)} />
                           </div>
                         </div>
                         <div className="space-y-1">
                           <p className="text-xs text-slate-500 font-medium">EVENING</p>
                           <div className="flex gap-2 items-center">
-                            <input aria-label={`${day} evening start time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
+                            <input aria-label={`${day} evening start time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.evening?.start ?? ''} onChange={e => handleTimingChange(day, 'evening', 'start', e.target.value)} />
                             <span className="text-slate-500 text-xs">–</span>
-                            <input aria-label={`${day} evening end time`} type="time" className="form-input text-sm py-1.5 flex-1" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
+                            <input aria-label={`${day} evening end time`} type="time" className="form-input text-sm py-1.5 px-2 flex-1 min-w-0" value={timing.evening?.end ?? ''} onChange={e => handleTimingChange(day, 'evening', 'end', e.target.value)} />
                           </div>
                         </div>
                       </div>
