@@ -3,9 +3,10 @@ import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/auth/session'
 import { audit } from '@/lib/audit'
+import { can } from '@/lib/auth/access'
 import Link from 'next/link'
 import PatientPinActions from '@/components/doctor/PatientPinActions'
-import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight, FilePlus2 } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
 
@@ -117,6 +118,13 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
           </div>
         </div>
       </div>
+
+      {/* A prescription for this patient without a visit (a call or a message): they are already picked on the next screen */}
+      {can(session?.role, 'prescriptions:manage') && patient.phone && (
+        <Link href={`/doctor/quick-prescription?patient=${patient.id}&phone=${encodeURIComponent(patient.phone)}`} className="btn btn-outline w-full sm:w-auto">
+          <FilePlus2 size={16} aria-hidden="true" /> Quick prescription for {patient.name.split(' ')[0]}
+        </Link>
+      )}
 
       <PatientPinActions phone={patient.phone} />
 

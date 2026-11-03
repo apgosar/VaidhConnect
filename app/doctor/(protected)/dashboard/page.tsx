@@ -231,7 +231,8 @@ export default async function DoctorDashboard() {
             {todayAppts.map((appt: any, idx: number) => (
               <Link
                 key={appt.id}
-                href={`/doctor/appointments/${appt.id}`}
+                // Straight to the job: the doctor writes the prescription, the front desk takes the payment
+                href={`/doctor/appointments/${appt.id}?tab=${can(session?.role, 'prescriptions:manage') ? 'prescription' : 'payment'}`}
                 className="flex items-center justify-between px-5 py-3.5 group transition-colors hover:bg-[var(--color-primary-bg)]"
                 style={{
                   borderBottom: idx < todayAppts.length - 1 ? '1px solid var(--color-sage-border)' : 'none',

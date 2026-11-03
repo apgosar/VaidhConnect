@@ -6,7 +6,7 @@ import { useState } from 'react'
 
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'a1' }), useRouter: () => ({ back: vi.fn(), push: vi.fn() }) }))
 
-import AppointmentDetailPage from '@/app/doctor/(protected)/appointments/[id]/page'
+import AppointmentView from '@/app/doctor/(protected)/appointments/[id]/AppointmentView'
 import { MedicineList } from '@/components/doctor/MedicineList'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { emptyRx, type RxContent } from '@/lib/rxContent'
@@ -45,7 +45,7 @@ beforeEach(() => { stubServer() })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 async function openPrescription(user: ReturnType<typeof userEvent.setup>) {
-  render(<AppointmentDetailPage />)
+  render(<AppointmentView canPrescribe />)
   await user.click(await screen.findByRole('button', { name: 'Prescription' }))
 }
 
@@ -128,6 +128,31 @@ describe('Save & share on the appointment page', () => {
     expect(JSON.parse(posts(calls, '/api/prescriptions')[0].init!.body as string)).toMatchObject({
       onExamination: 'BP 120/80', investigations: 'CBC', advice: ['Avoid outside food'], adviceOther: 'Cut down on tea',
     })
+  })
+})
+
+describe('which tab a visit opens on', () => {
+  afterEach(() => { window.history.pushState({}, '', '/') })
+  const selected = () => screen.getAllByRole('button').filter(b => b.className.includes('border-blue-600')).map(b => b.textContent)
+
+  it('a doctor opens straight on the prescription', async () => {
+    render(<AppointmentView canPrescribe />)
+    await screen.findByLabelText(/On examination/)
+    expect(selected()).toEqual(['Prescription'])
+  })
+
+  it('a link can ask for another tab', async () => {
+    window.history.pushState({}, '', '/doctor/appointments/a1?tab=payment')
+    render(<AppointmentView canPrescribe />)
+    await screen.findByLabelText('Amount (₹)')
+  })
+
+  it('front-desk staff open on Payment and have no Prescription tab, even when a link asks for it', async () => {
+    window.history.pushState({}, '', '/doctor/appointments/a1?tab=prescription')
+    render(<AppointmentView canPrescribe={false} />)
+    await screen.findByLabelText('Amount (₹)')
+    expect(screen.queryByRole('button', { name: 'Prescription' })).toBeNull()
+    expect(screen.queryByLabelText(/On examination/)).toBeNull()
   })
 })
 

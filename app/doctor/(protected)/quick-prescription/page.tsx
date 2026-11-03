@@ -62,6 +62,18 @@ export default function QuickPrescriptionPage() {
     fetch('/api/public/config').then(r => r.json()).then(d => { if (d.config?.today) setToday(d.config.today) }).catch(() => {})
   }, [])
 
+  // Opened from a patient's page (?patient=<id>&phone=<number>): that patient is already picked, no typing at all.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('patient'); const phone = digits(params.get('phone') ?? '').slice(-10)
+    if (!id || phone.length < 3) return
+    fetch(`/api/patients/search?q=${encodeURIComponent(phone)}&limit=20`)
+      .then(r => (r.ok ? r.json() : { patients: [] }))
+      .then(d => { const p = (d.patients ?? []).find((x: KnownPatient) => x.id === id); if (p) choose(p) })
+      .catch(() => { /* the form still works by typing */ })
+    // runs once, on arrival
+  }, [])
+
   // Search the clinic's patients while the doctor types a name or a number.
   useEffect(() => {
     if (!searchFor || chosen) { setHits([]); return }
@@ -95,14 +107,16 @@ export default function QuickPrescriptionPage() {
     setAge(v ? String(Math.max(0, ageFromDob(v, today))) : '')
   }
 
-  const pick = (id: string) => {
-    const p = hits.find(h => h.id === id)
-    if (!p) return
+  const choose = (p: KnownPatient) => {
     const phone = splitPhone(p.phone)
     setChosen(p); setName(p.name); setCode(phone.code); setNumber(phone.number)
     const ymd = p.dob?.slice(0, 10) ?? ''
     setDob(ymd); setAge(ymd ? String(ageFromDob(ymd, today)) : ''); setEntered('dob')
     setSearchFor(null); setHits([])
+  }
+  const pick = (id: string) => {
+    const p = hits.find(h => h.id === id)
+    if (p) choose(p)
   }
   const clearChosen = () => {
     setChosen(null); setName(''); setNumber(''); setAge(''); setDob(''); setSearchFor(null); setHits([])

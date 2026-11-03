@@ -210,10 +210,10 @@ describe('photos of a handwritten prescription', () => {
     expect(res.status).toBe(404)
   })
 
-  it('is for doctors only: signed out and front-desk staff are turned away', async () => {
+  it('is for doctors only: signed out and front-desk staff (STAFF) are turned away', async () => {
     h.session = null
     expect((await upload([await photo()])).status).toBe(401)
-    h.session = { uid: 'u2', role: 'RECEPTIONIST' }
+    h.session = { uid: 'u2', role: 'STAFF' }
     expect((await upload([await photo()])).status).toBe(403)
     expect((await listScanRoute(new Request('http://x'), { params: Promise.resolve({ id: 'a1' }) }))!.status).toBe(403)
   })

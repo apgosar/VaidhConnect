@@ -361,3 +361,23 @@ describe('saving and sending', () => {
     expect(medicineName().value).toBe('')
   })
 })
+
+describe('opened from a patient page', () => {
+  afterEach(() => { window.history.pushState({}, '', '/') })
+
+  it('has that patient already picked and locked, so the doctor can go straight to the medicines', async () => {
+    window.history.pushState({}, '', '/doctor/quick-prescription?patient=p1&phone=%2B919800000001')
+    render(<QuickPrescriptionPage />)
+    await waitFor(() => expect(field(/^Name/).value).toBe('Asha Rao'))
+    expect(field(/^Name/).disabled).toBe(true)
+    expect(field(/Mobile number/).value).toBe('9800000001')
+  })
+
+  it('stays an ordinary empty form when the patient cannot be found', async () => {
+    const calls = stubServer()
+    window.history.pushState({}, '', '/doctor/quick-prescription?patient=nobody&phone=9800000001')
+    render(<QuickPrescriptionPage />)
+    await waitFor(() => expect(searches(calls).length).toBeGreaterThan(0))
+    expect(field(/^Name/).disabled).toBe(false)
+  })
+})
