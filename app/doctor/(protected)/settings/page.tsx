@@ -11,6 +11,7 @@ import { PrintingSection } from '@/components/doctor/settings/PrintingSection'
 import { AdviceSection } from '@/components/doctor/settings/AdviceSection'
 import { ClinicPhonesField } from '@/components/doctor/settings/ClinicPhonesField'
 import { clinicPhones } from '@/lib/clinicPhones'
+import { ImageAdjustDialog } from '@/components/ui/ImageAdjustDialog'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
 import { failureText, networkFailureText } from '@/lib/clientErrors'
@@ -101,12 +102,27 @@ function SettingsPageContent() {
     })
   }
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // A picked picture is positioned first (drag, zoom, turn); what comes out is a small square, so a big phone photo is fine.
+  const [adjusting, setAdjusting] = useState<{ kind: 'logo' | 'photo'; src: string } | null>(null)
+  const [logoSource, setLogoSource] = useState<string | null>(null)
+  const [photoSource, setPhotoSource] = useState<string | null>(null)
+  const pickPicture = (kind: 'logo' | 'photo', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
-    setLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setNotice('Please choose a PNG, JPG or WebP picture'); return }
+    if (file.size > 20 * 1024 * 1024) { setNotice('That picture is too large'); return }
+    const src = URL.createObjectURL(file)
+    if (kind === 'logo') setLogoSource(src); else setPhotoSource(src)
+    setAdjusting({ kind, src })
+  }
+  const adjustSaved = (kind: 'logo' | 'photo') =>
+    setAdjusting({ kind, src: (kind === 'logo' ? logoSource : photoSource) ?? `/api/doctor/profile/image?kind=${kind}&v=${Date.now()}` })
+  const applyAdjusted = (file: File) => {
+    if (!adjusting) return
+    const preview = URL.createObjectURL(file)
+    if (adjusting.kind === 'logo') { setLogoFile(file); setLogoPreview(preview) } else { setPhotoFile(file); setPhotoPreview(preview) }
+    setAdjusting(null)
   }
 
   const handleQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,13 +133,6 @@ function SettingsPageContent() {
     setQrPreview(URL.createObjectURL(file))
   }
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) { setNotice('File must be under 2MB'); return }
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
-  }
 
   const copyMondayToWeekdays = () => {
     if (!doctor) return
@@ -275,6 +284,12 @@ function SettingsPageContent() {
       <div className="card p-6 space-y-5">
         <h2 className="font-semibold text-slate-800 border-b border-slate-100 pb-3">Clinic Branding</h2>
 
+        <ImageAdjustDialog
+          src={adjusting?.src ?? null} mode={adjusting?.kind === 'logo' ? 'fit' : 'fill'} round={adjusting?.kind === 'photo'}
+          title={adjusting?.kind === 'logo' ? 'Adjust the clinic logo' : 'Adjust the doctor photo'}
+          onCancel={() => setAdjusting(null)} onApply={applyAdjusted}
+        />
+
         {/* Logo and Photo Uploads */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
           <div className="form-group">
@@ -288,12 +303,15 @@ function SettingsPageContent() {
                 )}
               </div>
               <div className="space-y-2">
-                <button onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
-                  <Upload size={14} /> Upload Logo
-                </button>
-                <p className="text-xs text-slate-500">Max 2MB</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => logoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                    <Upload size={14} /> {(logoPreview || doctor.logoUrl) ? 'Change' : 'Upload Logo'}
+                  </button>
+                  {(logoPreview || doctor.logoUrl) && <button type="button" onClick={() => adjustSaved('logo')} className="btn btn-outline btn-sm">Adjust</button>}
+                </div>
+                <p className="text-xs text-slate-500">Move, zoom or turn it before saving</p>
               </div>
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => pickPicture('logo', e)} />
             </div>
           </div>
 
@@ -308,12 +326,15 @@ function SettingsPageContent() {
                 )}
               </div>
               <div className="space-y-2">
-                <button onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
-                  <Upload size={14} /> Upload Photo
-                </button>
-                <p className="text-xs text-slate-500">Max 2MB</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => photoInputRef.current?.click()} className="btn btn-outline btn-sm">
+                    <Upload size={14} /> {(photoPreview || doctor.photoUrl) ? 'Change' : 'Upload Photo'}
+                  </button>
+                  {(photoPreview || doctor.photoUrl) && <button type="button" onClick={() => adjustSaved('photo')} className="btn btn-outline btn-sm">Adjust</button>}
+                </div>
+                <p className="text-xs text-slate-500">Move, zoom or turn it before saving</p>
               </div>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={e => pickPicture('photo', e)} />
             </div>
           </div>
         </div>
