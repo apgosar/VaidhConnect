@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
 })
 
 export interface PrescriptionDocProps {
-  prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null; /** Already formatted, e.g. "12 Nov 2026". */ followUpText?: string }
+  prescription: { id: string; diagnosis?: string | null; medicines: Medicine[]; notes?: string | null; onExamination?: string | null; investigations?: string | null; advice?: string[]; adviceOther?: string | null; /** Already formatted, e.g. "12 Nov 2026". */ followUpText?: string }
   patient: { name: string; phone: string; /** Their age at the visit, already worded ("36 years"); empty when unknown. */ age?: string }
   visit: { /** Already formatted in the clinic's timezone. */ dateText: string; chiefComplaint?: string | null }
   doctor: {
@@ -95,6 +95,7 @@ function MedicineRow({ med, index }: { med: Medicine; index: number }) {
 export function PrescriptionDocument({ prescription, patient, visit, doctor, layout = STANDARD_LAYOUT }: PrescriptionDocProps) {
   const accent = accentOf(doctor.primary, '#1e40af')
   const registration = printableRegistration(doctor.registrationNumber)
+  const adviceLines = [...(prescription.advice ?? []), ...(prescription.adviceOther?.trim() ? [prescription.adviceOther.trim()] : [])].filter(a => a.trim())
 
   // Our own header and footer are used only when nothing else says who the clinic is.
   const ownBranding = layout.mode === 'standard' && !layout.letterhead
@@ -169,6 +170,13 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
           </View>
         ) : null}
 
+        {prescription.onExamination?.trim() ? (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.sectionTitle}>On Examination (O/E)</Text>
+            <Txt style={{ fontSize: 10, color: '#475569' }}>{prescription.onExamination.trim()}</Txt>
+          </View>
+        ) : null}
+
         {prescription.diagnosis ? (
           <View style={styles.diagnosisBox}>
             <Text style={{ fontSize: 8, color: accent, marginBottom: 2 }}>DIAGNOSIS</Text>
@@ -190,6 +198,25 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
             {prescription.medicines.map((med, i) => <MedicineRow key={i} med={med} index={i} />)}
           </View>
         )}
+
+        {prescription.investigations?.trim() ? (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Advised Investigations</Text>
+            <Txt style={{ fontSize: 10 }}>{prescription.investigations.trim()}</Txt>
+          </View>
+        ) : null}
+
+        {adviceLines.length > 0 ? (
+          <View style={styles.section} wrap={false}>
+            <Text style={styles.sectionTitle}>Advice</Text>
+            {adviceLines.map((line, i) => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                <Text style={{ width: 12, fontSize: 10 }}>{'•'}</Text>
+                <Txt style={{ flex: 1, fontSize: 10 }}>{line}</Txt>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {prescription.notes ? (
           <View style={styles.notes}>

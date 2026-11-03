@@ -14,8 +14,15 @@ export interface PrescriptionInput {
   patientId: string
   /** Why the patient came. Updates the visit's chief complaint; leave undefined to keep what it already says. */
   chiefComplaint?: string | null
+  /** Findings on examination: blood pressure, pulse, heart rate and so on. */
+  onExamination?: string | null
   diagnosis?: string | null
   medicines: Medicine[]
+  /** Tests the patient should get done. */
+  investigations?: string | null
+  /** Ticked items of the clinic's advice list, then anything else the doctor wrote. */
+  advice?: string[]
+  adviceOther?: string | null
   notes?: string | null
   /** Clinic-calendar date (YYYY-MM-DD) the patient should come back; null/empty = none. */
   followUpDate?: string | null
@@ -28,6 +35,7 @@ export interface PrescriptionInput {
 export async function savePrescription(tenant: Tenant, input: PrescriptionInput) {
   const db = tenantDb(tenant)
   const { appointmentId, patientId, diagnosis, medicines, notes } = input
+  const clean = (v?: string | null) => v?.trim() || null
   const followUpDate = input.followUpDate || null
 
   const appt = await db.col('appointments').doc(appointmentId).get()
@@ -53,7 +61,11 @@ export async function savePrescription(tenant: Tenant, input: PrescriptionInput)
   const stored = medicines.map(m => m.taper
     ? { ...m, dosage: m.taper.steps[0].dose, frequency: 'Tapering', duration: `${taperTotalDays(m.taper.steps)} days` }
     : m)
-  const data: Record<string, unknown> = { appointmentId, patientId, diagnosis: diagnosis ?? null, medicines: stored, notes: notes ?? null, followUpDate, updatedAt: now }
+  const data: Record<string, unknown> = {
+    appointmentId, patientId, diagnosis: diagnosis ?? null, medicines: stored, notes: notes ?? null, followUpDate, updatedAt: now,
+    onExamination: clean(input.onExamination), investigations: clean(input.investigations),
+    advice: (input.advice ?? []).map(a => a.trim()).filter(Boolean), adviceOther: clean(input.adviceOther),
+  }
   // A new or changed follow-up date is a new reminder to send.
   if (followUpDate !== (previous?.followUpDate ?? null)) data.followUpReminderSent = false
 

@@ -68,3 +68,22 @@ export interface Medicine {
   /** A tapering dose. When present it replaces the single dosage / frequency / duration. */
   taper?: { steps: TaperStep[] }
 }
+
+/** Advice the doctor ticks on a prescription until they write their own list in Settings. */
+export const DEFAULT_ADVICE = [
+  'Avoid outside food',
+  'Have a fibre-rich diet',
+  'Have 2 servings of fruit daily',
+  'Drink plenty of water',
+  'Avoid spicy and oily food',
+  'Take adequate rest',
+  'Walk for 30 minutes daily',
+] as const
+export const MAX_ADVICE_OPTIONS = 40
+export const MAX_ADVICE_LENGTH = 200
+
+/** One-tap additions next to the free-text boxes of a prescription. */
+export const INVESTIGATION_CHOICES = ['CBC', 'Fasting sugar', 'PP sugar', 'HbA1c', 'Lipid profile', 'LFT', 'KFT', 'Thyroid (TSH)', 'Vitamin D3', 'Vitamin B12', 'Urine routine', 'ECG', 'X-ray chest'] as const
+export const FREQUENCY_CHOICES = ['Once daily', 'Twice daily', 'Thrice daily', 'At night', 'Every 8 hours', 'When needed'] as const
+export const DURATION_CHOICES = ['3 days', '5 days', '7 days', '10 days', '14 days', '1 month'] as const
+export const DEFAULT_TAPER_STEP_DAYS = 5

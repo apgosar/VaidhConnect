@@ -16,8 +16,12 @@ export interface QuickConsultInput {
   patient?: { name: string; phone: string; ageYears?: number; dob?: string }
   /** Why the patient called; printed on the prescription. */
   chiefComplaint?: string | null
+  onExamination?: string | null
   diagnosis?: string | null
   medicines: Medicine[]
+  investigations?: string | null
+  advice?: string[]
+  adviceOther?: string | null
   notes?: string | null
   followUpDate?: string | null
 }
@@ -88,8 +92,12 @@ export async function createQuickConsult(tenant: Tenant, actorUid: string, input
   const rx: PrescriptionInput = {
     appointmentId: apptRef.id,
     patientId,
+    onExamination: input.onExamination,
     diagnosis: input.diagnosis ?? null,
     medicines: input.medicines.filter(m => m.name.trim()),
+    investigations: input.investigations,
+    advice: input.advice,
+    adviceOther: input.adviceOther,
     notes: input.notes ?? null,
     followUpDate: input.followUpDate ?? null,
   }

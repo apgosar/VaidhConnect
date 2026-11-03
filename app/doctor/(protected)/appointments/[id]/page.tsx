@@ -3,16 +3,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ArrowLeft, User, Clock, FileText, CreditCard,
-  CheckCircle2, XCircle, Edit3, Save, Pill,
+  ArrowLeft, FileText, CreditCard,
+  CheckCircle2, Edit3, Save, Pill,
   Download, Printer, Phone, CalendarClock
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
-import type { Medicine } from '@/lib/constants'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
-import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
+import { SaveShareBar, type ShareState } from '@/components/doctor/SaveShareBar'
+import { HandwrittenRx } from '@/components/doctor/HandwrittenRx'
 import { PAYMENT_MODES } from '@/lib/constants'
+import { emptyRx, rxFromStored, rxSnapshot, rxToPayload, type RxContent } from '@/lib/rxContent'
+import { readFailure, networkFailureText } from '@/lib/clientErrors'
 import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 
@@ -23,40 +25,32 @@ interface Appointment {
   id: string; startTime: string; endTime: string; status: string; visitType?: string;
   chiefComplaint?: string; consultationNotes?: string;
   patient: Patient;
-  prescription?: { id: string; diagnosis?: string; medicines: Medicine[]; notes?: string; followUpDate?: string | null }
+  prescription?: { id: string }
   payment?: { id: string; amount: string; mode: string; paidAt: string; notes?: string; receiptPdfPath?: string }
 }
+
+type Tab = 'notes' | 'prescription' | 'payment'
+const TABS: Tab[] = ['notes', 'prescription', 'payment']
 
 export default function AppointmentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [appt, setAppt] = useState<Appointment | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'notes' | 'prescription' | 'payment'>('notes')
+  const [activeTab, setActiveTab] = useState<Tab>('notes')
 
   // Notes state
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [savingNotes, setSavingNotes] = useState(false)
 
-  // Prescription state
-  const [chiefComplaint, setChiefComplaint] = useState('')
-  const [diagnosis, setDiagnosis] = useState('')
-  const [medicines, setMedicines] = useState<Medicine[]>([{ name: '', dosage: '', frequency: '', duration: '' }])
-  const [prescriptionNotes, setPrescriptionNotes] = useState('')
-  const [followUpDate, setFollowUpDate] = useState('')
-  const [savingRx, setSavingRx] = useState(false)
-
-  // Payment state
-  const [payAmount, setPayAmount] = useState('')
-  const [payMode, setPayMode] = useState('CASH')
-  const [payNotes, setPayNotes] = useState('')
-  const [savingPay, setSavingPay] = useState(false)
-
-  const [error, setError] = useState('')
-  const [rescheduling, setRescheduling] = useState(false)
+  // Prescription state: what is in the form, and a snapshot of what is saved to tell when they differ
+  const [rx, setRx] = useState<RxContent>(emptyRx)
+  const [savedRx, setSavedRx] = useState('')
+  const [rxBusy, setRxBusy] = useState<'save' | 'send' | null>(null)
+  const [rxProblem, setRxProblem] = useState('')
   // Sending the prescription to the patient on WhatsApp
-  const [share, setShare] = useState<{ state: 'idle' | 'confirm' | 'sending' | 'sent' | 'failed'; message?: string }>({ state: 'idle' })
+  const [share, setShare] = useState<ShareState>({ state: 'idle' })
   // "Print on letterhead": the paper in the printer already carries the clinic's letterhead.
   const [onLetterhead, setOnLetterheadState] = useState(false)
   useEffect(() => {
@@ -66,31 +60,39 @@ export default function AppointmentDetailPage() {
     setOnLetterheadState(v)
     try { localStorage.setItem('rx.onLetterhead', v ? '1' : '0') } catch { /* private mode */ }
   }
-  // What is saved on the server, to tell when the form has edits the PDF would not include.
-  const [savedRx, setSavedRx] = useState('')
+
+  // Payment state
+  const [payAmount, setPayAmount] = useState('')
+  const [payMode, setPayMode] = useState('CASH')
+  const [payNotes, setPayNotes] = useState('')
+  const [savingPay, setSavingPay] = useState(false)
   const [savedPay, setSavedPay] = useState('')
 
-  const fetchAppt = useCallback(async () => {
-    setLoading(true)
+  const [error, setError] = useState('')
+  const [rescheduling, setRescheduling] = useState(false)
+
+  // A link from a list can open straight on the prescription: /doctor/appointments/<id>?tab=prescription
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get('tab')
+    if (TABS.includes(wanted as Tab)) setActiveTab(wanted as Tab)
+  }, [])
+
+  // `quiet` refreshes in place, without replacing the page with a spinner (the form keeps its scroll position).
+  const fetchAppt = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true)
     try {
       const res = await fetch(`/api/appointments/${id}`)
       if (!res.ok) { setError('Could not load this appointment.'); return }
       const data = await res.json()
-      setAppt(data.appointment)
-      setNotes(data.appointment?.consultationNotes ?? '')
+      const a = data.appointment
+      setAppt(a)
+      setNotes(a?.consultationNotes ?? '')
       // The complaint belongs to the visit (the patient may have given it when booking), so it is there before a prescription exists.
-      setChiefComplaint(data.appointment?.chiefComplaint ?? '')
-      if (data.appointment?.prescription) {
-        const rx = data.appointment.prescription
-        const meds = rx.medicines?.length ? rx.medicines : [{ name: '', dosage: '', frequency: '', duration: '' }]
-        setDiagnosis(rx.diagnosis ?? '')
-        setMedicines(meds)
-        setPrescriptionNotes(rx.notes ?? '')
-        setFollowUpDate(rx.followUpDate ?? '')
-        setSavedRx(JSON.stringify([data.appointment?.chiefComplaint ?? '', rx.diagnosis ?? '', meds.filter((m: Medicine) => m.name), rx.notes ?? '', rx.followUpDate ?? '']))
-      }
-      if (data.appointment?.payment) {
-        const pay = data.appointment.payment
+      const stored = rxFromStored(a?.prescription, a?.chiefComplaint)
+      setRx(stored)
+      setSavedRx(a?.prescription ? rxSnapshot(stored) : '')
+      if (a?.payment) {
+        const pay = a.payment
         setPayAmount(pay.amount?.toString() ?? '')
         setPayMode(pay.mode ?? 'CASH')
         setPayNotes(pay.notes ?? '')
@@ -120,7 +122,7 @@ export default function AppointmentDetailPage() {
     try {
       if (await write(`/api/appointments/${id}`, 'PATCH', { consultationNotes: notes }, 'Could not save the notes.')) {
         setEditingNotes(false)
-        fetchAppt()
+        fetchAppt(true)
       }
     } finally {
       setSavingNotes(false)
@@ -128,25 +130,40 @@ export default function AppointmentDetailPage() {
   }
 
   const markCompleted = async () => {
-    if (await write(`/api/appointments/${id}`, 'PATCH', { status: 'COMPLETED' }, 'Could not mark this appointment as done.')) fetchAppt()
+    if (await write(`/api/appointments/${id}`, 'PATCH', { status: 'COMPLETED' }, 'Could not mark this appointment as done.')) fetchAppt(true)
   }
 
-  const savePrescription = async () => {
-    if (!appt) return
-    setSavingRx(true)
+  const phoneOk = !!appt && /^\+\d{8,15}$/.test(appt.patient.phone)
+
+  /** Saves the form. Returns the prescription's id, or null after showing what went wrong. */
+  const persist = async (): Promise<string | null> => {
+    if (!appt) return null
+    if (!rx.medicines.some(m => m.name.trim())) { setRxProblem('Add at least one medicine.'); return null }
+    const res = await fetch('/api/prescriptions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointmentId: appt.id, patientId: appt.patient.id, ...rxToPayload(rx) }),
+    })
+    if (!res.ok) { setRxProblem(await readFailure(res, 'Could not save the prescription.')); return null }
+    const body = await res.json()
+    return body.prescription?.id ?? null
+  }
+
+  const submitRx = async (alsoSend: boolean) => {
+    setRxProblem(''); setShare({ state: 'idle' }); setRxBusy(alsoSend ? 'send' : 'save')
     try {
-      const ok = await write('/api/prescriptions', 'POST', {
-        appointmentId: appt.id,
-        patientId: appt.patient.id,
-        chiefComplaint,
-        diagnosis,
-        medicines: medicines.filter(m => m.name),
-        notes: prescriptionNotes,
-        followUpDate: followUpDate || null,
-      }, 'Could not save the prescription.')
-      if (ok) { setShare({ state: 'idle' }); fetchAppt() }
+      const prescriptionId = await persist()
+      if (!prescriptionId) return
+      // One tap does both: the doctor never has to confirm a second time.
+      if (alsoSend) {
+        const res = await fetch(`/api/prescriptions/${prescriptionId}/whatsapp`, { method: 'POST' })
+        if (res.ok) { const d = await res.json().catch(() => ({})); setShare({ state: 'sent', message: `Sent to ${d.to ?? appt?.patient.phone}` }) }
+        else setShare({ state: 'failed', message: await readFailure(res, 'Could not send on WhatsApp.') })
+      }
+      await fetchAppt(true)
+    } catch {
+      setRxProblem(networkFailureText())
     } finally {
-      setSavingRx(false)
+      setRxBusy(null)
     }
   }
 
@@ -161,25 +178,11 @@ export default function AppointmentDetailPage() {
         mode: payMode,
         notes: payNotes,
       }, 'Could not save the payment.')
-      if (ok) fetchAppt()
+      if (ok) fetchAppt(true)
     } finally {
       setSavingPay(false)
     }
   }
-
-  const shareOnWhatsApp = async () => {
-    if (!appt?.prescription) return
-    setShare({ state: 'sending' })
-    try {
-      const res = await fetch(`/api/prescriptions/${appt.prescription.id}/whatsapp`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok) setShare({ state: 'sent', message: `Sent to ${data.to ?? appt.patient.phone}` })
-      else setShare({ state: 'failed', message: data.error ?? 'Could not send on WhatsApp' })
-    } catch {
-      setShare({ state: 'failed', message: 'Could not reach the server. Check your connection and try again.' })
-    }
-  }
-
 
   if (loading) {
     return (
@@ -194,8 +197,7 @@ export default function AppointmentDetailPage() {
   }
 
   const age = computeAge(appt.patient.dob)
-  const rxDirty = JSON.stringify([chiefComplaint, diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
-  const sharing = share.state === 'sending'
+  const rxDirty = rxSnapshot(rx) !== savedRx
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
     { key: 'notes', label: 'Notes', icon: FileText },
@@ -208,7 +210,7 @@ export default function AppointmentDetailPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={() => router.back()} className="btn btn-ghost p-2 -ml-2">
+          <button onClick={() => router.back()} className="btn btn-ghost p-2 -ml-2" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <div className="min-w-0">
@@ -242,7 +244,7 @@ export default function AppointmentDetailPage() {
           currentLabel={formatDate(appt.startTime)}
           patientName={appt.patient.name}
           onClose={() => setRescheduling(false)}
-          onMoved={() => { setRescheduling(false); fetchAppt() }}
+          onMoved={() => { setRescheduling(false); fetchAppt(true) }}
         />
       )}
 
@@ -313,71 +315,49 @@ export default function AppointmentDetailPage() {
       )}
 
       {activeTab === 'prescription' && (
-        <div className="card p-5 space-y-5">
-          <div className="flex justify-between items-center">
-            <h3 className="font-semibold text-slate-800">Prescription</h3>
-            {appt.prescription && (
-              <div className="flex gap-2">
+        <div className="card p-4 sm:p-5 space-y-5">
+          <h3 className="font-semibold text-slate-800">Prescription</h3>
+
+          {/* Copies of what is already saved; they wrap onto more lines on a narrow screen instead of running off it */}
+          {appt.prescription && (
+            <div className="space-y-2 -mt-2">
+              <div className="flex flex-wrap gap-2">
                 <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf`} disabled={rxDirty} download>
-                  <Download size={14} /> Download PDF
+                  <Download size={14} aria-hidden="true" /> Download PDF
                 </DocLink>
                 <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1${onLetterhead ? '&mode=preprinted' : ''}`} disabled={rxDirty}>
-                  <Printer size={14} /> Print
+                  <Printer size={14} aria-hidden="true" /> Print
                 </DocLink>
-                <button
-                  type="button" onClick={() => setShare({ state: 'confirm' })} disabled={rxDirty || sharing || !appt.patient.phone}
-                  className="btn btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}
-                  aria-label="Share prescription on WhatsApp"
-                >
-                  <WhatsAppIcon size={15} /> {sharing ? 'Sending...' : 'WhatsApp'}
-                </button>
               </div>
-            )}
-          </div>
-          {!appt.patient.phone && appt.prescription && (
-            <p className="text-xs text-amber-700 -mt-2">This patient has no phone number on file, so the prescription cannot be sent on WhatsApp.</p>
-          )}
-          {(share.state === 'confirm' || sharing) && (
-            <div role="alertdialog" aria-label="Send on WhatsApp" className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3 -mt-2">
-              <p className="text-sm text-slate-700">
-                Send this prescription as a PDF to <strong>{appt.patient.name}</strong> on WhatsApp (<strong>{appt.patient.phone}</strong>)?
-              </p>
-              <div className="flex gap-2">
-                <button type="button" onClick={shareOnWhatsApp} disabled={sharing} className="btn btn-sm disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
-                  <WhatsAppIcon size={15} /> {sharing ? 'Sending...' : 'Send now'}
-                </button>
-                <button type="button" onClick={() => setShare({ state: 'idle' })} disabled={sharing} className="btn btn-ghost btn-sm">Cancel</button>
-              </div>
+              <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                <input type="checkbox" className="mt-0.5" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} />
+                <span>
+                  Print on letterhead
+                  <span className="block text-xs text-slate-500">Tick when the paper already has your letterhead printed on it.</span>
+                </span>
+              </label>
+              {rxDirty && <p className="text-xs text-amber-700">You have unsaved changes. Save the prescription to download or print the latest version.</p>}
             </div>
-          )}
-          {share.state === 'sent' && <p role="status" className="text-sm text-green-700 -mt-2">{share.message}. The patient has the PDF on WhatsApp.</p>}
-          {share.state === 'failed' && <p role="alert" className="text-sm text-red-600 -mt-2">{share.message}</p>}
-          {appt.prescription && (
-            <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer select-none -mt-2">
-              <input type="checkbox" className="mt-0.5" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} />
-              <span>
-                Print on letterhead
-                <span className="block text-xs text-slate-500">Tick when the paper already has your letterhead printed on it. Adjust the spacing in Settings.</span>
-              </span>
-            </label>
-          )}
-          {appt.prescription && rxDirty && (
-            <p className="text-xs text-amber-700 -mt-2">You have unsaved changes. Save the prescription to download or print the latest version.</p>
           )}
 
           <PrescriptionFields
-            chiefComplaint={chiefComplaint} onChiefComplaint={setChiefComplaint}
-            diagnosis={diagnosis} onDiagnosis={setDiagnosis}
-            medicines={medicines} onMedicines={setMedicines}
-            followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
-            notes={prescriptionNotes} onNotes={setPrescriptionNotes}
+            value={rx}
+            onChange={patch => setRx(prev => ({ ...prev, ...patch }))}
             baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
           />
 
-          <button onClick={savePrescription} className="btn btn-primary w-full" disabled={savingRx}>
-            <Save size={16} /> {savingRx ? 'Saving...' : 'Save Prescription'}
-          </button>
+          <HandwrittenRx appointmentId={appt.id} />
+
+          <SaveShareBar
+            bleed
+            busy={rxBusy}
+            canShare={phoneOk}
+            sendTo={appt.patient.phone}
+            problem={rxProblem}
+            share={share}
+            onSaveAndShare={() => submitRx(true)}
+            onSave={() => submitRx(false)}
+          />
         </div>
       )}
 
@@ -400,7 +380,7 @@ export default function AppointmentDetailPage() {
 
           <div className="form-group">
             <label htmlFor="amount" className="form-label">Amount (₹)</label>
-            <input id="amount" type="number" className="form-input" placeholder="500" value={payAmount} onChange={e => setPayAmount(e.target.value)} min="0" step="0.01" />
+            <input id="amount" type="number" inputMode="decimal" className="form-input" placeholder="500" value={payAmount} onChange={e => setPayAmount(e.target.value)} min="0" step="0.01" />
           </div>
 
           <div className="form-group">
