@@ -164,3 +164,19 @@ describe('POST /api/doctor/quick-prescription', () => {
     expect((await call(good)).status).toBe(429)
   })
 })
+
+describe('age and date of birth helpers', () => {
+  it('turn one into the other', async () => {
+    const { ageFromDob, dobFromAge: fromAge } = await import('@/lib/time')
+    expect(ageFromDob('1990-11-05', '2026-11-05')).toBe(36)
+    expect(ageFromDob('1990-11-06', '2026-11-05')).toBe(35) // birthday still to come
+    expect(ageFromDob('2026-11-05', '2026-11-05')).toBe(0)
+    for (const age of [0, 1, 36, 99]) expect(ageFromDob(fromAge(age, '2026-11-05'), '2026-11-05')).toBe(age)
+  })
+  it('handles 29 February', async () => {
+    const { ageFromDob, dobFromAge: fromAge } = await import('@/lib/time')
+    expect(fromAge(1, '2028-02-29')).toBe('2027-02-28') // 2027 has no 29 Feb
+    expect(fromAge(4, '2028-02-29')).toBe('2024-02-29')
+    expect(ageFromDob(fromAge(1, '2028-02-29'), '2028-02-29')).toBe(1)
+  })
+})

@@ -2,7 +2,9 @@ import { tenantDb } from '@/lib/db/tenant'
 import type { Tenant } from '@/lib/tenant/types'
 import type { Medicine } from '@/lib/constants'
 import { savePrescription, type PrescriptionInput } from '@/lib/modules/prescriptions'
-import { ymdInTz } from '@/lib/time'
+import { dobFromAge, ymdInTz } from '@/lib/time'
+
+export { dobFromAge }
 
 export class QuickConsultError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -16,11 +18,6 @@ export interface QuickConsultInput {
   medicines: Medicine[]
   notes?: string | null
   followUpDate?: string | null
-}
-
-/** The date of birth that makes someone exactly `age` years old today (clinic calendar). */
-export function dobFromAge(age: number, today: string): string {
-  return `${Number(today.slice(0, 4)) - age}${today.slice(4)}`
 }
 
 /**

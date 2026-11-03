@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, FilePlus2, Save, UserRound } from 'lucide-react'
+import { CheckCircle2, Download, FilePlus2, Save, UserRound, X } from 'lucide-react'
 import type { Medicine } from '@/lib/constants'
-import { computeAge } from '@/lib/slots'
-import { MedicineList, emptyMedicine } from '@/components/doctor/MedicineList'
+import { ageFromDob, dobFromAge } from '@/lib/time'
+import { emptyMedicine } from '@/components/doctor/MedicineList'
+import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
+import { SuggestInput, type Suggestion } from '@/components/ui/SuggestInput'
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { readFailure, networkFailureText } from '@/lib/clientErrors'
 
@@ -15,25 +17,44 @@ interface KnownPatient { id: string; name: string; phone: string; dob?: string }
 type Share = { state: 'idle' | 'sending' | 'sent' | 'failed'; message?: string }
 interface Saved { appointmentId: string; prescriptionId: string; patientName: string; phone: string }
 
+const DEFAULT_CODE = '+91'
 const digits = (s: string) => s.replace(/\D/g, '')
-/** What the server will treat as the number: a bare 10-digit number is an Indian mobile. */
-const normalise = (raw: string) => { const t = raw.replace(/[\s\-()]/g, ''); return /^\d{10}$/.test(t) ? `+91${t}` : t }
-const validPhone = (raw: string) => /^\+\d{8,15}$/.test(normalise(raw))
+// Country calling codes people are likely to have, so a pasted "+971501234567" is split as +971 / 501234567.
+const COUNTRY_CODES = new Set([
+  '1', '7', '20', '27', '31', '32', '33', '34', '39', '41', '44', '45', '46', '47', '49', '52', '54', '55', '60', '61', '62', '63', '64', '65', '66',
+  '81', '82', '84', '86', '90', '91', '92', '93', '94', '95', '98', '212', '234', '254', '255', '256', '880', '960', '961', '962', '963', '964',
+  '965', '966', '967', '968', '971', '972', '973', '974', '975', '976', '977', '994', '995',
+])
+/** "+919800000001" → { code: "+91", number: "9800000001" }. Without a "+", the digits are the number and the code stays +91. */
+function splitPhone(raw: string): { code: string; number: string } {
+  const d = digits(raw)
+  if (raw.trim().startsWith('+')) {
+    for (const n of [3, 2, 1]) if (COUNTRY_CODES.has(d.slice(0, n)) && d.length - n >= 6) return { code: `+${d.slice(0, n)}`, number: d.slice(n) }
+    if (d.length > 10) return { code: `+${d.slice(0, -10)}`, number: d.slice(-10) }
+  }
+  return { code: DEFAULT_CODE, number: d.length > 10 && d.startsWith('91') ? d.slice(-10) : d }
+}
+const ageOf = (dob?: string, today?: string) => (dob && today ? ageFromDob(dob.slice(0, 10), today) : undefined)
 
 export default function QuickPrescriptionPage() {
-  const [phone, setPhone] = useState('')
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
+  const [code, setCode] = useState(DEFAULT_CODE)
+  const [number, setNumber] = useState('')
   const [name, setName] = useState('')
-  const [ageMode, setAgeMode] = useState<'age' | 'dob'>('age')
   const [age, setAge] = useState('')
   const [dob, setDob] = useState('')
-  // People already on the books with this number (families share a phone), and which one this is.
-  const [known, setKnown] = useState<KnownPatient[]>([])
-  const [chosen, setChosen] = useState<string>('new')
+  // Whichever of the two the doctor typed last is the one that is sent; the other is worked out from it.
+  const [entered, setEntered] = useState<'age' | 'dob'>('age')
+  // An existing patient picked from the dropdown: their details are filled in and locked.
+  const [chosen, setChosen] = useState<KnownPatient | null>(null)
+
+  const [searchFor, setSearchFor] = useState<{ source: 'name' | 'phone'; q: string } | null>(null)
+  const [hits, setHits] = useState<KnownPatient[]>([])
+
   const [diagnosis, setDiagnosis] = useState('')
   const [medicines, setMedicines] = useState<Medicine[]>([emptyMedicine()])
-  const [notes, setNotes] = useState('')
   const [followUpDate, setFollowUpDate] = useState('')
-  const [today, setToday] = useState('')
+  const [notes, setNotes] = useState('')
 
   const [busy, setBusy] = useState<'save' | 'send' | null>(null)
   const [error, setError] = useState('')
@@ -41,40 +62,75 @@ export default function QuickPrescriptionPage() {
   const [share, setShare] = useState<Share>({ state: 'idle' })
 
   useEffect(() => {
-    fetch('/api/public/config').then(r => r.json()).then(d => setToday(d.config?.today ?? '')).catch(() => {})
+    fetch('/api/public/config').then(r => r.json()).then(d => { if (d.config?.today) setToday(d.config.today) }).catch(() => {})
   }, [])
 
-  // Look the number up as soon as it is complete, so a returning patient is picked, not typed again.
+  // Search the clinic's patients while the doctor types a name or a number.
   useEffect(() => {
-    const d = digits(phone)
-    if (d.length < 10) { setKnown([]); setChosen('new'); return }
+    if (!searchFor || chosen) { setHits([]); return }
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/patients/search?q=${encodeURIComponent(d.slice(-10))}&limit=10`)
-        if (!res.ok) return
-        const list: KnownPatient[] = ((await res.json()).patients ?? []).filter((p: KnownPatient) => digits(p.phone).endsWith(d.slice(-10)))
-        setKnown(list)
-        setChosen(list.length === 1 ? list[0].id : 'new')
-      } catch { /* the lookup is a convenience; the form works without it */ }
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [phone])
+        const res = await fetch(`/api/patients/search?q=${encodeURIComponent(searchFor.q)}&limit=8`, { signal: controller.signal })
+        if (res.ok) setHits((await res.json()).patients ?? [])
+      } catch { /* searching is a convenience; the form works without it */ }
+    }, 150)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [searchFor, chosen])
 
-  const usingKnown = chosen !== 'new' ? known.find(p => p.id === chosen) : undefined
+  const typeName = (v: string) => {
+    setName(v)
+    setSearchFor(v.trim().length >= 2 ? { source: 'name', q: v.trim() } : null)
+  }
+  const typeNumber = (raw: string) => {
+    if (raw.trim().startsWith('+')) { const p = splitPhone(raw); setCode(p.code); setNumber(p.number) }
+    else setNumber(digits(raw).slice(0, 14))
+    const d = digits(raw).slice(-10)
+    setSearchFor(d.length >= 3 ? { source: 'phone', q: d } : null)
+  }
+  const typeAge = (v: string) => {
+    const clean = v.replace(/\D/g, '').slice(0, 3)
+    setAge(clean); setEntered('age')
+    setDob(clean !== '' && Number(clean) <= 120 ? dobFromAge(Number(clean), today) : '')
+  }
+  const typeDob = (v: string) => {
+    setDob(v); setEntered('dob')
+    setAge(v ? String(Math.max(0, ageFromDob(v, today))) : '')
+  }
+
+  const pick = (id: string) => {
+    const p = hits.find(h => h.id === id)
+    if (!p) return
+    const phone = splitPhone(p.phone)
+    setChosen(p); setName(p.name); setCode(phone.code); setNumber(phone.number)
+    const ymd = p.dob?.slice(0, 10) ?? ''
+    setDob(ymd); setAge(ymd ? String(ageFromDob(ymd, today)) : ''); setEntered('dob')
+    setSearchFor(null); setHits([])
+  }
+  const clearChosen = () => {
+    setChosen(null); setName(''); setNumber(''); setAge(''); setDob(''); setSearchFor(null); setHits([])
+  }
+
+  const phone = `${code}${number}`
+  const phoneOk = /^\+\d{1,4}$/.test(code) && /^\+\d{8,15}$/.test(phone)
   const meds = medicines.filter(m => m.name.trim())
+  const ageOk = age !== '' && Number(age) >= 0 && Number(age) <= 120
   const problem =
-    !validPhone(phone) ? 'Enter the patient\'s mobile number.'
-    : !usingKnown && name.trim().length < 2 ? 'Enter the patient\'s name.'
-    : !usingKnown && ageMode === 'age' && (age === '' || Number(age) < 0 || Number(age) > 120) ? 'Enter the patient\'s age (or switch to date of birth).'
-    : !usingKnown && ageMode === 'dob' && !dob ? 'Enter the patient\'s date of birth (or switch to age).'
+    !phoneOk ? 'Enter the patient\'s mobile number.'
+    : !chosen && name.trim().length < 2 ? 'Enter the patient\'s name.'
+    : !chosen && entered === 'age' && !ageOk ? 'Enter the patient\'s age or date of birth.'
+    : !chosen && entered === 'dob' && !dob ? 'Enter the patient\'s age or date of birth.'
     : meds.length === 0 ? 'Add at least one medicine.'
     : ''
+
+  const nameSuggestions: Suggestion[] = searchFor?.source === 'name' && !chosen ? hits.map(h => toSuggestion(h, today)) : []
+  const phoneSuggestions: Suggestion[] = searchFor?.source === 'phone' && !chosen ? hits.map(h => toSuggestion(h, today)) : []
 
   const send = async (prescriptionId: string) => {
     setShare({ state: 'sending' })
     try {
       const res = await fetch(`/api/prescriptions/${prescriptionId}/whatsapp`, { method: 'POST' })
-      if (res.ok) { const d = await res.json().catch(() => ({})); setShare({ state: 'sent', message: `Sent to ${d.to ?? normalise(phone)}` }) }
+      if (res.ok) { const d = await res.json().catch(() => ({})); setShare({ state: 'sent', message: `Sent to ${d.to ?? phone}` }) }
       else setShare({ state: 'failed', message: await readFailure(res, 'Could not send on WhatsApp') })
     } catch {
       setShare({ state: 'failed', message: networkFailureText() })
@@ -88,8 +144,8 @@ export default function QuickPrescriptionPage() {
       const res = await fetch('/api/doctor/quick-prescription', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(usingKnown ? { patientId: usingKnown.id } : {
-            patient: { name: name.trim(), phone: normalise(phone), ...(ageMode === 'age' ? { ageYears: Number(age) } : { dob }) },
+          ...(chosen ? { patientId: chosen.id } : {
+            patient: { name: name.trim(), phone, ...(entered === 'age' ? { ageYears: Number(age) } : { dob }) },
           }),
           diagnosis: diagnosis.trim() || null,
           medicines: meds,
@@ -99,7 +155,7 @@ export default function QuickPrescriptionPage() {
       })
       if (!res.ok) { setError(await readFailure(res, 'Could not save the prescription.')); return }
       const data = await res.json()
-      const result: Saved = { appointmentId: data.appointmentId, prescriptionId: data.prescriptionId, patientName: usingKnown?.name ?? name.trim(), phone: usingKnown?.phone ?? normalise(phone) }
+      const result: Saved = { appointmentId: data.appointmentId, prescriptionId: data.prescriptionId, patientName: chosen?.name ?? name.trim(), phone: chosen?.phone ?? phone }
       setSaved(result)
       if (alsoSend) await send(result.prescriptionId)
     } catch {
@@ -110,7 +166,7 @@ export default function QuickPrescriptionPage() {
   }
 
   const startAnother = () => {
-    setPhone(''); setName(''); setAge(''); setDob(''); setKnown([]); setChosen('new')
+    setCode(DEFAULT_CODE); setNumber(''); setName(''); setAge(''); setDob(''); setEntered('age'); setChosen(null); setSearchFor(null); setHits([])
     setDiagnosis(''); setMedicines([emptyMedicine()]); setNotes(''); setFollowUpDate('')
     setSaved(null); setShare({ state: 'idle' }); setError('')
   }
@@ -151,71 +207,57 @@ export default function QuickPrescriptionPage() {
 
       <section className="card p-5 space-y-4" aria-labelledby="qp-patient">
         <h2 id="qp-patient" className="font-semibold text-slate-800">Patient</h2>
+        <p className="text-xs -mt-2" style={{ color: 'var(--color-sage)' }}>Start typing a name or a mobile number to pick a patient you already have.</p>
+
+        {chosen && (
+          <div className="flex items-center justify-between gap-2 rounded-lg p-3" style={{ background: 'var(--color-primary-bg)' }}>
+            <p className="text-sm"><strong>Existing patient.</strong> Their details are filled in.</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={clearChosen}><X size={14} aria-hidden="true" /> Not them</button>
+          </div>
+        )}
+
         <div className="form-group">
-          <label htmlFor="qp-phone" className="form-label">Mobile number <span aria-hidden="true" className="text-red-600">*</span></label>
-          <input id="qp-phone" className="form-input" inputMode="tel" autoComplete="off" placeholder="98765 43210" value={phone} onChange={e => setPhone(e.target.value)} aria-describedby="qp-phone-hint" />
-          <p id="qp-phone-hint" className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>The prescription is sent to this WhatsApp number. Without a country code it is taken as +91.</p>
+          <label htmlFor="qp-number" className="form-label">Mobile number <span aria-hidden="true" className="text-red-600">*</span></label>
+          <div className="flex gap-2">
+            <input aria-label="Country code" className="form-input text-center" style={{ width: '5rem', flexShrink: 0 }} inputMode="tel" value={code} readOnly={!!chosen}
+              onChange={e => setCode(`+${digits(e.target.value).slice(0, 4)}`)} />
+            <div className="flex-1 min-w-0">
+              <SuggestInput id="qp-number" className="form-input" type="tel" inputMode="tel" placeholder="98765 43210" value={number} readOnly={!!chosen}
+                aria-describedby="qp-number-hint" onChange={e => typeNumber(e.target.value)}
+                suggestions={phoneSuggestions} onPick={pick} listLabel="Matching patients" />
+            </div>
+          </div>
+          <p id="qp-number-hint" className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>The prescription is sent to this WhatsApp number.</p>
         </div>
 
-        {known.length > 0 && (
-          <fieldset className="space-y-2">
-            <legend className="form-label">Who is this?</legend>
-            {known.map(p => (
-              <label key={p.id} className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer" style={{ borderColor: chosen === p.id ? 'var(--color-forest)' : 'var(--color-sage-border)' }}>
-                <input type="radio" name="qp-who" checked={chosen === p.id} onChange={() => setChosen(p.id)} />
-                <span className="font-medium">{p.name}</span>
-                {p.dob && <span className="text-xs" style={{ color: 'var(--color-sage)' }}>{computeAge(p.dob)} yrs</span>}
-              </label>
-            ))}
-            <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer" style={{ borderColor: chosen === 'new' ? 'var(--color-forest)' : 'var(--color-sage-border)' }}>
-              <input type="radio" name="qp-who" checked={chosen === 'new'} onChange={() => setChosen('new')} />
-              <span className="font-medium">Someone else on this number</span>
-            </label>
-          </fieldset>
-        )}
+        <div className="form-group">
+          <label htmlFor="qp-name" className="form-label">Name <span aria-hidden="true" className="text-red-600">*</span></label>
+          <SuggestInput id="qp-name" className="form-input" value={name} readOnly={!!chosen} onChange={e => typeName(e.target.value)}
+            suggestions={nameSuggestions} onPick={pick} listLabel="Matching patients" />
+        </div>
 
-        {!usingKnown && (
-          <>
-            <div className="form-group">
-              <label htmlFor="qp-name" className="form-label">Name <span aria-hidden="true" className="text-red-600">*</span></label>
-              <input id="qp-name" className="form-input" autoComplete="off" value={name} onChange={e => setName(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor={ageMode === 'age' ? 'qp-age' : 'qp-dob'} className="form-label">{ageMode === 'age' ? 'Age (years)' : 'Date of birth'} <span aria-hidden="true" className="text-red-600">*</span></label>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAgeMode(m => m === 'age' ? 'dob' : 'age')}>{ageMode === 'age' ? 'Use date of birth' : 'Use age'}</button>
-              </div>
-              {ageMode === 'age'
-                ? <input id="qp-age" className="form-input" type="number" inputMode="numeric" min={0} max={120} style={{ maxWidth: '8rem' }} value={age} onChange={e => setAge(e.target.value)} />
-                : <input id="qp-dob" className="form-input" type="date" max={today || undefined} style={{ maxWidth: '12rem' }} value={dob} onChange={e => setDob(e.target.value)} />}
-            </div>
-          </>
-        )}
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 6.5rem) minmax(0, 1fr)' }}>
+          <div className="form-group">
+            <label htmlFor="qp-age" className="form-label">Age <span aria-hidden="true" className="text-red-600">*</span></label>
+            <input id="qp-age" className="form-input" inputMode="numeric" placeholder="Years" value={age} readOnly={!!chosen} onChange={e => typeAge(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label htmlFor="qp-dob" className="form-label">Date of birth <span aria-hidden="true" className="text-red-600">*</span></label>
+            <input id="qp-dob" className="form-input" type="date" max={today} value={dob} readOnly={!!chosen} onChange={e => typeDob(e.target.value)} />
+          </div>
+        </div>
+        {!chosen && <p className="text-xs -mt-2" style={{ color: 'var(--color-sage)' }}>Enter either one. The other is worked out for you{entered === 'age' && dob ? ' (the date of birth is an estimate from the age)' : ''}.</p>}
       </section>
 
       <section className="card p-5 space-y-5" aria-labelledby="qp-rx">
         <h2 id="qp-rx" className="font-semibold text-slate-800">Prescription</h2>
-        <div className="form-group">
-          <label htmlFor="qp-diagnosis" className="form-label">Diagnosis <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span></label>
-          <textarea id="qp-diagnosis" className="form-textarea" rows={2} placeholder="e.g. Upper respiratory tract infection" value={diagnosis} onChange={e => setDiagnosis(e.target.value)} />
-        </div>
-
-        <MedicineList medicines={medicines} onChange={setMedicines} />
-
-        <details className="group">
-          <summary className="cursor-pointer text-sm font-medium" style={{ color: 'var(--color-link)' }}>Follow-up date and notes (optional)</summary>
-          <div className="space-y-4 mt-3">
-            <div className="form-group">
-              <label htmlFor="qp-follow" className="form-label">Follow-up visit</label>
-              <input id="qp-follow" type="date" className="form-input" style={{ maxWidth: '12rem' }} min={today || undefined} value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
-              <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
-            </div>
-            <div className="form-group">
-              <label htmlFor="qp-notes" className="form-label">Additional notes</label>
-              <textarea id="qp-notes" className="form-textarea" rows={2} placeholder="Diet, precautions, when to call..." value={notes} onChange={e => setNotes(e.target.value)} />
-            </div>
-          </div>
-        </details>
+        <PrescriptionFields
+          diagnosis={diagnosis} onDiagnosis={setDiagnosis}
+          medicines={medicines} onMedicines={setMedicines}
+          followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
+          notes={notes} onNotes={setNotes}
+          baseDate={today}
+        />
       </section>
 
       {error && <Alert variant="error">{error}</Alert>}
@@ -224,9 +266,14 @@ export default function QuickPrescriptionPage() {
         <button type="button" onClick={() => submit(true)} disabled={busy !== null} className="btn btn-lg w-full disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
           <WhatsAppIcon size={18} /> {busy === 'send' ? 'Saving and sending...' : 'Save and send on WhatsApp'}
         </button>
-        {validPhone(phone) && <p className="text-xs text-center" style={{ color: 'var(--color-sage)' }}>Will be sent to {normalise(phone)}</p>}
+        {phoneOk && <p className="text-xs text-center" style={{ color: 'var(--color-sage)' }}>Will be sent to {phone}</p>}
         <Button variant="outline" block loading={busy === 'save'} disabled={busy !== null} onClick={() => submit(false)}><Save size={16} aria-hidden="true" /> Save only</Button>
       </div>
     </div>
   )
+}
+
+function toSuggestion(p: KnownPatient, today: string): Suggestion {
+  const years = ageOf(p.dob, today)
+  return { key: p.id, primary: p.name, secondary: `${p.phone}${years !== undefined ? ` · ${years} yrs` : ''}` }
 }

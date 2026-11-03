@@ -10,7 +10,7 @@ import {
 import { formatDate, computeAge } from '@/lib/slots'
 import { format, parseISO } from 'date-fns'
 import type { Medicine } from '@/lib/constants'
-import { MedicineList } from '@/components/doctor/MedicineList'
+import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { PAYMENT_MODES } from '@/lib/constants'
 import { LangText } from '@/components/ui/LangText'
@@ -191,7 +191,6 @@ export default function AppointmentDetailPage() {
 
   const age = computeAge(appt.patient.dob)
   const rxDirty = JSON.stringify([diagnosis, medicines.filter(m => m.name), prescriptionNotes, followUpDate]) !== savedRx
-  const addDays = (n: number) => { const d = new Date(appt.startTime); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
   const sharing = share.state === 'sending'
   const payDirty = JSON.stringify([payAmount, payMode, payNotes]) !== savedPay
   const tabs = [
@@ -363,41 +362,13 @@ export default function AppointmentDetailPage() {
             <p className="text-xs text-amber-700 -mt-2">You have unsaved changes. Save the prescription to download or print the latest version.</p>
           )}
 
-          <div className="form-group">
-            <label htmlFor="diagnosis" className="form-label">Diagnosis</label>
-            <textarea id="diagnosis"
-              className="form-textarea"
-              value={diagnosis}
-              onChange={e => setDiagnosis(e.target.value)}
-              placeholder="e.g. Upper respiratory tract infection"
-              rows={2}
-            />
-          </div>
-
-          <MedicineList medicines={medicines} onChange={setMedicines} />
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="followUpDate">Follow-up visit (optional)</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input id="followUpDate" type="date" className="form-input" style={{ maxWidth: '12rem' }} value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
-              {([['3 days', 3], ['1 week', 7], ['2 weeks', 14], ['1 month', 30]] as const).map(([label, n]) => (
-                <button key={label} type="button" className="btn btn-ghost btn-sm" onClick={() => setFollowUpDate(addDays(n))}>{label}</button>
-              ))}
-              {followUpDate && <button type="button" className="btn btn-ghost btn-sm text-red-500" onClick={() => setFollowUpDate('')}>Clear</button>}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Printed on the prescription. The patient also gets a WhatsApp reminder the day before.</p>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="additional-notes" className="form-label">Additional Notes</label>
-            <textarea id="additional-notes"
-              className="form-textarea"
-              value={prescriptionNotes}
-              onChange={e => setPrescriptionNotes(e.target.value)}
-              placeholder="Diet restrictions, follow-up instructions..."
-              rows={2}
-            />
-          </div>
+          <PrescriptionFields
+            diagnosis={diagnosis} onDiagnosis={setDiagnosis}
+            medicines={medicines} onMedicines={setMedicines}
+            followUpDate={followUpDate} onFollowUpDate={setFollowUpDate}
+            notes={prescriptionNotes} onNotes={setPrescriptionNotes}
+            baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
+          />
 
           <button onClick={savePrescription} className="btn btn-primary w-full" disabled={savingRx}>
             <Save size={16} /> {savingRx ? 'Saving...' : 'Save Prescription'}
