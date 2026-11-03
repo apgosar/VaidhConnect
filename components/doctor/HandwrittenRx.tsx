@@ -79,10 +79,10 @@ export function HandwrittenRx({ appointmentId }: { appointmentId: string }) {
   }
 
   return (
-    <section className="rounded-xl border border-dashed border-slate-300 p-4 space-y-3" aria-labelledby="hw-rx-title">
+    <section className="rounded-xl border border-dashed border-slate-300 p-3 space-y-2" aria-labelledby="hw-rx-title">
       <div>
-        <h4 id="hw-rx-title" className="font-semibold text-slate-800">Handwritten prescription</h4>
-        <p className="text-xs text-slate-600 mt-0.5">Wrote it on paper? Add a photo to keep it with this visit. It is for your records and is not sent to the patient.</p>
+        <h4 id="hw-rx-title" className="font-semibold text-slate-800 text-sm">Wrote it on paper?</h4>
+        <p className="text-xs text-slate-600">Add a photo of the handwritten prescription to keep with this visit. It is for your records and is not sent to the patient.</p>
       </div>
 
       {/* capture="environment" opens the rear camera on a phone; on a computer it is an ordinary file picker */}
@@ -101,9 +101,9 @@ export function HandwrittenRx({ appointmentId }: { appointmentId: string }) {
       {error && <Alert variant="error">{error}</Alert>}
 
       {scans.length > 0 && (
-        <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <ul className="flex gap-2 overflow-x-auto pb-1">
           {scans.map((s, i) => (
-            <li key={s.id} className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+            <li key={s.id} className="relative w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
               <a href={s.url} target="_blank" rel="noopener" aria-label={`Open handwritten prescription page ${i + 1}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- a short-lived signed link; next/image would cache and proxy it */}
                 <img src={s.url} alt={`Handwritten prescription, page ${i + 1}`} className="aspect-[3/4] w-full object-cover" loading="lazy" />

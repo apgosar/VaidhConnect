@@ -4,6 +4,7 @@ import { tenantDb } from '../db/tenant'
 import { downloadFile } from '../storage'
 import { ageText, formatDateShortInTz, formatDateTimeInTz, ymdInTz } from '../time'
 import { genderLabel } from '../gender'
+import { clinicPhoneText } from '../clinicPhones'
 import { registerPdfFonts } from '../pdf/fonts'
 import { PrescriptionDocument, type PrescriptionDocProps } from '../pdf/prescriptionDocument'
 import { ReceiptDocument } from '../pdf/receiptDocument'
@@ -63,7 +64,8 @@ async function loadDoctor(tenant: Tenant) {
     clinicName: String(d.clinicName ?? 'Clinic'),
     qualifications: d.qualifications || undefined,
     address: d.address || undefined,
-    phone: d.phone || undefined,
+    // every clinic number, for the header ("Tel: ..."), the receipt and the WhatsApp message
+    phone: clinicPhoneText(d) || undefined,
     registrationNumber: d.registrationNumber || undefined,
     primary: d.theme?.primary as string | undefined,
     logoUrl: d.logoUrl as string | undefined,

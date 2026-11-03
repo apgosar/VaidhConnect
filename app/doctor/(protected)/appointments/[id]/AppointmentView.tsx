@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, FileText, CreditCard,
   CheckCircle2, Edit3, Save, Pill,
-  Download, Printer, Phone, CalendarClock
+  Download, Printer, Phone, Pencil
 } from 'lucide-react'
 import { formatDate, computeAge } from '@/lib/slots'
 import { genderLabel } from '@/lib/gender'
@@ -18,6 +18,7 @@ import { emptyRx, rxFromStored, rxSnapshot, rxToPayload, type RxContent } from '
 import { readFailure, networkFailureText } from '@/lib/clientErrors'
 import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
+import { EditVisitDialog } from '@/components/booking/EditVisitDialog'
 
 interface Patient {
   id: string; name: string; phone: string; dob: string; gender?: string; medicalHistory?: string; email?: string
@@ -75,6 +76,7 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
   const [savedPay, setSavedPay] = useState('')
 
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false)
   const [rescheduling, setRescheduling] = useState(false)
 
   // A link from a list can open straight on the prescription: /doctor/appointments/<id>?tab=prescription
@@ -233,8 +235,8 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
           }`}>{appt.status}</span>
           {appt.status === 'BOOKED' && (
             <>
-              <button onClick={() => setRescheduling(true)} className="btn btn-outline btn-sm">
-                <CalendarClock size={14} aria-hidden="true" /> Reschedule
+              <button onClick={() => setEditing(true)} className="btn btn-outline btn-sm">
+                <Pencil size={14} aria-hidden="true" /> Edit
               </button>
               <button onClick={markCompleted} className="btn btn-success btn-sm">
                 <CheckCircle2 size={14} /> Done
@@ -243,6 +245,16 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
           )}
         </div>
       </div>
+
+      <EditVisitDialog
+        open={editing}
+        appointmentId={appt.id}
+        patientName={appt.patient.name}
+        whenText={formatDate(appt.startTime)}
+        onClose={() => setEditing(false)}
+        onReschedule={() => { setEditing(false); setRescheduling(true) }}
+        onCancelled={() => { setEditing(false); fetchAppt(true) }}
+      />
 
       {rescheduling && (
         <RescheduleDialog
@@ -325,6 +337,9 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
         <div className="card p-4 sm:p-5 space-y-5">
           <h3 className="font-semibold text-slate-800">Prescription</h3>
 
+          {/* At the top, so a handwritten prescription is one tap away without scrolling past the whole form */}
+          <HandwrittenRx appointmentId={appt.id} />
+
           {/* Copies of what is already saved; they wrap onto more lines on a narrow screen instead of running off it */}
           {appt.prescription && (
             <div className="space-y-2 -mt-2">
@@ -352,8 +367,6 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
             onChange={patch => setRx(prev => ({ ...prev, ...patch }))}
             baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
           />
-
-          <HandwrittenRx appointmentId={appt.id} />
 
           <SaveShareBar
             bleed

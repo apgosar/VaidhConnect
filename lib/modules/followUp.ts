@@ -1,4 +1,5 @@
 import { tenantDb } from '../db/tenant'
+import { clinicPhoneText } from '../clinicPhones'
 import { tenantHasFeature } from '../tenant/features'
 import { clinicBookingUrl } from '../tenant/list'
 import { sendFollowUpReminder } from '../whatsapp'
@@ -57,7 +58,7 @@ export async function processFollowUps(tenant: Tenant, doctor: any, now = new Da
       clinicName,
       doctorName: doctor.name || 'Doctor',
       dateText,
-      clinicPhone: doctor.phone || clinicName,
+      clinicPhone: clinicPhoneText(doctor, clinicName),
       bookingUrl,
     })
     if (ok) {

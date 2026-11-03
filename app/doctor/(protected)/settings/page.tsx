@@ -9,6 +9,8 @@ import { Alert } from '@/components/ui/Alert'
 import { Switch } from '@/components/ui/Switch'
 import { PrintingSection } from '@/components/doctor/settings/PrintingSection'
 import { AdviceSection } from '@/components/doctor/settings/AdviceSection'
+import { ClinicPhonesField } from '@/components/doctor/settings/ClinicPhonesField'
+import { clinicPhones } from '@/lib/clinicPhones'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
 import { failureText, networkFailureText } from '@/lib/clientErrors'
@@ -17,7 +19,7 @@ import { LoadingBlock } from '@/components/ui/Spinner'
 
 interface Doctor {
   name: string; email: string; clinicName: string; logoUrl?: string | null
-  address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null
+  address?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; phone?: string | null; phones?: string[]
   whatsappPhone?: string | null
   registrationNumber: string; photoUrl?: string | null;
   youtubeLinks: string[];
@@ -216,6 +218,7 @@ function SettingsPageContent() {
           mapsUrl: doctor.mapsUrl,
           websiteUrl: doctor.websiteUrl,
           phone: doctor.phone,
+          phones: doctor.phones ?? clinicPhones(doctor),
           whatsappPhone: doctor.whatsappPhone,
           specialty: doctor.specialty,
           practiceDescription: doctor.practiceDescription,
@@ -386,7 +389,7 @@ function SettingsPageContent() {
                 const val = e.target.value
                 setDoctor((p: any) => p ? { ...p, whatsappPhone: val } : p)
                 if (sameAsWhatsapp) {
-                  setDoctor((p: any) => p ? { ...p, phone: val } : p)
+                  setDoctor((p: any) => p ? { ...p, phone: val, phones: [val, ...clinicPhones(p).slice(1)] } : p)
                 }
               }}
             />
@@ -397,16 +400,10 @@ function SettingsPageContent() {
 
           {/* Clinic Phone */}
           <div className="form-group">
-            <label className="form-label" htmlFor="clinicPhone">Clinic Phone</label>
-            <input
-              id="clinicPhone"
-              type="tel"
-              className="form-input"
-              placeholder="+91 98765 43210"
-              value={doctor.phone ?? ''}
-              disabled={sameAsWhatsapp}
-              style={sameAsWhatsapp ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
-              onChange={e => setDoctor((p: any) => p ? { ...p, phone: e.target.value } : p)}
+            <ClinicPhonesField
+              value={doctor.phones ?? clinicPhones(doctor)}
+              lockFirst={sameAsWhatsapp}
+              onChange={list => setDoctor((p: any) => p ? { ...p, phones: list, phone: list[0] ?? '' } : p)}
             />
             <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
               <input
@@ -416,16 +413,16 @@ function SettingsPageContent() {
                   const checked = e.target.checked
                   setSameAsWhatsapp(checked)
                   if (checked && doctor.whatsappPhone) {
-                    setDoctor((p: any) => p ? { ...p, phone: p.whatsappPhone } : p)
+                    setDoctor((p: any) => p ? { ...p, phone: p.whatsappPhone, phones: [p.whatsappPhone, ...clinicPhones(p).slice(1)] } : p)
                   }
                 }}
                 className="w-4 h-4 rounded"
                 style={{ accentColor: 'var(--color-forest)' }}
               />
-              <span className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>Same as Dr. WhatsApp number</span>
+              <span className="text-sm" style={{ color: 'var(--color-charcoal-mid)' }}>Main number is the same as the Dr. WhatsApp number</span>
             </label>
             <p className="text-xs mt-1" style={{ color: 'var(--color-sage)' }}>
-              Shown on the patient-facing landing page and included in WhatsApp messages sent to patients.
+              The first number is the main one, shown on the Call and WhatsApp buttons of your landing page. Every number is shown in the WhatsApp messages sent to patients (booking, reminders, prescriptions).
             </p>
           </div>
           <div className="form-group sm:col-span-2">

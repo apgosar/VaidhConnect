@@ -179,6 +179,13 @@ describe('rendering from saved data', () => {
     expect(h.lastRx.visit.chiefComplaint).toBe('Fever')
   })
 
+  it('prints every clinic number in the header, and gives the WhatsApp message all of them', async () => {
+    await h.db.profile().update({ phones: ['+91 98765 43210', '+91 91234 56789'], phone: '+91 98765 43210' })
+    const pdf = await renderPrescriptionPdf(tenant, 'rx1')
+    expect(h.lastRx.doctor.phone).toBe('+91 98765 43210, +91 91234 56789')
+    expect(pdf!.share!.clinicPhone).toBe('+91 98765 43210, +91 91234 56789')
+  })
+
   it('puts the patient gender on the prescription when it is recorded', async () => {
     await h.db.col('patients').doc('p1').update({ gender: 'FEMALE' })
     await renderPrescriptionPdf(tenant, 'rx1')
