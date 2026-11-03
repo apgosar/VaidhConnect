@@ -49,7 +49,7 @@ export function AgeDobFields({ value, onChange, today, disabled, required = true
   const typeDob = (dob: string) => onChange({ dob, entered: 'dob', age: dob ? String(Math.max(0, ageFromDob(dob, today))) : '' })
 
   return (
-    <>
+    <div className="space-y-1.5">
       <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 6.5rem) minmax(0, 1fr)' }}>
         <div className="form-group">
           <label htmlFor={`${uid}-age`} className="form-label">Age {mark}</label>
@@ -61,10 +61,10 @@ export function AgeDobFields({ value, onChange, today, disabled, required = true
         </div>
       </div>
       {hint && !disabled && (
-        <p className="text-xs -mt-2" style={{ color: 'var(--color-sage)' }}>
+        <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
           Enter either one. The other is worked out for you{value.entered === 'age' && value.dob ? ' (the date of birth is an estimate from the age)' : ''}.
         </p>
       )}
-    </>
+    </div>
   )
 }
