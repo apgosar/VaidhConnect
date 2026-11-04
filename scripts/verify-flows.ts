@@ -293,6 +293,20 @@ async function main() {
       check('removing it takes it off the page and deletes its files', gone.status === 200 && (gone.body?.items ?? []).length === 0 && !(await (await fetch(`https://${aHost}/`)).text()).includes('ZZ Brochure'))
     }
 
+    // ── importing patients from a file ───────────────────────────────────────
+    const importCsv = `id,name,gender,dob,phone\nzz1,ZZ Import One ${stamp},Female,04-11-2006,9800000071\nzz2,ZZ Import Two ${stamp},Male,03-11-1991,9800000072\nzz3,ZZ Import Two ${stamp},Male,03-11-1991,9800000072\nzz4,ZZ Import Bad ${stamp},Male,03-11-1991,0797734165`
+    const importCall = (host: string, cookie: string | undefined, commit: boolean) => http(host, '/api/doctor/patients/import', { method: 'POST', cookie, json: { csv: importCsv, commit } })
+    cleanup.push(async () => { const s = await db.collection('clinics').doc(a).collection('patients').where('createdBy', '==', `import:${(await db.collection('clinics').doc(a).get()).data()!.ownerUid}`).get(); await Promise.all(s.docs.filter(d => String(d.data().name).startsWith('ZZ Import')).map(d => d.ref.delete())) })
+    check('importing needs a login, and front desk cannot', (await importCall(aHost, undefined, false)).status === 401 && (await importCall(aHost, staffCookie, false)).status === 403)
+    const prev = await importCall(aHost, ownerCookie, false)
+    check('the preview counts new, repeated and refused lines and saves nothing', prev.status === 200 && prev.body?.newCount === 2 && prev.body?.repeatedCount === 1 && prev.body?.rejectedCount === 1 && (await db.collection('clinics').doc(a).collection('patients').where('phone', '==', '+919800000071').get()).empty, `(${prev.status} ${prev.text.slice(0, 160)})`)
+    const done = await importCall(aHost, ownerCookie, true)
+    const imported = (await db.collection('clinics').doc(a).collection('patients').where('phone', '==', '+919800000071').get()).docs[0]?.data()
+    check('confirming adds the patients with gender and an estimated date of birth', done.status === 200 && done.body?.added === 2 && imported?.gender === 'FEMALE' && imported?.dobApproximate === true, `(${done.status})`)
+    const second = await importCall(aHost, ownerCookie, true)
+    check('running it again adds nobody twice', second.status === 200 && second.body?.added === 0 && (await db.collection('clinics').doc(a).collection('patients').where('phone', '==', '+919800000072').get()).size === 1)
+    check('another clinic does not see them', (await db.collection('clinics').doc(b).collection('patients').where('phone', '==', '+919800000071').get()).empty)
+
     // ── follow-up date, medicine suggestions, patient prescription download ──
     const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', onExamination: 'ZZ BP 120/80', investigations: 'ZZ CBC', advice: ['ZZ Avoid outside food'], adviceOther: 'ZZ Rest', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
     check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)
