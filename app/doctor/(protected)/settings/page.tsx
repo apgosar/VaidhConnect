@@ -12,6 +12,7 @@ import { AdviceSection } from '@/components/doctor/settings/AdviceSection'
 import { ClinicPhonesField } from '@/components/doctor/settings/ClinicPhonesField'
 import { clinicPhones } from '@/lib/clinicPhones'
 import { ImageAdjustDialog } from '@/components/ui/ImageAdjustDialog'
+import { ShowcaseSection } from '@/components/doctor/settings/ShowcaseSection'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
 import { failureText, networkFailureText } from '@/lib/clientErrors'
@@ -740,6 +741,7 @@ function SettingsPageContent() {
 
       <PrintingSection value={doctor} onChange={patch => setDoctor(p => (p ? { ...p, ...patch } : p))} />
 
+      <ShowcaseSection />
       <VideosSection links={doctor.youtubeLinks || []} onChange={links => setDoctor(p => (p ? { ...p, youtubeLinks: links } : p))} />
 
       {/* Products Catalog */}

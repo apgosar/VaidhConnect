@@ -1,5 +1,6 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { clinicPhones } from '@/lib/clinicPhones'
+import { toPublicShowcase } from '@/lib/showcase'
 import { tenantDb } from '@/lib/db/tenant'
 import { tenantHasFeature } from '@/lib/tenant/features'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -56,6 +57,7 @@ export default async function HomePage() {
         registrationNumber: doctor.registrationNumber,
         youtubeLinks: tenantHasFeature(tenant, 'videos') ? (doctor.youtubeLinks as string[]) ?? [] : [],
         products: tenantHasFeature(tenant, 'products') ? (doctor.products as any[]) ?? [] : [],
+        showcase: toPublicShowcase(doctor.showcase),
         pageViews: doctor.pageViews ?? 0,
         paymentDetails: doctor.paymentDetails as any,
         timings: doctor.timings as unknown as WeeklyTimings,

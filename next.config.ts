@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
     // Images are served as-is from Cloud Storage (no optimizer, so SVG handling is moot).
     unoptimized: true,
   },
-  serverExternalPackages: ['@react-pdf/renderer'],
+  serverExternalPackages: ['@react-pdf/renderer', 'mupdf'],
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
