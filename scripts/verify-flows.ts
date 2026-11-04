@@ -270,6 +270,29 @@ async function main() {
     const afterPhones = (await profileRef.get()).data()!
     check('several clinic numbers are saved, the first one as the main number', multi.status === 200 && afterPhones.phone === '+91 90000 00001' && JSON.stringify(afterPhones.phones) === JSON.stringify(['+91 90000 00001', '+91 90000 00002']), `(${multi.status})`)
 
+    // ── clinic showcase (PDFs and pictures on the public page) ───────────────
+    const { createElement: el } = await import('react')
+    const rp = await import('@react-pdf/renderer')
+    const pdfBuf = await rp.renderToBuffer(el(rp.Document, null, el(rp.Page, { size: 'A4' }, el(rp.Text, null, 'ZZ one')), el(rp.Page, { size: 'A4' }, el(rp.Text, null, 'ZZ two'))))
+    const showcaseForm = (data: Buffer | string, name: string, title: string) => { const fd = new FormData(); fd.append('file', new File([typeof data === 'string' ? data : new Uint8Array(data)], name)); fd.append('title', title); return fd }
+    check('front desk cannot add to the showcase', (await http(aHost, '/api/doctor/showcase', { method: 'POST', cookie: staffCookie, body: showcaseForm(pdfBuf, 'zz.pdf', 'ZZ') })).status === 403)
+    check('a file that is not a PDF or picture is refused', (await http(aHost, '/api/doctor/showcase', { method: 'POST', cookie: ownerCookie, body: showcaseForm('MZ program', 'zz.pdf', 'ZZ') })).status === 400)
+    const sc = await http(aHost, '/api/doctor/showcase', { method: 'POST', cookie: ownerCookie, body: showcaseForm(pdfBuf, 'zz.pdf', 'ZZ Brochure') })
+    const scId: string | undefined = sc.body?.item?.id
+    if (scId) cleanup.push(async () => { await http(aHost, `/api/doctor/showcase/${scId}`, { method: 'DELETE', cookie: ownerCookie }) })
+    check('a PDF is turned into one picture per page', sc.status === 201 && sc.body?.item?.kind === 'pdf' && sc.body.item.pages?.length === 2, `(${sc.status} ${sc.text.slice(0, 120)})`)
+    if (sc.body?.item?.pages) {
+      const page = await fetch(sc.body.item.pages[0])
+      check('the page pictures are public images', page.status === 200 && page.headers.get('content-type') === 'image/jpeg', `(${page.status})`)
+      const orig = await fetch(sc.body.item.url)
+      check('the original PDF is kept for download', orig.status === 200 && Buffer.from(await orig.arrayBuffer()).subarray(0, 5).toString() === '%PDF-')
+    }
+    check('the public page shows it, and another clinic does not', (await (await fetch(`https://${aHost}/`)).text()).includes('ZZ Brochure') && !(await (await fetch(`https://${bHost}/`)).text()).includes('ZZ Brochure'))
+    if (scId) {
+      const gone = await http(aHost, `/api/doctor/showcase/${scId}`, { method: 'DELETE', cookie: ownerCookie })
+      check('removing it takes it off the page and deletes its files', gone.status === 200 && (gone.body?.items ?? []).length === 0 && !(await (await fetch(`https://${aHost}/`)).text()).includes('ZZ Brochure'))
+    }
+
     // ── follow-up date, medicine suggestions, patient prescription download ──
     const fuOk = await http(aHost, '/api/prescriptions', { method: 'POST', cookie: ownerCookie, json: { appointmentId: rxApptId, patientId: rxAppt.data()!.patientId, diagnosis: 'ZZ Verify', onExamination: 'ZZ BP 120/80', investigations: 'ZZ CBC', advice: ['ZZ Avoid outside food'], adviceOther: 'ZZ Rest', medicines: [{ name: 'ZZ Paracetamol', dosage: '500 mg', frequency: 'BD', duration: '3 days' }], followUpDate: ymdPlus(cfg.today, 30) } })
     check('a follow-up date is saved with the prescription', fuOk.status === 201 && fuOk.body?.prescription?.followUpDate === ymdPlus(cfg.today, 30), `(${fuOk.status})`)

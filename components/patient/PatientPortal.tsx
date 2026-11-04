@@ -10,6 +10,8 @@ import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
 import SiteFooter from '@/components/SiteFooter'
+import { ShowcaseGallery } from '@/components/patient/ShowcaseGallery'
+import type { PublicShowcaseItem } from '@/lib/showcase'
 import { getSavedPatients, setDraft, type SavedPatient } from '@/lib/patientDevice'
 
 interface DoctorProfile {
@@ -29,6 +31,7 @@ interface DoctorProfile {
   registrationNumber: string
   youtubeLinks: string[]
   products: { id: string; name: string; price: string; description: string; photoUrl?: string }[]
+  showcase?: PublicShowcaseItem[]
   pageViews: number
   timings: WeeklyTimings
   slotDurationMins: number
@@ -494,6 +497,9 @@ END:VCARD`
             </div>
           </div>
         )}
+
+        {/* ── Our Services: the clinic's PDFs and pictures ── */}
+        <ShowcaseGallery items={doctor.showcase ?? []} />
 
         {/* ── Payment Details ── */}
         {doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0) && (
