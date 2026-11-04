@@ -13,6 +13,7 @@ import { ClinicPhonesField } from '@/components/doctor/settings/ClinicPhonesFiel
 import { clinicPhones } from '@/lib/clinicPhones'
 import { ImageAdjustDialog } from '@/components/ui/ImageAdjustDialog'
 import { ShowcaseSection } from '@/components/doctor/settings/ShowcaseSection'
+import { BottomBarSection } from '@/components/doctor/settings/BottomBarSection'
 import { ImportPatientsSection } from '@/components/doctor/settings/ImportPatientsSection'
 import { VideosSection } from '@/components/doctor/settings/VideosSection'
 import { PasswordSection } from '@/components/doctor/settings/PasswordSection'
@@ -26,6 +27,7 @@ interface Doctor {
   whatsappPhone?: string | null
   registrationNumber: string; photoUrl?: string | null;
   youtubeLinks: string[];
+  bottomNav?: string[] | null;
   products: { id: string; name: string; price: string; description: string; photoUrl?: string }[];
   pageViews: number;
   specialty: string; practiceDescription?: string | null; themeColor: string; theme?: { primary?: string }; qualifications?: string | null
@@ -743,6 +745,7 @@ function SettingsPageContent() {
       <PrintingSection value={doctor} onChange={patch => setDoctor(p => (p ? { ...p, ...patch } : p))} />
 
       <ShowcaseSection />
+      <BottomBarSection value={doctor.bottomNav} />
       <ImportPatientsSection />
       <VideosSection links={doctor.youtubeLinks || []} onChange={links => setDoctor(p => (p ? { ...p, youtubeLinks: links } : p))} />
 

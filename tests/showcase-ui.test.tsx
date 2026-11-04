@@ -18,36 +18,50 @@ describe('the gallery on the public page', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows a PDF by its first page with the page count, and a picture as a card', () => {
+  it('shows each PDF as a swipeable gallery: the pages side by side, one at a time, never one long scroll', () => {
     render(<ShowcaseGallery items={[PDF, IMG]} />)
     expect(screen.getByRole('heading', { name: 'Our Services' })).toBeTruthy()
-    expect(screen.getByText('3 pages')).toBeTruthy()
-    const pdfCard = screen.getByRole('button', { name: /Our treatments/ })
-    expect(pdfCard.querySelector('img')!.getAttribute('src')).toBe('https://f.example/p1.jpg')
-    expect(screen.getByRole('button', { name: /Waiting room/ })).toBeTruthy()
-  })
-
-  it('reads a PDF page by page inside the page, with a download of the original', async () => {
-    const user = userEvent.setup(); render(<ShowcaseGallery items={[PDF]} />)
-    await user.click(screen.getByRole('button', { name: /Our treatments/ }))
-    const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText('Page 1 of 3')).toBeTruthy()
-    expect(within(dialog).getByRole('img').getAttribute('src')).toBe('https://f.example/p1.jpg')
-    expect((within(dialog).getByRole('button', { name: 'Previous page' }) as HTMLButtonElement).disabled).toBe(true)
-    await user.click(within(dialog).getByRole('button', { name: 'Next page' }))
-    expect(within(dialog).getByRole('img').getAttribute('src')).toBe('https://f.example/p2.jpg')
-    await user.click(within(dialog).getByRole('button', { name: 'Next page' }))
-    expect((within(dialog).getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true)
-    const download = within(dialog).getByRole('link', { name: /Download PDF/ })
+    const pdf = screen.getByRole('region', { name: 'Our treatments' })
+    const track = within(pdf).getByRole('group')
+    expect(track.className).toContain('snap-x')
+    expect(track.className).toContain('overflow-x-auto')
+    expect(Array.from(track.querySelectorAll('img')).map(i => i.getAttribute('src'))).toEqual(PDF.pages)
+    expect(within(pdf).getByText('Page 1 of 3')).toBeTruthy()
+    // a picture is a single slide with no page controls
+    const pic = screen.getByRole('region', { name: 'Waiting room' })
+    expect(within(pic).getAllByRole('button')).toHaveLength(1)
+    expect(within(pic).queryByRole('button', { name: 'Next page' })).toBeNull()
+    const download = within(pdf).getByRole('link', { name: /Download PDF/ })
     expect(download.getAttribute('href')).toBe('https://f.example/file.pdf')
     expect(download.getAttribute('rel')).toContain('noopener')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('zooms a picture in steps, and a picture has no page controls beyond one', async () => {
+  it('moves between pages with the arrows', async () => {
+    const user = userEvent.setup(); render(<ShowcaseGallery items={[PDF]} />)
+    const pdf = screen.getByRole('region', { name: 'Our treatments' })
+    expect((within(pdf).getByRole('button', { name: 'Previous page' }) as HTMLButtonElement).disabled).toBe(true)
+    await user.click(within(pdf).getByRole('button', { name: 'Next page' }))
+    expect(within(pdf).getByText('Page 2 of 3')).toBeTruthy()
+    await user.click(within(pdf).getByRole('button', { name: 'Next page' }))
+    expect((within(pdf).getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('opens the tapped page to look closer, and steps through the pages', async () => {
+    const user = userEvent.setup(); render(<ShowcaseGallery items={[PDF]} />)
+    await user.click(screen.getByRole('button', { name: /page 2 of 3\. Tap/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Page 2 of 3')).toBeTruthy()
+    expect(within(dialog).getByRole('img').getAttribute('src')).toBe('https://f.example/p2.jpg')
+    await user.click(within(dialog).getByRole('button', { name: 'Next page' }))
+    expect(within(dialog).getByRole('img').getAttribute('src')).toBe('https://f.example/p3.jpg')
+    expect((within(dialog).getByRole('button', { name: 'Next page' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('zooms a picture in steps', async () => {
     const user = userEvent.setup(); render(<ShowcaseGallery items={[IMG]} />)
     await user.click(screen.getByRole('button', { name: /Waiting room/ }))
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).queryByRole('link', { name: /Download/ })).toBeNull()
     const img = within(dialog).getByRole('img')
     expect(img.style.width).toBe('100%')
     await user.click(within(dialog).getByRole('button', { name: 'Zoom in' }))
