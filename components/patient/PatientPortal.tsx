@@ -5,12 +5,13 @@ import { upiPayLink } from '@/lib/upi'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { PageShell } from '@/components/ui/PageShell'
-import { LogOut, Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package } from 'lucide-react'
+import { LogOut, Phone, MapPin, ExternalLink, Clock, ChevronRight, ChevronDown, ChevronUp, UserPlus, Calendar, User, MessageCircle, PlaySquare, CreditCard, Package, FileText } from 'lucide-react'
 import { SPECIALTIES, DAYS_OF_WEEK } from '@/lib/constants'
 import type { WeeklyTimings } from '@/lib/constants'
 import { computeAge } from '@/lib/slots'
 import SiteFooter from '@/components/SiteFooter'
 import { ShowcaseGallery } from '@/components/patient/ShowcaseGallery'
+import { NAV_LABEL, pickBottomNav, type NavSection } from '@/lib/bottomNav'
 import type { PublicShowcaseItem } from '@/lib/showcase'
 import { getSavedPatients, setDraft, type SavedPatient } from '@/lib/patientDevice'
 
@@ -32,6 +33,7 @@ interface DoctorProfile {
   youtubeLinks: string[]
   products: { id: string; name: string; price: string; description: string; photoUrl?: string }[]
   showcase?: PublicShowcaseItem[]
+  bottomNav?: string[] | null
   pageViews: number
   timings: WeeklyTimings
   slotDurationMins: number
@@ -607,52 +609,48 @@ END:VCARD`
         </div>
       </div>
 
-      {/* ── Sticky Bottom Navigation ── */}
+      {/* ── Sticky Bottom Navigation: always five buttons. About and Book stay; the clinic picks the other three. ── */}
       <nav aria-label="Sections" className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200 z-50 pb-safe">
         <div className="max-w-md mx-auto grid grid-cols-5 items-center px-1 py-3">
-          
-          {/* 1. About */}
-          <div className="flex justify-center">
-            <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
-              <User size={20} />
-              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">About</span>
-            </button>
-          </div>
-          
-          {/* 2. Products */}
-          <div className="flex justify-center">
-            <button disabled={!(doctor.products?.length)} onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 transition-colors" style={{ opacity: (doctor.products?.length) ? 1 : 0.5 }}>
-              <Package size={20} />
-              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Products</span>
-            </button>
-          </div>
-
-          {/* 3. Book (Center) */}
-          <div className="flex justify-center">
-            <button onClick={() => document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 transition-colors -mt-4 relative z-10">
-              <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
-                <Calendar size={22} />
-              </div>
-              <span className="text-xs font-bold uppercase tracking-normal min-[360px]:tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
-            </button>
-          </div>
-
-          {/* 4. Videos */}
-          <div className="flex justify-center">
-            <button disabled={!(doctor.youtubeLinks?.length)} onClick={() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: (doctor.youtubeLinks?.length) ? 1 : 0.5 }}>
-              <PlaySquare size={20} />
-              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Videos</span>
-            </button>
-          </div>
-
-          {/* 5. Payment */}
-          <div className="flex justify-center">
-            <button disabled={!((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0)))} onClick={() => document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: ((doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))) ? 1 : 0.5 }}>
-              <CreditCard size={20} />
-              <span className="text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider">Payment</span>
-            </button>
-          </div>
-
+          {(() => {
+            const hasPayment = !!(doctor.paymentDetails && (typeof doctor.paymentDetails === 'string' ? doctor.paymentDetails.trim() !== '' : Object.keys(doctor.paymentDetails).length > 0))
+            const [first, ...rest] = pickBottomNav(doctor.bottomNav, {
+              products: !!doctor.products?.length, services: !!doctor.showcase?.length, videos: !!doctor.youtubeLinks?.length, payment: hasPayment,
+            })
+            const label = 'text-xs font-medium uppercase tracking-normal min-[360px]:tracking-wider'
+            const ICONS = { products: Package, services: FileText, videos: PlaySquare, payment: CreditCard }
+            const section = ({ key, enabled }: { key: NavSection; enabled: boolean }) => {
+              const Icon = ICONS[key]
+              return (
+                <div key={key} className="flex justify-center">
+                  <button disabled={!enabled} onClick={() => document.getElementById(key)?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors" style={{ opacity: enabled ? 1 : 0.5 }}>
+                    <Icon size={20} />
+                    <span className={label}>{NAV_LABEL[key]}</span>
+                  </button>
+                </div>
+              )
+            }
+            return (
+              <>
+                <div className="flex justify-center">
+                  <button onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 text-slate-500 hover:text-forest transition-colors">
+                    <User size={20} />
+                    <span className={label}>About</span>
+                  </button>
+                </div>
+                {section(first)}
+                <div className="flex justify-center">
+                  <button onClick={() => document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center gap-1 transition-colors -mt-4 relative z-10">
+                    <div className="text-white p-3 rounded-full shadow-lg border-4" style={{ background: 'var(--color-forest)', borderColor: 'var(--color-linen)' }}>
+                      <Calendar size={22} />
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-normal min-[360px]:tracking-wider mt-0.5" style={{ color: 'var(--color-forest)' }}>Book</span>
+                  </button>
+                </div>
+                {rest.map(section)}
+              </>
+            )
+          })()}
         </div>
       </nav>
     </PageShell>

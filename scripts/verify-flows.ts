@@ -293,6 +293,13 @@ async function main() {
       check('removing it takes it off the page and deletes its files', gone.status === 200 && (gone.body?.items ?? []).length === 0 && !(await (await fetch(`https://${aHost}/`)).text()).includes('ZZ Brochure'))
     }
 
+    // ── bottom bar buttons of the public page ────────────────────────────────
+    cleanup.push(async () => { await profileRef.update({ bottomNav: before.bottomNav ?? null }) })
+    check('front desk cannot change the bottom bar', (await staff('/api/doctor/profile', 'PATCH', { bottomNav: ['products', 'services', 'videos'] })).status === 403)
+    check('a bottom bar that is not three real sections is refused', (await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { bottomNav: ['products', 'nope', 'videos'] } })).status === 400)
+    const navSave = await http(aHost, '/api/doctor/profile', { method: 'PATCH', cookie: ownerCookie, json: { bottomNav: ['payment', 'services', 'videos'] } })
+    check('three chosen buttons are saved', navSave.status === 200 && JSON.stringify((await profileRef.get()).data()!.bottomNav) === JSON.stringify(['payment', 'services', 'videos']), `(${navSave.status})`)
+
     // ── importing patients from a file ───────────────────────────────────────
     const importCsv = `id,name,gender,dob,phone\nzz1,ZZ Import One ${stamp},Female,04-11-2006,9800000071\nzz2,ZZ Import Two ${stamp},Male,03-11-1991,9800000072\nzz3,ZZ Import Two ${stamp},Male,03-11-1991,9800000072\nzz4,ZZ Import Bad ${stamp},Male,03-11-1991,0797734165`
     const importCall = (host: string, cookie: string | undefined, commit: boolean) => http(host, '/api/doctor/patients/import', { method: 'POST', cookie, json: { csv: importCsv, commit } })

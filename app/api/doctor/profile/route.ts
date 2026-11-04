@@ -10,6 +10,7 @@ import { isUsablePrimary } from '@/lib/tenant/theme'
 import { FieldValue } from 'firebase-admin/firestore'
 import { apiError } from '@/lib/errors'
 import { cleanAdviceOptions } from '@/lib/advice'
+import { cleanBottomNav } from '@/lib/bottomNav'
 import { cleanClinicPhones, MAX_CLINIC_PHONES } from '@/lib/clinicPhones'
 import { MAX_ADVICE_LENGTH, MAX_ADVICE_OPTIONS } from '@/lib/constants'
 
@@ -193,7 +194,7 @@ export async function PATCH(request: Request) {
       theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
-      printSettings, removeLetterhead, adviceOptions, phones,
+      printSettings, removeLetterhead, adviceOptions, phones, bottomNav,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -211,6 +212,11 @@ export async function PATCH(request: Request) {
       if (!list) return Response.json({ error: `Enter valid phone numbers (up to ${MAX_CLINIC_PHONES})` }, { status: 400 })
       updateData.phones = list
       updateData.phone = list[0] ?? null
+    }
+    if (bottomNav !== undefined) {
+      const nav = cleanBottomNav(bottomNav)
+      if (bottomNav !== null && !nav) return Response.json({ error: 'Choose exactly three buttons for the bottom bar' }, { status: 400 })
+      updateData.bottomNav = nav
     }
     if (whatsappPhone !== undefined) updateData.whatsappPhone = whatsappPhone?.trim() || null
     if (specialty) updateData.specialty = specialty
