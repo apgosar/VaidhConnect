@@ -19,9 +19,10 @@ import { readFailure, networkFailureText } from '@/lib/clientErrors'
 import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 import { EditVisitDialog } from '@/components/booking/EditVisitDialog'
+import { EditPatientDialog } from '@/components/doctor/EditPatientDialog'
 
 interface Patient {
-  id: string; name: string; phone: string; dob: string; gender?: string; medicalHistory?: string; email?: string
+  id: string; name: string; phone: string; dob: string; gender?: string; medicalHistory?: string; email?: string; dobApproximate?: boolean
 }
 interface Appointment {
   id: string; startTime: string; endTime: string; status: string; visitType?: string;
@@ -78,6 +79,7 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
   const [rescheduling, setRescheduling] = useState(false)
+  const [editingPatient, setEditingPatient] = useState(false)
 
   // A link from a list can open straight on the prescription: /doctor/appointments/<id>?tab=prescription
   useEffect(() => {
@@ -223,7 +225,12 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
             <ArrowLeft size={20} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-slate-800 [overflow-wrap:anywhere]"><LangText>{appt.patient.name}</LangText></h1>
+            <h1 className="text-xl font-bold text-slate-800 [overflow-wrap:anywhere]">
+              <LangText>{appt.patient.name}</LangText>
+              <button type="button" onClick={() => setEditingPatient(true)} className="btn btn-ghost p-1.5 ml-1 align-middle" aria-label="Edit patient details" title="Edit patient details">
+                <Pencil size={16} aria-hidden="true" />
+              </button>
+            </h1>
             <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
           </div>
         </div>
@@ -245,6 +252,20 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
           )}
         </div>
       </div>
+
+      {editingPatient && (
+        <EditPatientDialog
+          open
+          today={format(new Date(), 'yyyy-MM-dd')}
+          patient={{
+            id: appt.patient.id, name: appt.patient.name, phone: appt.patient.phone, email: appt.patient.email, medicalHistory: appt.patient.medicalHistory,
+            dob: appt.patient.dob ? new Date(appt.patient.dob).toISOString().slice(0, 10) : undefined,
+            dobApproximate: appt.patient.dobApproximate, gender: appt.patient.gender, hasVisits: true,
+          }}
+          onClose={() => setEditingPatient(false)}
+          onSaved={() => fetchAppt(true)}
+        />
+      )}
 
       <EditVisitDialog
         open={editing}
