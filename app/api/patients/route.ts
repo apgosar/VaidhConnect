@@ -59,14 +59,29 @@ export async function PUT(request: Request) {
 
     const parsed = await parseBody(request, patientDetailsSchema.partial().extend({ id: patientDetailsSchema.shape.name.min(1) }))
     if ('error' in parsed) return parsed.error
-    const { id, name, dob, medicalHistory, email, gender } = parsed.data
+    const { id, name, phone, dob, dobApproximate, medicalHistory, email, gender } = parsed.data
 
-    const ref = tenantDb(tenant).col('patients').doc(id)
-    if (!(await ref.get()).exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
+    const db = tenantDb(tenant)
+    const ref = db.col('patients').doc(id)
+    const current = await ref.get()
+    if (!current.exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
+
+    // Two records for the same person on the same number is what the import and the booking forms avoid; editing must not create one.
+    const newName = (name ?? current.data()!.name ?? '').trim().toLowerCase()
+    const newPhone = phone ?? current.data()!.phone
+    if (name !== undefined || phone !== undefined) {
+      const same = (await db.col('patients').where('phone', '==', newPhone).get()).docs
+        .find(d => d.id !== id && String(d.data().name ?? '').trim().toLowerCase() === newName)
+      if (same) return Response.json({ error: 'Another patient with this name and number already exists' }, { status: 409 })
+    }
 
     const update: Record<string, unknown> = { updatedAt: new Date() }
     if (name) update.name = name.trim()
-    if (dob) update.dob = new Date(`${dob}T00:00:00Z`)
+    if (phone) update.phone = phone
+    if (dob) {
+      update.dob = new Date(`${dob}T00:00:00Z`)
+      update.dobApproximate = dobApproximate === true
+    }
     if (gender) update.gender = gender
     if (medicalHistory !== undefined) update.medicalHistory = medicalHistory || null
     if (email !== undefined) update.email = email || null
@@ -77,6 +92,38 @@ export async function PUT(request: Request) {
     return Response.json({ patient: { id, ...p, dob: p.dob?.toDate() } })
   } catch (error) {
     console.error('[patient-update]', error)
+    return apiError('SERVER_ERROR')
+  }
+}
+
+// DELETE — remove a patient who has no visits. A patient with visits keeps their medical record: those
+// appointments, prescriptions and payments belong to the clinic's records and must not be orphaned.
+export async function DELETE(request: Request) {
+  try {
+    const tenant = await getTenant()
+    if (!tenant) return apiError('CLINIC_NOT_FOUND')
+    const session = await getSession()
+    if (!session?.uid) return apiError('UNAUTHORIZED')
+    const denied = forbid(session, 'patients:manage')
+    if (denied) return denied
+
+    const id = new URL(request.url).searchParams.get('id')
+    if (!id) return Response.json({ error: 'Patient not found' }, { status: 404 })
+    const db = tenantDb(tenant)
+    const ref = db.col('patients').doc(id)
+    const snap = await ref.get()
+    if (!snap.exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
+
+    const visits = await db.col('appointments').where('patientId', '==', id).limit(1).get()
+    const rx = await db.col('prescriptions').where('patientId', '==', id).limit(1).get()
+    if (!visits.empty || !rx.empty) {
+      return Response.json({ error: 'This patient has visits or prescriptions on record, so they cannot be deleted. Edit their details instead.' }, { status: 409 })
+    }
+    await ref.delete()
+    await audit(tenant, session, 'patient.delete', `patients/${id}`)
+    return Response.json({ ok: true })
+  } catch (error) {
+    console.error('[patient-delete]', error)
     return apiError('SERVER_ERROR')
   }
 }

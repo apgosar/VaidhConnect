@@ -69,7 +69,7 @@ describe('Save & share on the appointment page', () => {
     await openPrescription(user)
     expect(screen.getByText('Goes to +919800000001')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /Save & share on WhatsApp/ }))
-    expect(await screen.findByText('Add at least one medicine.')).toBeTruthy()
+    expect(await screen.findByText('Add a medicine, some advice or a diagnosis.')).toBeTruthy()
     expect(posts(calls, '/api/prescriptions')).toHaveLength(0)
   })
 
