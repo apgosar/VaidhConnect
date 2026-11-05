@@ -140,7 +140,7 @@ describe('PrintingSection', () => {
     const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ doctor: { letterheadPath: 'letterheads/x.png' } }), { status: 200 }))
     vi.stubGlobal('fetch', fetchSpy)
     render(<PrintingSection value={{}} onChange={onChange} />)
-    await userEvent.upload(screen.getByLabelText('Choose a letterhead image'), file())
+    await userEvent.upload(screen.getByLabelText('Choose a letterhead file'), file())
     await waitFor(() => expect(onChange).toHaveBeenCalledWith({ letterheadPath: 'letterheads/x.png' }))
     expect((fetchSpy.mock.calls[0] as any)[1].body.get('letterhead').name).toBe('letterhead.png')
   })
@@ -148,7 +148,7 @@ describe('PrintingSection', () => {
   it('shows why an upload was refused', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'The letterhead should be a portrait A4 page' }), { status: 400 })))
     render(<PrintingSection value={{}} onChange={onChange} />)
-    await userEvent.upload(screen.getByLabelText('Choose a letterhead image'), file())
+    await userEvent.upload(screen.getByLabelText('Choose a letterhead file'), file())
     expect((await screen.findByRole('alert')).textContent).toContain('portrait A4')
     expect(onChange).not.toHaveBeenCalled()
   })

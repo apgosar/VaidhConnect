@@ -13,6 +13,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 export interface PrintingValue {
   printSettings?: PrintMargins
   letterheadPath?: string | null
+  signaturePath?: string | null
 }
 
 /**
@@ -24,6 +25,9 @@ export function PrintingSection({ value, onChange }: {
   onChange: (patch: PrintingValue) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const signInput = useRef<HTMLInputElement>(null)
+  const [found, setFound] = useState<{ header: boolean; footer: boolean } | null>(null)
+  const [signVersion, setSignVersion] = useState(() => Date.now())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [version, setVersion] = useState(() => Date.now()) // busts the preview image cache after an upload
@@ -41,13 +45,46 @@ export function PrintingSection({ value, onChange }: {
       const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(failureText(data, 'Could not upload the letterhead')); return }
-      onChange({ letterheadPath: data.doctor?.letterheadPath ?? 'set' })
+      onChange({ letterheadPath: data.doctor?.letterheadPath ?? 'set', ...(data.doctor?.printSettings ? { printSettings: data.doctor.printSettings } : {}) })
+      setFound(data.found ?? null)
       setVersion(Date.now())
     } catch {
       setError(networkFailureText())
     } finally {
       setBusy(false)
       if (input.current) input.current.value = ''
+    }
+  }
+
+  const uploadSignature = async (file: File) => {
+    setBusy(true); setError('')
+    try {
+      const fd = new FormData()
+      fd.append('signature', file)
+      const res = await fetch('/api/doctor/profile', { method: 'PATCH', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(failureText(data, 'Could not upload the signature')); return }
+      onChange({ signaturePath: data.doctor?.signaturePath ?? 'set' })
+      setSignVersion(Date.now())
+    } catch {
+      setError(networkFailureText())
+    } finally {
+      setBusy(false)
+      if (signInput.current) signInput.current.value = ''
+    }
+  }
+
+  const removeSignature = async () => {
+    if (!(await confirm({ title: 'Remove the signature?', message: 'Prescriptions will show only your name and details.', confirmLabel: 'Remove', danger: true }))) return
+    setBusy(true); setError('')
+    try {
+      const res = await fetch('/api/doctor/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeSignature: true }) })
+      if (!res.ok) { setError(failureText(await res.json().catch(() => ({})), 'Could not remove the signature')); return }
+      onChange({ signaturePath: null })
+    } catch {
+      setError(networkFailureText())
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -72,8 +109,7 @@ export function PrintingSection({ value, onChange }: {
         <div>
           <p className="text-sm font-medium text-slate-700">Letterhead</p>
           <p className="text-sm text-slate-500">
-            Upload your letterhead as a full A4 page image (JPG or PNG, up to 5 MB). Prescriptions, downloads and WhatsApp copies are then drawn on it.
-            Without one, the standard header with your logo and details is used.
+            Upload your letterhead as one A4 page: a PDF (best, it stays sharp) or a JPG or PNG picture, up to 5 MB. Keep both the header and the footer on it, but leave out the doctor name, qualifications, registration number and signature, because we print those. Prescriptions, downloads and WhatsApp copies are then written in the empty space between your header and footer. Without a letterhead, the standard header with your logo and details is used.
           </p>
         </div>
         {value.letterheadPath ? (
@@ -94,8 +130,43 @@ export function PrintingSection({ value, onChange }: {
             <Upload size={14} aria-hidden="true" /> {busy ? 'Uploading...' : 'Upload letterhead'}
           </Button>
         )}
-        <input ref={input} type="file" accept="image/png,image/jpeg" className="hidden" aria-label="Choose a letterhead image" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f) }} />
+        <input ref={input} type="file" accept="application/pdf,image/png,image/jpeg" className="hidden" aria-label="Choose a letterhead file" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f) }} />
+        {found && (
+          <p className="text-sm text-slate-600" role="status">
+            {found.header && found.footer
+              ? `Found your header and footer. Text is placed between them: ${margins.top} mm from the top and ${margins.bottom} mm from the bottom. You can fine-tune this below.`
+              : `We found ${found.header ? 'a header but no footer' : found.footer ? 'a footer but no header' : 'no header or footer'} on this page. Check the spacing below.`}
+          </p>
+        )}
         {error && <Alert>{error}</Alert>}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-medium text-slate-700">Signature</p>
+          <p className="text-sm text-slate-500">
+            A picture of your signature (PNG with a transparent or white background works best, up to 2 MB). It is printed above your name at the end of every prescription.
+          </p>
+        </div>
+        {value.signaturePath ? (
+          <div className="flex items-start gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/doctor/signature?v=${signVersion}`} alt="Your signature" className="h-16 max-w-48 rounded border border-slate-200 bg-white object-contain p-1" />
+            <div className="space-y-2">
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => signInput.current?.click()}>
+                <Upload size={14} aria-hidden="true" /> Replace
+              </Button>
+              <Button variant="ghost" size="sm" className="text-red-600 block" disabled={busy} onClick={removeSignature}>
+                <X size={14} aria-hidden="true" /> Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => signInput.current?.click()}>
+            <Upload size={14} aria-hidden="true" /> Upload signature
+          </Button>
+        )}
+        <input ref={signInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" aria-label="Choose a signature picture" onChange={e => { const f = e.target.files?.[0]; if (f) uploadSignature(f) }} />
       </div>
 
       <div className="space-y-3">

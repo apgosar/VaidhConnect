@@ -3,7 +3,8 @@ import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
 import { uploadFile, deleteFile, tenantPath } from '@/lib/storage'
 import sharp, { type Sharp, type Metadata } from 'sharp'
-import { A4_RATIO, A4_RATIO_TOLERANCE, parseMargins } from '@/lib/pdf/layout'
+import { DEFAULT_MARGINS, parseMargins } from '@/lib/pdf/layout'
+import { prepareLetterhead, LetterheadError } from '@/lib/modules/letterhead'
 import { forbid } from '@/lib/auth/access'
 import { audit } from '@/lib/audit'
 import { isUsablePrimary } from '@/lib/tenant/theme'
@@ -78,6 +79,7 @@ export async function PATCH(request: Request) {
       const qrCodeFile = formData.get('qrCode') as File | null
       const photoFile = formData.get('photo') as File | null
       const letterheadFile = formData.get('letterhead') as File | null
+      const signatureFile = formData.get('signature') as File | null
 
       const allowedTypes = Object.keys(IMAGE_EXT)
 
@@ -99,44 +101,38 @@ export async function PATCH(request: Request) {
         return Response.json({ doctor: { logoUrl } })
       }
 
-      // Letterhead: a full A4 page image that sits behind prescriptions. Kept private; only our own PDF code reads it.
+      // Letterhead: a PDF or picture of one A4 page, drawn behind prescriptions. Kept private; only our own PDF code reads it.
+      // The space its printed header and footer take is measured, so text is placed in the empty part between them.
       if (letterheadFile) {
-        if (letterheadFile.size > 5 * 1024 * 1024) {
-          return Response.json({ error: 'The letterhead must be under 5MB' }, { status: 400 })
-        }
-        if (letterheadFile.type !== 'image/jpeg' && letterheadFile.type !== 'image/png') {
-          return Response.json({ error: 'The letterhead must be a JPG or PNG image of a full A4 page' }, { status: 400 })
-        }
-        const raw = Buffer.from(await letterheadFile.arrayBuffer())
-        if (!looksLikeImage(raw, letterheadFile.type)) {
-          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
-        }
-        let image: Sharp
-        let meta: Metadata
         try {
-          image = sharp(raw).rotate() // honour the phone/scanner orientation tag
-          meta = await image.metadata()
-        } catch {
-          return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+          const prepared = await prepareLetterhead(Buffer.from(await letterheadFile.arrayBuffer()))
+          const path = tenantPath(tenant, `letterheads/${doctorRef.id}.${prepared.ext}`)
+          const previous = doctorDoc.data()?.letterheadPath as string | undefined
+          await uploadFile(prepared.buffer, path, prepared.contentType)
+          if (previous && previous !== path) await deleteFile(previous)
+          const printSettings = { ...DEFAULT_MARGINS, ...(parseMargins(doctorDoc.data()?.printSettings) ?? {}), ...prepared.spacing }
+          await doctorRef.update({ letterheadPath: path, printSettings })
+          return Response.json({ doctor: { letterheadPath: path, printSettings }, found: { header: prepared.zones.headerEndMm !== null, footer: prepared.zones.footerStartMm !== null } })
+        } catch (e) {
+          if (e instanceof LetterheadError) return Response.json({ error: e.message }, { status: e.status })
+          throw e
         }
-        // EXIF orientations 5-8 are sideways: the stored width is the displayed height
-        const sideways = (meta.orientation ?? 1) >= 5
-        const width = (sideways ? meta.height : meta.width) ?? 0
-        const height = (sideways ? meta.width : meta.height) ?? 0
-        if (!width || !height || Math.abs(width / height - A4_RATIO) > A4_RATIO_TOLERANCE) {
-          return Response.json({ error: 'The letterhead should be a portrait A4 page (210 x 297 mm). Export or scan the whole page.' }, { status: 400 })
-        }
-        // A4 at 200 dpi is plenty for print and keeps every PDF small.
-        const resized = image.resize({ width: 1654, height: 2339, fit: 'inside', withoutEnlargement: true })
-        const isPng = letterheadFile.type === 'image/png'
-        const buffer = await (isPng ? resized.png() : resized.jpeg({ quality: 88 })).toBuffer()
-        const ext = isPng ? 'png' : 'jpg'
-        const path = tenantPath(tenant, `letterheads/${doctorRef.id}.${ext}`)
-        const previous = doctorDoc.data()?.letterheadPath as string | undefined
-        await uploadFile(buffer, path, isPng ? 'image/png' : 'image/jpeg')
-        if (previous && previous !== path) await deleteFile(previous)
-        await doctorRef.update({ letterheadPath: path })
-        return Response.json({ doctor: { letterheadPath: path } })
+      }
+
+      // Signature: a picture (ideally on a transparent or white background) printed above the doctor's name. Kept private.
+      if (signatureFile) {
+        if (signatureFile.size > 2 * 1024 * 1024) return Response.json({ error: 'The signature must be under 2MB' }, { status: 400 })
+        if (!allowedTypes.includes(signatureFile.type)) return Response.json({ error: 'The signature must be a JPG, PNG or WebP picture' }, { status: 400 })
+        const raw = Buffer.from(await signatureFile.arrayBuffer())
+        if (!looksLikeImage(raw, signatureFile.type)) return Response.json({ error: 'That file is not a valid image' }, { status: 400 })
+        let buffer: Buffer
+        try {
+          buffer = await sharp(raw).rotate().trim({ background: '#ffffff', threshold: 20 }).resize({ width: 600, height: 300, fit: 'inside', withoutEnlargement: true }).png().toBuffer()
+        } catch { return Response.json({ error: 'That file is not a valid image' }, { status: 400 }) }
+        const path = tenantPath(tenant, `signatures/${doctorRef.id}.png`)
+        await uploadFile(buffer, path, 'image/png')
+        await doctorRef.update({ signaturePath: path })
+        return Response.json({ doctor: { signaturePath: path } })
       }
 
       // Handle QR Code upload
@@ -194,7 +190,7 @@ export async function PATCH(request: Request) {
       theme,
       enableChiefComplaint, enableMedicalHistory,
       consultationFee, followUpFee, summaryHour,
-      printSettings, removeLetterhead, adviceOptions, phones, bottomNav,
+      printSettings, removeLetterhead, removeSignature, adviceOptions, phones, bottomNav,
     } = body
 
     const updateData: Record<string, unknown> = {}
@@ -289,6 +285,12 @@ export async function PATCH(request: Request) {
       if (existing) await deleteFile(existing)
       // not through updateData: its deep-clean would flatten the delete marker
       await doctorRef.update({ letterheadPath: FieldValue.delete() })
+    }
+
+    if (removeSignature === true) {
+      const existing = doctorDoc.data()?.signaturePath as string | undefined
+      if (existing) await deleteFile(existing)
+      await doctorRef.update({ signaturePath: FieldValue.delete() })
     }
 
     // Brand colour: validated (hex + enough contrast for white text); null/'' resets to the default look.

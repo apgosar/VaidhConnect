@@ -41,6 +41,7 @@ interface Doctor {
   summaryHour?: number
   printSettings?: PrintMargins
   letterheadPath?: string | null
+  signaturePath?: string | null
   adviceOptions?: string[]
 }
 
