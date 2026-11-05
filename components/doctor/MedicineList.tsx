@@ -207,7 +207,7 @@ export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; o
                 )}
 
                 <div>
-                  <label htmlFor={`${base}-note`} className="form-label">Instructions <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span></label>
+                  <label htmlFor={`${base}-note`} className="form-label">Instructions</label>
                   <input id={`${base}-note`} className="form-input" placeholder="e.g. After food" value={med.instructions ?? ''} onChange={e => updateMedicine(i, 'instructions', e.target.value)} />
                 </div>
               </div>
