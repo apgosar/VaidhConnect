@@ -51,6 +51,8 @@ export interface PrescriptionDocProps {
     /** #RRGGBB brand colour. */
     primary?: string
     logo?: PdfImage
+    /** Printed above the doctor's name. */
+    signature?: PdfImage
   }
   layout?: PdfLayout
 }
@@ -238,12 +240,16 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
           </View>
         ) : null}
 
-        {/* Signature */}
-        <View style={{ marginTop: 40 }} wrap={false}>
-          <View style={styles.signature}>
+        {/* Signature: the picture (when uploaded) above the doctor's name, qualifications and registration number */}
+        <View style={{ marginTop: 12, alignItems: 'flex-end' }} wrap={false}>
+          {doctor.signature && (
+            <Image src={{ data: doctor.signature.data, format: doctor.signature.format }} style={{ width: 130, height: 34, objectFit: 'contain', marginBottom: 2 }} />
+          )}
+          <View style={{ paddingTop: 4, fontSize: 9, textAlign: 'right' }}>
             <Txt style={{ fontWeight: 700 }}>{`Dr. ${doctor.name}`}</Txt>
-            {doctor.qualifications && <Txt style={{ fontSize: 8, color: '#64748b' }}>{doctor.qualifications}</Txt>}
-            {!ownBranding && registration && <Txt style={{ fontSize: 8, color: '#64748b' }}>{registration}</Txt>}
+            {(doctor.qualifications || (!ownBranding && registration)) && (
+              <Txt style={{ fontSize: 8, color: '#64748b' }}>{[doctor.qualifications, !ownBranding ? registration : ''].filter(Boolean).join('  |  ')}</Txt>
+            )}
           </View>
         </View>
 

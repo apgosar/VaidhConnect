@@ -55,6 +55,13 @@ export async function loadLetterhead(letterheadPath: unknown): Promise<PdfImage 
   return { data, format: letterheadPath.endsWith('.png') ? 'png' : 'jpg' }
 }
 
+/** The doctor's uploaded signature (kept privately), or undefined when there is none or it cannot be read. */
+export async function loadSignature(signaturePath: unknown): Promise<PdfImage | undefined> {
+  if (typeof signaturePath !== 'string' || !signaturePath) return undefined
+  const data = await downloadFile(signaturePath)
+  return data ? { data, format: 'png' } : undefined
+}
+
 async function loadDoctor(tenant: Tenant) {
   const snap = await tenantDb(tenant).profile().get()
   if (!snap.exists) return null
@@ -71,6 +78,7 @@ async function loadDoctor(tenant: Tenant) {
     logoUrl: d.logoUrl as string | undefined,
     printSettings: d.printSettings as unknown,
     letterheadPath: d.letterheadPath as string | undefined,
+    signaturePath: d.signaturePath as string | undefined,
   }
 }
 
@@ -84,10 +92,10 @@ async function buildLayout(doctor: DoctorRecord, mode: PrintMode): Promise<PdfLa
 }
 
 async function renderPrescription(doctor: DoctorRecord, mode: PrintMode, data: Omit<PrescriptionDocProps, 'doctor' | 'layout'>) {
-  const { logoUrl, printSettings: _p, letterheadPath: _l, ...doctorProps } = doctor
-  const [logo, layout] = await Promise.all([loadLogo(logoUrl), buildLayout(doctor, mode)])
+  const { logoUrl, printSettings: _p, letterheadPath: _l, signaturePath, ...doctorProps } = doctor
+  const [logo, layout, signature] = await Promise.all([loadLogo(logoUrl), buildLayout(doctor, mode), loadSignature(signaturePath)])
   registerPdfFonts()
-  return renderToBuffer(PrescriptionDocument({ ...data, doctor: { ...doctorProps, logo }, layout }))
+  return renderToBuffer(PrescriptionDocument({ ...data, doctor: { ...doctorProps, logo, signature }, layout }))
 }
 
 /** Renders a saved prescription. Returns null when it, its appointment, its patient or the clinic profile is missing. */
