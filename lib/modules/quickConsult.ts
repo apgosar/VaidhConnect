@@ -1,6 +1,7 @@
 import { tenantDb } from '@/lib/db/tenant'
 import type { Tenant } from '@/lib/tenant/types'
 import type { Medicine } from '@/lib/constants'
+import { rxHasContent } from '@/lib/rxContent'
 import { savePrescription, type PrescriptionInput } from '@/lib/modules/prescriptions'
 import { dobFromAge, ymdInTz } from '@/lib/time'
 import type { Gender } from '@/lib/gender'
@@ -37,7 +38,7 @@ export interface QuickConsultInput {
  */
 export async function createQuickConsult(tenant: Tenant, actorUid: string, input: QuickConsultInput, now = new Date()) {
   const db = tenantDb(tenant)
-  if (!input.medicines.some(m => m.name.trim())) throw new QuickConsultError(400, 'Add at least one medicine')
+  if (!rxHasContent(input)) throw new QuickConsultError(400, 'Add a medicine, some advice or a diagnosis')
 
   let patientId: string
   let patientCreated = false

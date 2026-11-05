@@ -20,11 +20,14 @@ const slotAt = (i: number) => {
   return { start: start.toISOString(), end: new Date(start.getTime() + 15 * 60_000).toISOString(), label }
 }
 
+const KNOWN = [{ id: 'p9', name: 'Kiran Shah', phone: '+919822200000', dob: '1980-04-01T00:00:00.000Z', gender: 'MALE' }]
+
 function stubBooking(slotIdx = [0, 1, 2, 3]) {
   const calls: Call[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init })
     if (url.startsWith('/api/public/config')) return Response.json({ config: CONFIG })
+    if (url.startsWith('/api/patients/search')) return Response.json({ patients: KNOWN })
     if (url.startsWith('/api/appointments?mode=slots')) return Response.json({ slots: slotIdx.map(slotAt) })
     if (url === '/api/appointments' && init?.method === 'POST') return Response.json({ appointment: { id: 'a1' } }, { status: 201 })
     throw new Error('unexpected request ' + url)
@@ -39,10 +42,34 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 async function openNewPatientForm(user: ReturnType<typeof userEvent.setup>) {
   render(<NewAppointmentPage />)
-  await user.click(await screen.findByRole('button', { name: /New patient/ }))
-  await user.type(field(/Full name/), 'Meera Joshi')
-  fireEvent.change(field(/Mobile/), { target: { value: '+919811100000' } })
+  await screen.findByRole('heading', { name: /1. Patient/ })
+  await user.type(field(/^Name/), 'Meera Joshi')
+  fireEvent.change(field(/^Mobile number/), { target: { value: '+919811100000' } })
 }
+
+describe('choosing the patient while booking (staff)', () => {
+  it('offers matching patients as you type, and books the one picked without asking for their details again', async () => {
+    const calls = stubBooking(); const user = userEvent.setup()
+    render(<NewAppointmentPage />)
+    await user.type(await screen.findByLabelText(/^Name/), 'Kir')
+    await user.click(await screen.findByRole('option', { name: /Kiran Shah/ }, { timeout: 4000 }))
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).disabled).toBe(true)
+    await user.click(await screen.findByRole('button', { name: /09:00 AM/ }, { timeout: 4000 }))
+    await user.click(screen.getByRole('button', { name: /Book appointment/ }))
+    await screen.findByText(/Appointment booked/)
+    const body = posted(calls)
+    expect(body.patientId).toBe('p9')
+    expect(body.patient).toBeUndefined()
+  })
+
+  it('has no Find / New patient switch: typing is enough', async () => {
+    stubBooking()
+    render(<NewAppointmentPage />)
+    await screen.findByLabelText(/^Name/)
+    expect(screen.queryByRole('button', { name: /New patient/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Find/ })).toBeNull()
+  })
+})
 
 describe('adding a new patient while booking (staff)', () => {
   it('works out the date of birth from an age, and the age from a date of birth', async () => {

@@ -6,6 +6,8 @@ import { audit } from '@/lib/audit'
 import { can } from '@/lib/auth/access'
 import Link from 'next/link'
 import PatientPinActions from '@/components/doctor/PatientPinActions'
+import PatientActions from '@/components/doctor/PatientActions'
+import { ymdInTz } from '@/lib/time'
 import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight, FilePlus2 } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
@@ -124,6 +126,17 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
         <Link href={`/doctor/quick-prescription?patient=${patient.id}&phone=${encodeURIComponent(patient.phone)}`} className="btn btn-outline w-full sm:w-auto">
           <FilePlus2 size={16} aria-hidden="true" /> Quick prescription for {patient.name.split(' ')[0]}
         </Link>
+      )}
+
+      {can(session?.role, 'patients:manage') && (
+        <PatientActions
+          today={ymdInTz(new Date(), tenant.timezone)}
+          patient={{
+            id: patient.id, name: patient.name, phone: patient.phone, email: patient.email, medicalHistory: patient.medicalHistory,
+            dob: patient.dob ? patient.dob.toISOString().slice(0, 10) : undefined, dobApproximate: patientData.dobApproximate === true,
+            gender: patientData.gender ?? null, hasVisits: patient.appointments.length > 0,
+          }}
+        />
       )}
 
       <PatientPinActions phone={patient.phone} />

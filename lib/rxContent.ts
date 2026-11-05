@@ -56,3 +56,16 @@ export function rxFromStored(rx: any, chiefComplaint?: string | null): RxContent
     notes: rx?.notes ?? '',
   }
 }
+
+/**
+ * A prescription needs something to say, but not necessarily a medicine: sometimes advice alone is the treatment.
+ * True when any part of the content (as the forms or the endpoints hold it) has been filled in.
+ */
+export function rxHasContent(rx: {
+  medicines?: { name: string }[]; advice?: string[]; adviceOther?: string | null; diagnosis?: string | null
+  onExamination?: string | null; investigations?: string | null; notes?: string | null
+}): boolean {
+  const said = (v?: string | null) => !!v?.trim()
+  return !!rx.medicines?.some(m => said(m.name)) || !!rx.advice?.some(said) || said(rx.adviceOther) || said(rx.diagnosis)
+    || said(rx.onExamination) || said(rx.investigations) || said(rx.notes)
+}

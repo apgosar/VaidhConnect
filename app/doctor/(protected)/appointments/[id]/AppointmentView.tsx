@@ -14,7 +14,7 @@ import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
 import { SaveShareBar, type ShareState } from '@/components/doctor/SaveShareBar'
 import { HandwrittenRx } from '@/components/doctor/HandwrittenRx'
 import { PAYMENT_MODES } from '@/lib/constants'
-import { emptyRx, rxFromStored, rxSnapshot, rxToPayload, type RxContent } from '@/lib/rxContent'
+import { emptyRx, rxFromStored, rxHasContent, rxSnapshot, rxToPayload, type RxContent } from '@/lib/rxContent'
 import { readFailure, networkFailureText } from '@/lib/clientErrors'
 import { LangText } from '@/components/ui/LangText'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
@@ -147,7 +147,7 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
   /** Saves the form. Returns the prescription's id, or null after showing what went wrong. */
   const persist = async (): Promise<string | null> => {
     if (!appt) return null
-    if (!rx.medicines.some(m => m.name.trim())) { setRxProblem('Add at least one medicine.'); return null }
+    if (!rxHasContent(rx)) { setRxProblem('Add a medicine, some advice or a diagnosis.'); return null }
     const res = await fetch('/api/prescriptions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appointmentId: appt.id, patientId: appt.patient.id, ...rxToPayload(rx) }),

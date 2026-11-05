@@ -1,29 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Search, UserPlus, CheckCircle2, Clock, X, Minus, Plus } from 'lucide-react'
+import { CheckCircle2, Clock, Minus, Plus } from 'lucide-react'
 import { addDaysYmd, describeYmd, formatSlotLabelInTz } from '@/lib/time'
 import { MAX_SLOTS_PER_VISIT } from '@/lib/slots'
-import type { Gender } from '@/lib/gender'
-import { AgeDobFields, ageDobAsDob, ageDobComplete, emptyAgeDob, type AgeDob } from '@/components/ui/AgeDobFields'
-import { GenderField } from '@/components/ui/GenderField'
+import { ageDobAsDob } from '@/components/ui/AgeDobFields'
+import { PatientEntryFields, usePatientEntry } from '@/components/doctor/PatientEntry'
 import { LoadingBlock } from '@/components/ui/Spinner'
 
-interface PatientHit { id: string; name: string; phone: string; dob?: string }
 interface Slot { start: string; end: string; label: string }
-
-const emptyNew = { name: '', phone: '+91', email: '', medicalHistory: '' }
 
 export default function NewAppointmentPage() {
   const [config, setConfig] = useState<{ today: string; timezone: string; enableChiefComplaint: boolean } | null>(null)
-  const [mode, setMode] = useState<'existing' | 'new'>('existing')
-  const [query, setQuery] = useState('')
-  const [hits, setHits] = useState<PatientHit[]>([])
-  const [patient, setPatient] = useState<PatientHit | null>(null)
-  const [fresh, setFresh] = useState(emptyNew)
-  const [ageDob, setAgeDob] = useState<AgeDob>(emptyAgeDob)
-  const [gender, setGender] = useState<Gender | ''>('')
+  const entry = usePatientEntry(config?.today ?? new Date().toISOString().slice(0, 10))
   const [date, setDate] = useState('')
   const [slots, setSlots] = useState<Slot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -34,7 +24,6 @@ export default function NewAppointmentPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [booked, setBooked] = useState<{ label: string; name: string; minutes: number } | null>(null)
-  const searchSeq = useRef(0)
 
   useEffect(() => {
     fetch('/api/public/config').then(r => r.json()).then(d => {
@@ -42,18 +31,6 @@ export default function NewAppointmentPage() {
       setDate(d.config.today)
     })
   }, [])
-
-  // Debounced patient search
-  useEffect(() => {
-    if (mode !== 'existing' || query.trim().length < 2) { setHits([]); return }
-    const seq = ++searchSeq.current
-    const t = setTimeout(async () => {
-      const res = await fetch(`/api/patients/search?q=${encodeURIComponent(query.trim())}&limit=8`)
-      if (!res.ok || seq !== searchSeq.current) return
-      setHits((await res.json()).patients ?? [])
-    }, 250)
-    return () => clearTimeout(t)
-  }, [query, mode])
 
   const loadSlots = (d: string) => {
     setLoadingSlots(true); setSlot(null); setCount(1)
@@ -76,17 +53,16 @@ export default function NewAppointmentPage() {
   const minutes = (count * slotMs) / 60_000
   const pickSlot = (s: Slot) => { setSlot(s); setCount(1) }
 
-  const canBook =
-    !!slot && (mode === 'existing' ? !!patient : fresh.name.trim().length >= 2 && fresh.phone.length >= 8 && ageDobComplete(ageDob) && !!gender)
+  const canBook = !!slot && !entry.problem
 
   const book = async () => {
     if (!slot) return
     setSaving(true); setError('')
     const body: Record<string, unknown> = {
       startTime: slot.start, endTime: visitEnd!.toISOString(), chiefComplaint: complaint || undefined,
-      ...(mode === 'existing'
-        ? { patientId: patient!.id }
-        : { patient: { ...fresh, ...ageDobAsDob(ageDob, config!.today), gender, email: fresh.email || undefined, medicalHistory: fresh.medicalHistory || undefined } }),
+      ...(entry.chosen
+        ? { patientId: entry.chosen.id }
+        : { patient: { name: entry.name.trim(), phone: entry.phone, ...ageDobAsDob(entry.ageDob, config!.today), gender: entry.gender || undefined } }),
     }
     const res = await fetch('/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json()
@@ -96,11 +72,11 @@ export default function NewAppointmentPage() {
       if (res.status === 409) loadSlots(date) // someone took it — show what is still open
       return
     }
-    setBooked({ label: `${describeYmd(date).weekdayLong}, ${describeYmd(date).day} ${describeYmd(date).monthShort} at ${slot.label}`, name: mode === 'existing' ? patient!.name : fresh.name, minutes })
+    setBooked({ label: `${describeYmd(date).weekdayLong}, ${describeYmd(date).day} ${describeYmd(date).monthShort} at ${slot.label}`, name: entry.chosen?.name ?? entry.name.trim(), minutes })
   }
 
   const reset = () => {
-    setBooked(null); setPatient(null); setQuery(''); setFresh(emptyNew); setAgeDob(emptyAgeDob()); setGender(''); setCount(1); setComplaint(''); setSlot(null); setError('')
+    setBooked(null); entry.reset(); setCount(1); setComplaint(''); setSlot(null); setError('')
     if (config) setDate(config.today)
   }
 
@@ -128,43 +104,9 @@ export default function NewAppointmentPage() {
       <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-charcoal)' }}>New Appointment</h1>
 
       {/* 1. Patient */}
-      <section className="card p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">1. Patient</h2>
-          <div className="flex gap-1 text-sm">
-            <button className={`btn btn-sm ${mode === 'existing' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode('existing')}><Search size={14} /> Find</button>
-            <button className={`btn btn-sm ${mode === 'new' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMode('new')}><UserPlus size={14} /> New patient</button>
-          </div>
-        </div>
-
-        {mode === 'existing' ? (
-          patient ? (
-            <div className="flex items-center justify-between rounded-lg p-3" style={{ background: 'var(--color-primary-bg)' }}>
-              <div><p className="font-medium">{patient.name}</p><p className="text-xs" style={{ color: 'var(--color-sage)' }}>{patient.phone}</p></div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setPatient(null)} aria-label="Choose a different patient"><X size={16} /></button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <input aria-label="Search patients by name or phone" className="form-input" placeholder="Name or phone (2+ letters)" value={query} onChange={e => setQuery(e.target.value)} />
-              {hits.map(h => (
-                <button key={h.id} className="w-full text-left rounded-lg p-3 hover:bg-[var(--color-primary-bg)] border" style={{ borderColor: 'var(--color-sage-border)' }} onClick={() => setPatient(h)}>
-                  <span className="font-medium">{h.name}</span> <span className="text-xs" style={{ color: 'var(--color-sage)' }}>{h.phone}</span>
-                </button>
-              ))}
-              {query.trim().length >= 2 && hits.length === 0 && (
-                <p className="text-sm" style={{ color: 'var(--color-sage)' }}>No match. Use “New patient” to add them.</p>
-              )}
-            </div>
-          )
-        ) : (
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="form-group"><label htmlFor="full-name" className="form-label">Full name *</label><input id="full-name" className="form-input" value={fresh.name} onChange={e => setFresh(f => ({ ...f, name: e.target.value }))} /></div>
-            <div className="form-group"><label htmlFor="mobile" className="form-label">Mobile (with country code) *</label><input id="mobile" className="form-input" inputMode="tel" value={fresh.phone} onChange={e => setFresh(f => ({ ...f, phone: e.target.value }))} /></div>
-            <div className="sm:col-span-2"><AgeDobFields value={ageDob} onChange={setAgeDob} today={config.today} /></div>
-            <div className="sm:col-span-2"><GenderField value={gender} onChange={setGender} /></div>
-            <div className="form-group"><label htmlFor="email" className="form-label">Email (optional)</label><input id="email" type="email" className="form-input" value={fresh.email} onChange={e => setFresh(f => ({ ...f, email: e.target.value }))} /></div>
-          </div>
-        )}
+      <section className="card p-5 space-y-4" aria-labelledby="appt-patient">
+        <h2 id="appt-patient" className="font-semibold">1. Patient</h2>
+        <PatientEntryFields entry={entry} idPrefix="appt" numberHint="A WhatsApp confirmation is sent to this number." />
       </section>
 
       {/* 2. When */}

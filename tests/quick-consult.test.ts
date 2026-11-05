@@ -102,6 +102,14 @@ describe('createQuickConsult', () => {
     expect(all('appointments')).toHaveLength(0)
   })
 
+  it('does not need a medicine when there is advice, a diagnosis or a note to give', async () => {
+    for (const [i, say] of [{ advice: ['Rest and fluids'] }, { adviceOther: 'Drink warm water' }, { diagnosis: 'Viral cold' }, { notes: 'Review if no better' }].entries()) {
+      const r = await createQuickConsult(tenant, 'u1', { patient: { name: 'Asha Rao', phone: '+919800000001', ageYears: 36 }, medicines: [], ...say })
+      expect(r.prescriptionId, String(i)).toBeTruthy()
+    }
+    expect(all('prescriptions')).toHaveLength(4)
+  })
+
   it('leaves nothing behind when the prescription is refused (follow-up before the visit)', async () => {
     const e = await err(createQuickConsult(tenant, 'u1', { patient: { name: 'Asha Rao', phone: '+919800000001', ageYears: 36 }, medicines: [med], followUpDate: '2026-11-01' }))
     expect(e).toBeInstanceOf(PrescriptionError)
@@ -163,7 +171,7 @@ describe('POST /api/doctor/quick-prescription', () => {
       { ...good, patient: { name: 'Asha Rao', phone: '9800000001' } },
       { ...good, patient: { ...good.patient, ageYears: 150 } },
       { ...good, patientId: 'p1' },
-      { ...good, medicines: [] },
+      { ...good, medicines: [], diagnosis: undefined },
     ]) {
       const res = await call(bad)
       expect(res.status, JSON.stringify(bad)).toBe(400)
