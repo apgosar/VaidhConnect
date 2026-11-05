@@ -1,10 +1,11 @@
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { getSession } from '@/lib/auth/session'
-import { forbid } from '@/lib/auth/access'
+import { can, forbid } from '@/lib/auth/access'
 import { patientDetailsSchema, parseBody } from '@/lib/validation'
 import { audit } from '@/lib/audit'
 import { apiError } from '@/lib/errors'
+import { deleteFile } from '@/lib/storage'
 
 // POST — staff register a patient (e.g. at the front desk). Public patient
 // self-registration no longer exists: patients are created as part of a
@@ -96,8 +97,8 @@ export async function PUT(request: Request) {
   }
 }
 
-// DELETE — remove a patient who has no visits. A patient with visits keeps their medical record: those
-// appointments, prescriptions and payments belong to the clinic's records and must not be orphaned.
+// DELETE — remove a patient together with every visit, prescription and payment of theirs (and any scanned
+// prescription pages). The screen warns before this is sent; it cannot be undone.
 export async function DELETE(request: Request) {
   try {
     const tenant = await getTenant()
@@ -114,13 +115,23 @@ export async function DELETE(request: Request) {
     const snap = await ref.get()
     if (!snap.exists) return Response.json({ error: 'Patient not found' }, { status: 404 })
 
-    const visits = await db.col('appointments').where('patientId', '==', id).limit(1).get()
-    const rx = await db.col('prescriptions').where('patientId', '==', id).limit(1).get()
-    if (!visits.empty || !rx.empty) {
-      return Response.json({ error: 'This patient has visits or prescriptions on record, so they cannot be deleted. Edit their details instead.' }, { status: 409 })
+    const visits = (await db.col('appointments').where('patientId', '==', id).get()).docs
+    const rxs = (await db.col('prescriptions').where('patientId', '==', id).get()).docs
+    const pays = new Map<string, any>()
+    for (const d of (await db.col('payments').where('patientId', '==', id).get()).docs) pays.set(d.id, d)
+    for (const v of visits) for (const d of (await db.col('payments').where('appointmentId', '==', v.id).get()).docs) pays.set(d.id, d)
+    const files = visits.flatMap(v => ((v.data().rxScans ?? []) as { path?: string }[]).map(x => x.path).filter((p): p is string => !!p))
+
+    // Medical records may only be erased by the doctor or owner, not the front desk.
+    if ((visits.length || rxs.length) && !can(session.role, 'prescriptions:manage')) {
+      return Response.json({ error: 'Only the doctor or owner can delete a patient who has visits or prescriptions.' }, { status: 403 })
     }
+
+    // Records first, files after: a leftover file is harmless, a leftover record would point at nothing.
+    for (const d of [...visits, ...rxs, ...pays.values()]) await d.ref.delete()
+    await Promise.all(files.map(p => deleteFile(p).catch(() => {})))
     await ref.delete()
-    await audit(tenant, session, 'patient.delete', `patients/${id}`)
+    await audit(tenant, session, 'patient.delete', `patients/${id}`, { visits: visits.length, prescriptions: rxs.length, payments: pays.size })
     return Response.json({ ok: true })
   } catch (error) {
     console.error('[patient-delete]', error)

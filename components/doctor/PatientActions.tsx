@@ -17,7 +17,7 @@ export interface EditablePatient {
   /** YYYY-MM-DD */ dob?: string; dobApproximate?: boolean; gender?: string | null; hasVisits: boolean
 }
 
-/** Edit and delete buttons for a patient. A patient with visits cannot be deleted (their records stay), and the button says so. */
+/** Edit and delete buttons for a patient. Deleting one who has visits warns that their records go too. */
 export default function PatientActions({ patient, today }: { patient: EditablePatient; today: string }) {
   const router = useRouter()
   const { confirm, dialog } = useConfirm()
@@ -52,11 +52,7 @@ export default function PatientActions({ patient, today }: { patient: EditablePa
   }
 
   const remove = async () => {
-    if (patient.hasVisits) {
-      await confirm({ title: 'This patient cannot be deleted', message: 'They have visits or prescriptions on record, and those records must be kept. You can edit their details instead.', confirmLabel: 'OK', cancelLabel: 'Close' })
-      return
-    }
-    if (!(await confirm({ title: `Delete ${patient.name}?`, message: 'This removes the patient from your list. It cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
+    if (!(await confirm({ title: `Delete ${patient.name}?`, message: patient.hasVisits ? 'Deleting this patient will also delete all associated visit records and prescriptions. This cannot be undone. Are you sure you want to delete?' : 'This removes the patient from your list. It cannot be undone.', confirmLabel: 'Delete', danger: true }))) return
     try {
       const res = await fetch(`/api/patients?id=${encodeURIComponent(patient.id)}`, { method: 'DELETE' })
       if (!res.ok) { await confirm({ title: 'Could not delete', message: await readFailure(res, 'Could not delete this patient.'), confirmLabel: 'OK', cancelLabel: 'Close' }); return }

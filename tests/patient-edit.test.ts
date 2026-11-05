@@ -6,6 +6,8 @@ vi.mock('@/lib/db/tenant', () => ({ tenantDb: () => h.db }))
 vi.mock('@/lib/tenant/resolve', () => ({ getTenant: async () => ({ clinicId: 'c1', storage: 'scoped', timezone: 'Asia/Kolkata' }) }))
 vi.mock('@/lib/auth/session', () => ({ getSession: async () => h.session }))
 vi.mock('@/lib/audit', () => ({ audit: vi.fn(async () => {}) }))
+const gone = vi.hoisted(() => ({ files: [] as string[] }))
+vi.mock('@/lib/storage', () => ({ deleteFile: async (p: string) => { gone.files.push(p) } }))
 
 import { PUT, DELETE } from '@/app/api/patients/route'
 import { audit } from '@/lib/audit'
@@ -17,7 +19,7 @@ const del = (id: string) => DELETE(new Request(`http://x/api/patients?id=${id}`,
 
 beforeEach(() => {
   fs = new FakeFirestore(); h.db = fakeTenantDb(fs); h.session = { uid: 'u1', role: 'STAFF' }
-  vi.mocked(audit).mockClear()
+  vi.mocked(audit).mockClear(); gone.files = []
   fs.collection('clinics/c1/patients').doc('p1').set({ name: 'Asha Rao', phone: '+919800000001', dob: new Date('1990-06-01T00:00:00Z'), dobApproximate: true })
   fs.collection('clinics/c1/patients').doc('p2').set({ name: 'Mihir Rao', phone: '+919800000002', dob: new Date('2018-01-01T00:00:00Z') })
 })
@@ -49,19 +51,32 @@ describe('deleting a patient', () => {
   it('removes a patient who has no visits, and records it', async () => {
     expect((await del('p1')).status).toBe(200)
     expect(all('patients').map(p => p.name)).toEqual(['Mihir Rao'])
-    expect(audit).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'patient.delete', 'patients/p1')
+    expect(audit).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'patient.delete', 'patients/p1', { visits: 0, prescriptions: 0, payments: 0 })
   })
 
-  it('keeps a patient who has a visit or a prescription, so medical records are never orphaned', async () => {
-    fs.collection('clinics/c1/appointments').doc('a1').set({ patientId: 'p1', status: 'COMPLETED' })
-    const res = await del('p1')
-    expect(res.status).toBe(409)
-    expect(typeof (await res.json()).error).toBe('string')
-    expect(all('patients')).toHaveLength(2)
+  it('deletes a patient together with their visits, prescriptions, payments and scanned pages, and nobody else is touched', async () => {
+    h.session = { uid: 'u1', role: 'DOCTOR' }
+    fs.collection('clinics/c1/appointments').doc('a1').set({ patientId: 'p1', rxScans: [{ id: 's1', path: 'rx-scans/a1/s1.jpg' }] })
+    fs.collection('clinics/c1/appointments').doc('a2').set({ patientId: 'p2' })
+    fs.collection('clinics/c1/prescriptions').doc('r1').set({ patientId: 'p1', appointmentId: 'a1' })
+    fs.collection('clinics/c1/prescriptions').doc('r2').set({ patientId: 'p2', appointmentId: 'a2' })
+    fs.collection('clinics/c1/payments').doc('y1').set({ appointmentId: 'a1', amount: 300 })
+    fs.collection('clinics/c1/payments').doc('y2').set({ appointmentId: 'a2', amount: 300 })
+    expect((await del('p1')).status).toBe(200)
+    expect(all('patients').map(p => p.name)).toEqual(['Mihir Rao'])
+    expect(all('appointments').map(a => a.patientId)).toEqual(['p2'])
+    expect(all('prescriptions').map(r => r.patientId)).toEqual(['p2'])
+    expect(all('payments')).toHaveLength(1)
+    expect(gone.files).toEqual(['rx-scans/a1/s1.jpg'])
+    expect(audit).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'patient.delete', 'patients/p1', { visits: 1, prescriptions: 1, payments: 1 })
+  })
 
-    fs.collection('clinics/c1/prescriptions').doc('r1').set({ patientId: 'p2', appointmentId: 'gone' })
-    expect((await del('p2')).status).toBe(409)
+  it('leaves the records alone when the front desk tries to delete a patient who has some', async () => {
+    fs.collection('clinics/c1/appointments').doc('a1').set({ patientId: 'p1' })
+    const res = await del('p1') // STAFF
+    expect(res.status).toBe(403)
     expect(all('patients')).toHaveLength(2)
+    expect(all('appointments')).toHaveLength(1)
   })
 
   it('needs a login and a patient that exists', async () => {
