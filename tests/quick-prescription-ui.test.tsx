@@ -217,10 +217,11 @@ describe('the prescription section', () => {
       const el = screen.getByLabelText(label)
       expect(el.closest('details')).toBeNull()
     }
-    expect(screen.getByText('Follow-up visit').textContent).toContain('(optional)')
-    expect(screen.getByLabelText(/Additional Notes/).closest('.form-group')!.textContent).toContain('(optional)')
-    expect(screen.getByLabelText(/^Diagnosis/).closest('.form-group')!.textContent).toContain('(optional)')
-    expect(screen.getByLabelText(/Chief complaint/).closest('.form-group')!.textContent).toContain('(optional)')
+    // One note says so, instead of "(optional)" on every label.
+    expect(screen.getByText('All fields are optional. Fill in at least one to save the prescription.')).toBeTruthy()
+    expect(screen.getByLabelText(/Additional Notes/).closest('.form-group')!.textContent).not.toContain('(optional)')
+    expect(screen.getByLabelText(/^Diagnosis/).closest('.form-group')!.textContent).not.toContain('(optional)')
+    expect(screen.getByLabelText(/Chief complaint/).closest('.form-group')!.textContent).not.toContain('(optional)')
   })
 
   it('has the same quick follow-up choices as the appointment page, counted from today', async () => {

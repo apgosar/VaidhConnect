@@ -11,8 +11,6 @@ import { Chip, ChipRow } from '@/components/ui/Chip'
 /** How soon the patient should come back, as one-tap choices next to the date. */
 const FOLLOW_UP_CHOICES = [['3 days', 3], ['1 week', 7], ['1 month', 30], ['3 months', 90]] as const
 
-const Optional = () => <span className="font-normal normal-case" style={{ color: 'var(--color-sage)' }}>(optional)</span>
-
 /** "CBC, HbA1c" → ["CBC", "HbA1c"] */
 const tokens = (s: string) => s.split(/[,\n]/).map(t => t.trim()).filter(Boolean)
 
@@ -39,20 +37,22 @@ export function PrescriptionFields({ value, onChange, baseDate }: {
 
   return (
     <>
+      <p className="text-xs text-slate-500">All fields are optional. Fill in at least one to save the prescription.</p>
+
       <div className="form-group">
-        <label htmlFor={`${uid}-cc`} className="form-label">Chief complaint <Optional /></label>
+        <label htmlFor={`${uid}-cc`} className="form-label">Chief complaint</label>
         <textarea id={`${uid}-cc`} className="form-textarea" value={value.chiefComplaint} onChange={e => onChange({ chiefComplaint: e.target.value })}
           placeholder="Why the patient came, e.g. Fever and headache for 3 days" maxLength={500} rows={2} />
       </div>
 
       <div className="form-group">
-        <label htmlFor={`${uid}-oe`} className="form-label">On examination (O/E) <Optional /></label>
+        <label htmlFor={`${uid}-oe`} className="form-label">On examination (O/E)</label>
         <textarea id={`${uid}-oe`} className="form-textarea" value={value.onExamination} onChange={e => onChange({ onExamination: e.target.value })}
           placeholder="e.g. BP 120/80 mmHg, pulse 76/min, SpO2 98%, temperature 99.2 F" maxLength={1000} rows={2} />
       </div>
 
       <div className="form-group">
-        <label htmlFor={`${uid}-dx`} className="form-label">Diagnosis <Optional /></label>
+        <label htmlFor={`${uid}-dx`} className="form-label">Diagnosis</label>
         <textarea id={`${uid}-dx`} className="form-textarea" value={value.diagnosis} onChange={e => onChange({ diagnosis: e.target.value })}
           placeholder="e.g. Upper respiratory tract infection" rows={2} />
       </div>
@@ -60,7 +60,7 @@ export function PrescriptionFields({ value, onChange, baseDate }: {
       <MedicineList medicines={value.medicines} onChange={medicines => onChange({ medicines })} />
 
       <div className="form-group">
-        <label htmlFor={`${uid}-inv`} className="form-label">Advised investigations <Optional /></label>
+        <label htmlFor={`${uid}-inv`} className="form-label">Advised investigations</label>
         <textarea id={`${uid}-inv`} className="form-textarea" value={value.investigations} onChange={e => onChange({ investigations: e.target.value })}
           placeholder="Tap below, or type, e.g. CBC, fasting sugar, HbA1c" maxLength={1000} rows={2} />
         <ChipRow label="Common investigations">
@@ -69,7 +69,7 @@ export function PrescriptionFields({ value, onChange, baseDate }: {
       </div>
 
       <div className="form-group">
-        <p id={`${uid}-adv`} className="form-label">Advice <Optional /></p>
+        <p id={`${uid}-adv`} className="form-label">Advice</p>
         {adviceChoices.length > 0 ? (
           <div role="group" aria-labelledby={`${uid}-adv`} className="flex flex-wrap gap-1.5">
             {adviceChoices.map(a => <Chip key={a} selected={value.advice.includes(a)} onClick={() => toggleAdvice(a)} className="whitespace-normal text-left">{a}</Chip>)}
@@ -83,7 +83,7 @@ export function PrescriptionFields({ value, onChange, baseDate }: {
       </div>
 
       <div className="form-group">
-        <label className="form-label" htmlFor={`${uid}-fu`}>Follow-up visit <Optional /></label>
+        <label className="form-label" htmlFor={`${uid}-fu`}>Follow-up visit</label>
         <div className="flex flex-wrap items-center gap-2">
           <input id={`${uid}-fu`} type="date" className="form-input" style={{ maxWidth: '12rem' }} min={baseDate} value={value.followUpDate} onChange={e => onChange({ followUpDate: e.target.value })} />
           {value.followUpDate && <button type="button" className="btn btn-ghost btn-sm text-red-500" onClick={() => onChange({ followUpDate: '' })}>Clear</button>}
@@ -95,7 +95,7 @@ export function PrescriptionFields({ value, onChange, baseDate }: {
       </div>
 
       <div className="form-group">
-        <label htmlFor={`${uid}-notes`} className="form-label">Additional Notes <Optional /></label>
+        <label htmlFor={`${uid}-notes`} className="form-label">Additional Notes</label>
         <textarea id={`${uid}-notes`} className="form-textarea" value={value.notes} onChange={e => onChange({ notes: e.target.value })}
           placeholder="Anything else for the patient..." rows={2} />
       </div>
