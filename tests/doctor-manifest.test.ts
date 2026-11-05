@@ -8,7 +8,7 @@ import manifest from '@/app/manifest'
 describe('the two installable apps', () => {
   it('the doctor app starts on the dashboard, in its own scope and id', async () => {
     const m = await (await GET()).json()
-    expect(m).toMatchObject({ id: '/doctor', scope: '/doctor', start_url: '/doctor/dashboard', display: 'standalone', name: 'Shah Family Clinic - Doctor' })
+    expect(m).toMatchObject({ id: '/doctor', scope: '/doctor', start_url: '/doctor/dashboard', display: 'standalone', name: 'Shah Family Clinic', short_name: 'Shah Family Clinic' })
   })
 
   it('the patient app is still the landing page, with a different id', async () => {

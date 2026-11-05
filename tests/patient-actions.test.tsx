@@ -50,11 +50,16 @@ describe('patient edit and delete buttons', () => {
     expect(calls[0].init!.method).toBe('DELETE')
   })
 
-  it('does not even try to delete a patient who has visits', async () => {
+  it('warns that the patient visits and prescriptions are deleted too, and only deletes after a yes', async () => {
     const calls = stub(); const user = userEvent.setup()
     render(<PatientActions patient={{ ...patient, hasVisits: true }} today="2026-11-05" />)
     await user.click(screen.getByRole('button', { name: /Delete Asha Rao/ }))
-    expect(await screen.findByText(/cannot be deleted/)).toBeTruthy()
+    expect(await screen.findByText(/also delete all associated visit records and prescriptions/)).toBeTruthy()
     expect(calls).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(calls).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: /Delete Asha Rao/ }))
+    await user.click(await screen.findByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(calls).toHaveLength(1))
   })
 })

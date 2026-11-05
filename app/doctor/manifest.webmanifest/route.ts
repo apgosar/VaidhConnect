@@ -10,11 +10,10 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const clinic = await getClinicProfile()
   const name = clinic?.data.clinicName ?? 'Clinic'
-  const first = name.split(' ')[0]
   return Response.json({
     id: '/doctor',
-    name: `${name} - Doctor`,
-    short_name: `${first.length > 9 ? first.slice(0, 9) : first} Dr`,
+    name,
+    short_name: name,
     description: `Appointments and prescriptions for ${name}`,
     start_url: '/doctor/dashboard',
     scope: '/doctor',
