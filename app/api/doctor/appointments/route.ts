@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         const pDoc = await db.col('patients').doc(apt.patientId).get()
         if (pDoc.exists) {
           const pd = pDoc.data() as any
-          patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate() }
+          patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate(), gender: pd.gender }
         }
       }
 

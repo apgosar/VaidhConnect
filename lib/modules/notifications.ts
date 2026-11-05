@@ -5,6 +5,8 @@ import { sendEmail } from '../email'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
 import type { Tenant } from '../tenant/types'
 
+import { nameWithAgeSex } from './patientLabel'
+
 interface Doctor { id: string; [k: string]: any }
 interface Patient { name: string; phone: string; email?: string | null }
 interface Appt { startTime: Date }
@@ -115,7 +117,7 @@ export async function notifyDoctorScheduleUpdate(tenant: Tenant, doctor: Doctor,
   let scheduleList = ''
   snap.docs.forEach((d, i) => {
     const p = patients[i]?.data()
-    scheduleList += `${formatTimeInTz(d.data().startTime.toDate(), tenant.timezone)} - ${p?.name || 'Unknown'} - ${p?.phone || ''}\n`
+    scheduleList += `${formatTimeInTz(d.data().startTime.toDate(), tenant.timezone)} - ${nameWithAgeSex(p, ymdInTz(now, tenant.timezone))} - ${p?.phone || ''}\n`
   })
 
   await sendSummaryUpdate(notifyPhone, {

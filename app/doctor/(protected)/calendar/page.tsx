@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay } from 'date-fns'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
-import { formatDate, computeAge, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
+import { ageSex } from '@/lib/gender'
+import { formatDate, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { LangText } from '@/components/ui/LangText'
 
 interface Appointment {
@@ -13,10 +14,13 @@ interface Appointment {
   endTime: string
   status: string
   chiefComplaint?: string
-  patient: { id: string; name: string; phone: string; dob: string }
+  patient: { id: string; name: string; phone: string; dob?: string | null; gender?: string }
   prescription?: { id: string } | null
   payment?: { id: string } | null
 }
+
+/** "56M" / "60F" beside the patient's name. */
+const tagOf = (a: Appointment) => ageSex(a.patient.dob, a.patient.gender, format(new Date(), 'yyyy-MM-dd'))
 
 interface BlockedSlot {
   id: string
@@ -255,8 +259,8 @@ export default function CalendarPage() {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-semibold text-sm"><LangText>{appt.patient.name}</LangText></p>
-                          <p className="text-xs opacity-70">{computeAge(appt.patient.dob)} yrs · {appt.patient.phone}</p>
+                          <p className="font-semibold text-sm"><LangText>{appt.patient.name}</LangText>{tagOf(appt) && <span className="font-normal opacity-70"> {tagOf(appt)}</span>}</p>
+                          <p className="text-xs opacity-70">{appt.patient.phone}</p>
                           {appt.chiefComplaint && <p className="text-xs opacity-70 mt-0.5">{appt.chiefComplaint}</p>}
                         </div>
                         <div className="text-right text-xs shrink-0 ml-2">
@@ -351,7 +355,7 @@ export default function CalendarPage() {
                         className="block rounded-lg p-2 text-xs hover:opacity-80 transition-opacity"
                         style={statusColor(appt.status)}
                       >
-                        <p className="font-semibold truncate"><LangText>{appt.patient.name}</LangText></p>
+                        <p className="font-semibold truncate"><LangText>{appt.patient.name}</LangText>{tagOf(appt) && <span className="font-normal opacity-70"> {tagOf(appt)}</span>}</p>
                         <p className="opacity-70 font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
                       </Link>
                     ))}
