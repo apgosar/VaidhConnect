@@ -1,5 +1,6 @@
 import { tenantDb } from '../db/tenant'
 import { sendDailySummary } from '../whatsapp'
+import { nameWithAgeSex } from './patientLabel'
 import { dayBoundsInTz, formatDateLongInTz, formatTimeInTz, hourInTz, ymdInTz } from '../time'
 import type { Tenant } from '../tenant/types'
 
@@ -49,7 +50,7 @@ export async function processDailySummary(tenant: Tenant, now = new Date()): Pro
   remaining.forEach((d, i) => {
     const p = patientDocs[i]
     if (!p) return
-    scheduleList += `${formatTimeInTz(d.data().startTime.toDate(), tenant.timezone)} - ${p.data()?.name || 'Unknown'} - ${p.data()?.phone || ''}\n`
+    scheduleList += `${formatTimeInTz(d.data().startTime.toDate(), tenant.timezone)} - ${nameWithAgeSex(p.data(), today)} - ${p.data()?.phone || ''}\n`
   })
   if (!scheduleList) scheduleList = snap.size > 0 ? 'No more appointments for the rest of today.' : 'No appointments scheduled for today.'
 
