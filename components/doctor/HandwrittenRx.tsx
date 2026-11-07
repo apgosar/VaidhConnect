@@ -31,7 +31,7 @@ async function shrink(file: File): Promise<File> {
  * Keep a photo of a handwritten prescription with the visit. "Take photo" opens the phone's camera;
  * "Choose from gallery" opens the photo library (several at once). Photos stay private to the clinic.
  */
-export function HandwrittenRx({ appointmentId }: { appointmentId: string }) {
+export function HandwrittenRx({ appointmentId, savedAlready = false }: { appointmentId: string; /** A typed prescription is saved: no upload buttons, and nothing at all when there are no photos. */ savedAlready?: boolean }) {
   const camera = useRef<HTMLInputElement>(null)
   const gallery = useRef<HTMLInputElement>(null)
   const [scans, setScans] = useState<Scan[]>([])
@@ -78,24 +78,33 @@ export function HandwrittenRx({ appointmentId }: { appointmentId: string }) {
     }
   }
 
+  // After a prescription is saved there is nothing to add: show the photos already kept, or nothing at all.
+  if (savedAlready && scans.length === 0) return null
+
   return (
     <section className="rounded-xl border border-dashed border-slate-300 p-3 space-y-2" aria-labelledby="hw-rx-title">
-      <div>
-        <h4 id="hw-rx-title" className="font-semibold text-slate-800 text-sm">Wrote it on paper?</h4>
-        <p className="text-xs text-slate-600">Add a photo of the handwritten prescription to keep with this visit. It is for your records and is not sent to the patient.</p>
-      </div>
+      {savedAlready ? (
+        <h4 id="hw-rx-title" className="font-semibold text-slate-800 text-sm">Handwritten prescription photos</h4>
+      ) : (
+        <>
+          <div>
+            <h4 id="hw-rx-title" className="font-semibold text-slate-800 text-sm">Wrote it on paper?</h4>
+            <p className="text-xs text-slate-600">Add a photo of the handwritten prescription to keep with this visit. It is for your records and is not sent to the patient.</p>
+          </div>
 
-      {/* capture="environment" opens the rear camera on a phone; on a computer it is an ordinary file picker */}
-      <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Take a photo of the prescription" onChange={e => upload(e.target.files)} />
-      <input ref={gallery} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-label="Choose prescription photos from the gallery" onChange={e => upload(e.target.files)} />
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="btn btn-outline" disabled={busy} onClick={() => camera.current?.click()}>
-          <Camera size={16} aria-hidden="true" /> Take photo
-        </button>
-        <button type="button" className="btn btn-outline" disabled={busy} onClick={() => gallery.current?.click()}>
-          <ImagePlus size={16} aria-hidden="true" /> From gallery
-        </button>
-      </div>
+          {/* capture="environment" opens the rear camera on a phone; on a computer it is an ordinary file picker */}
+          <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Take a photo of the prescription" onChange={e => upload(e.target.files)} />
+          <input ref={gallery} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-label="Choose prescription photos from the gallery" onChange={e => upload(e.target.files)} />
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn btn-outline" disabled={busy} onClick={() => camera.current?.click()}>
+              <Camera size={16} aria-hidden="true" /> Take photo
+            </button>
+            <button type="button" className="btn btn-outline" disabled={busy} onClick={() => gallery.current?.click()}>
+              <ImagePlus size={16} aria-hidden="true" /> From gallery
+            </button>
+          </div>
+        </>
+      )}
 
       {busy && <p role="status" className="text-sm text-slate-600">Adding the photo...</p>}
       {error && <Alert variant="error">{error}</Alert>}
