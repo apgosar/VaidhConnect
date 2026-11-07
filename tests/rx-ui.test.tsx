@@ -64,10 +64,10 @@ describe('Save & share on the appointment page', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('shows where it will be sent, and says what is missing instead of failing quietly', async () => {
+  it('says what is missing instead of failing quietly (the number itself is not shown)', async () => {
     const calls = stubServer(); const user = userEvent.setup()
     await openPrescription(user)
-    expect(screen.getByText('Goes to +919800000001')).toBeTruthy()
+    expect(screen.queryByText(/Goes to/)).toBeNull()
     await user.click(screen.getByRole('button', { name: /Save & share on WhatsApp/ }))
     expect(await screen.findByText('Add a medicine, some advice or a diagnosis.')).toBeTruthy()
     expect(posts(calls, '/api/prescriptions')).toHaveLength(0)
@@ -83,9 +83,39 @@ describe('Save & share on the appointment page', () => {
     expect(await screen.findByText(/WhatsApp is not available/)).toBeTruthy()
     expect(screen.getByText(/The prescription is saved/)).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: /Save & share on WhatsApp/ }))
+    // Saved prescriptions are read-only: sending again is "Share again", and nothing is saved a second time.
+    await user.click(screen.getByRole('button', { name: /Share again/ }))
     await screen.findByText(/The patient has the prescription on WhatsApp/)
     expect(posts(calls, '/api/prescriptions/rx1/whatsapp')).toHaveLength(2)
+    expect(posts(calls, '/api/prescriptions')).toHaveLength(1)
+  })
+
+  it('shows a saved prescription read-only, with Preview in a new tab, Share again and Edit', async () => {
+    const stored = { id: 'rx1', medicines: [{ name: 'Paracetamol', dose: '500 mg', frequency: 'Twice a day', duration: '3 days' }], advice: [] }
+    stubServer({ appointment: { ...APPT, prescription: stored } })
+    const user = userEvent.setup()
+    await openPrescription(user)
+
+    expect(await screen.findByText('Prescription saved')).toBeTruthy()
+    expect(screen.queryAllByLabelText('Medicine name')).toHaveLength(0)
+    const preview = screen.getByRole('link', { name: /Preview/ })
+    expect(preview.getAttribute('target')).toBe('_blank')
+    expect(preview.getAttribute('href')).toContain('/api/prescriptions/rx1/pdf?inline=1')
+    expect(screen.getByRole('button', { name: /Share again/ })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Edit prescription' }))
+    expect(screen.getAllByLabelText('Medicine name').length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryAllByLabelText('Medicine name')).toHaveLength(0)
+  })
+
+  it('offers Call and WhatsApp instead of showing the phone number', async () => {
+    stubServer()
+    render(<AppointmentView canPrescribe />)
+    const call = await screen.findByRole('link', { name: /Call/ })
+    expect(call.getAttribute('href')).toBe('tel:+919800000001')
+    expect(screen.getByRole('link', { name: /WhatsApp Asha/ }).getAttribute('href')).toBe('https://wa.me/919800000001')
+    expect(document.body.textContent).not.toContain('9800000001')
   })
 
   it('does not send when saving fails, and shows the reason', async () => {

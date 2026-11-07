@@ -2,9 +2,10 @@ import { getSession } from '@/lib/auth/session'
 import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
-import { dayBoundsInTz } from '@/lib/time'
+import { dayBoundsInTz, ymdInTz } from '@/lib/time'
 import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
-import { computeAge } from '@/lib/slots'
+import { ageSex } from '@/lib/gender'
+import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -74,7 +75,7 @@ export default async function DoctorDashboard() {
       const pDoc = await db.col('patients').doc(apt.patientId).get()
       if (pDoc.exists) {
         const pd = pDoc.data() as any
-        patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate() }
+        patient = { id: pDoc.id, name: pd.name, phone: pd.phone, dob: pd.dob?.toDate(), gender: pd.gender }
       }
     }
 
@@ -125,11 +126,12 @@ export default async function DoctorDashboard() {
   const cleanName = rawName.replace(/^Dr\.?\s*/i, '')
   const firstName = cleanName.split(' ')[0]
 
+  // Each card opens the list behind its number.
   const stats = [
-    { label: "Today's Appointments", value: todayAppts.length, icon: Calendar },
-    { label: 'Completed Today', value: completedToday, icon: CheckCircle2 },
-    { label: 'Total Patients', value: totalPatients, icon: Users },
-    { label: 'Upcoming (7 days)', value: upcomingAppts.length, icon: Clock },
+    { label: "Today's Appointments", value: todayAppts.length, icon: Calendar, href: '#todays-schedule' },
+    { label: 'Completed Today', value: completedToday, icon: CheckCircle2, href: '/doctor/calendar' },
+    { label: 'Total Patients', value: totalPatients, icon: Users, href: '/doctor/patients' },
+    { label: 'Upcoming (7 days)', value: upcomingAppts.length, icon: Clock, href: upcomingAppts.length > 0 ? '#upcoming' : '/doctor/calendar' },
   ]
 
   return (
@@ -178,8 +180,8 @@ export default async function DoctorDashboard() {
 
       {/* ── Stat Cards ───────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="card-data p-4">
+        {stats.map(({ label, value, icon: Icon, href }) => (
+          <Link key={label} href={href} className="card-data p-4 block transition-shadow hover:shadow-md" aria-label={`${label}: ${value}`}>
             {/* Icon — single tone-on-tone forest green palette */}
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
@@ -196,12 +198,12 @@ export default async function DoctorDashboard() {
             <p className="text-xs mt-1.5" style={{ color: 'var(--color-sage)' }}>
               {label}
             </p>
-          </div>
+          </Link>
         ))}
       </div>
 
       {/* ── Today's Schedule ─────────────────────────────── */}
-      <div className="card-data overflow-hidden">
+      <div id="todays-schedule" className="card-data overflow-hidden scroll-mt-4">
         <div
           className="flex justify-between items-center px-5 py-4"
           style={{ borderBottom: '1px solid var(--color-sage-border)' }}
@@ -229,16 +231,15 @@ export default async function DoctorDashboard() {
         ) : (
           <div>
             {todayAppts.map((appt: any, idx: number) => (
-              <Link
+              // The whole row opens the visit (the name link stretches over it); Call and WhatsApp sit above that link.
+              <div
                 key={appt.id}
-                // Straight to the job: the doctor writes the prescription, the front desk takes the payment
-                href={`/doctor/appointments/${appt.id}?tab=${can(session?.role, 'prescriptions:manage') ? 'prescription' : 'payment'}`}
-                className="flex items-center justify-between px-5 py-3.5 group transition-colors hover:bg-[var(--color-primary-bg)]"
+                className="relative flex items-center justify-between px-5 py-3.5 group transition-colors hover:bg-[var(--color-primary-bg)]"
                 style={{
                   borderBottom: idx < todayAppts.length - 1 ? '1px solid var(--color-sage-border)' : 'none',
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   {/* Avatar — forest green, white initial */}
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
@@ -246,16 +247,23 @@ export default async function DoctorDashboard() {
                   >
                     {appt.patient?.name?.charAt(0)?.toUpperCase() ?? '?'}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium text-sm" style={{ color: 'var(--color-charcoal)' }}>
-                      {appt.patient?.name ?? 'Unknown'}
+                      <Link
+                        // Straight to the job: the doctor writes the prescription, the front desk takes the payment
+                        href={`/doctor/appointments/${appt.id}?tab=${can(session?.role, 'prescriptions:manage') ? 'prescription' : 'payment'}`}
+                        className="after:absolute after:inset-0"
+                      >
+                        {appt.patient?.name ?? 'Unknown'}
+                      </Link>
+                      {ageSex(appt.patient?.dob, appt.patient?.gender, ymdInTz(today, tenant.timezone)) && (
+                        <span className="font-normal" style={{ color: 'var(--color-sage)' }}> {ageSex(appt.patient?.dob, appt.patient?.gender, ymdInTz(today, tenant.timezone))}</span>
+                      )}
                     </p>
-                    <p className="text-xs" style={{ color: 'var(--color-sage)' }}>
-                      {appt.patient?.dob ? computeAge(appt.patient.dob) : '?'} yrs · {appt.patient?.phone ?? ''}
-                    </p>
+                    <ContactButtons phone={appt.patient?.phone} name={appt.patient?.name} className="relative z-10 mt-1.5" />
                   </div>
                 </div>
-                <div className="text-right flex items-center gap-3">
+                <div className="text-right flex items-center gap-3 shrink-0 ml-3">
                   <div>
                     <p className="text-sm font-medium font-tabular" style={{ color: 'var(--color-charcoal-mid)' }}>
                       {formatDate(appt.startTime).split(',')[1]?.trim()}
@@ -275,7 +283,7 @@ export default async function DoctorDashboard() {
                     className="group-hover:!text-[var(--color-sage)]"
                   />
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
@@ -333,7 +341,7 @@ export default async function DoctorDashboard() {
 
       {/* ── Upcoming appointments ────────────────────────── */}
       {upcomingAppts.length > 0 && (
-        <div className="card-data overflow-hidden">
+        <div id="upcoming" className="card-data overflow-hidden scroll-mt-4">
           <div
             className="px-5 py-4"
             style={{ borderBottom: '1px solid var(--color-sage-border)' }}

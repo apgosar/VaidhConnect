@@ -7,8 +7,9 @@ import { can } from '@/lib/auth/access'
 import Link from 'next/link'
 import PatientPinActions from '@/components/doctor/PatientPinActions'
 import PatientActions from '@/components/doctor/PatientActions'
+import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { ymdInTz } from '@/lib/time'
-import { ArrowLeft, Phone, Calendar, FileText, CreditCard, ChevronRight, FilePlus2 } from 'lucide-react'
+import { ArrowLeft, Calendar, FileText, CreditCard, ChevronRight, FilePlus2 } from 'lucide-react'
 import { computeAge, formatDate } from '@/lib/slots'
 import type { Metadata } from 'next'
 
@@ -114,7 +115,8 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
                   {formatPatientId(patient.id)}
                 </span>
               </div>
-              <p className="text-sm font-tabular mt-0.5" style={{ color: 'var(--color-sage)' }}>{age} years · {patient.phone}</p>
+              <p className="text-sm font-tabular mt-0.5" style={{ color: 'var(--color-sage)' }}>{age} years</p>
+              <ContactButtons phone={patient.phone} name={patient.name} className="mt-2" />
               {patient.email && <p className="text-xs mt-0.5 break-all" style={{ color: 'var(--color-sage-light)' }}>{patient.email}</p>}
             </div>
           </div>

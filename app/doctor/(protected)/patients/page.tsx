@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Search, Users, ChevronRight, Phone, Calendar, ChevronLeft } from 'lucide-react'
+import { Search, Users, ChevronRight, Calendar, ChevronLeft } from 'lucide-react'
+import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { computeAge } from '@/lib/slots'
 import { LangText } from '@/components/ui/LangText'
 
@@ -110,10 +111,10 @@ export default function PatientsPage() {
       ) : (
         <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3">
           {patients.map(patient => (
-            <Link
+            // The whole card opens the patient (the name link stretches over it); Call and WhatsApp sit above that link.
+            <div
               key={patient.id}
-              href={`/doctor/patients/${patient.id}`}
-              className="card p-4 flex items-center justify-between gap-3 hover:shadow-md transition-shadow group"
+              className="card relative p-4 flex items-center justify-between gap-3 hover:shadow-md transition-shadow group"
             >
               <div className="flex items-center gap-4">
                 <div
@@ -124,7 +125,9 @@ export default function PatientsPage() {
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}><LangText>{patient.name}</LangText></p>
+                    <p className="font-semibold" style={{ color: 'var(--color-charcoal)' }}>
+                      <Link href={`/doctor/patients/${patient.id}`} className="after:absolute after:inset-0"><LangText>{patient.name}</LangText></Link>
+                    </p>
                     <span
                       className="text-xs font-bold px-2 py-0.5 rounded-full font-tabular tracking-wide whitespace-nowrap"
                       style={{ background: 'var(--color-primary-bg)', color: 'var(--color-forest)' }}
@@ -133,9 +136,6 @@ export default function PatientsPage() {
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                    <span className="text-xs flex items-center gap-1 whitespace-nowrap" style={{ color: 'var(--color-sage)' }}>
-                      <Phone size={11} /> {patient.phone}
-                    </span>
                     <span className="text-xs font-tabular whitespace-nowrap" style={{ color: 'var(--color-sage)' }}>
                       {computeAge(patient.dob)} yrs
                     </span>
@@ -143,10 +143,11 @@ export default function PatientsPage() {
                       <Calendar size={11} /> {patient._count.appointments} appt{patient._count.appointments !== 1 ? 's' : ''}
                     </span>
                   </div>
+                  <ContactButtons phone={patient.phone} name={patient.name} className="relative z-10 mt-2" />
                 </div>
               </div>
               <ChevronRight size={16} className="shrink-0" style={{ color: 'var(--color-sage-light)' }} />
-            </Link>
+            </div>
           ))}
 
           {/* Pagination Controls */}
