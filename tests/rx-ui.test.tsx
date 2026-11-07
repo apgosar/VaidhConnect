@@ -109,6 +109,29 @@ describe('Save & share on the appointment page', () => {
     expect(screen.queryAllByLabelText('Medicine name')).toHaveLength(0)
   })
 
+  it('hides the paper-prescription box once saved, but keeps photos already uploaded', async () => {
+    const stored = { id: 'rx1', medicines: [{ name: 'Paracetamol', dose: '500 mg', frequency: 'Twice a day', duration: '3 days' }], advice: [] }
+    const calls = stubServer({ appointment: { ...APPT, prescription: stored } })
+    const user = userEvent.setup()
+    await openPrescription(user)
+    await screen.findByText('Prescription saved')
+    expect(screen.queryByText('Wrote it on paper?')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Take photo/ })).toBeNull()
+    expect(screen.queryByText('Handwritten prescription photos')).toBeNull() // no photos, nothing shown
+
+    // with a photo already kept, it stays visible (without the upload buttons)
+    const base = fetch as unknown as (u: string, i?: RequestInit) => Promise<Response>
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => (url === '/api/appointments/a1/rx-scans'
+      ? Response.json({ scans: [{ id: 's1', url: 'https://files.test/s1.jpg', uploadedAt: '2026-11-05T05:00:00.000Z' }] })
+      : base(url, init))))
+    cleanup()
+    await openPrescription(user)
+    expect(await screen.findByText('Handwritten prescription photos')).toBeTruthy()
+    expect(screen.getByAltText('Handwritten prescription, page 1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Take photo/ })).toBeNull()
+    void calls
+  })
+
   it('offers Call and WhatsApp instead of showing the phone number', async () => {
     stubServer()
     render(<AppointmentView canPrescribe />)
