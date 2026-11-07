@@ -5,8 +5,11 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, FileText, CreditCard,
   CheckCircle2, Edit3, Save, Pill,
-  Download, Printer, Phone, Pencil
+  Download, Printer, Pencil, Eye, RefreshCw
 } from 'lucide-react'
+import { ContactButtons } from '@/components/doctor/ContactButtons'
+import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
+import { Alert } from '@/components/ui/Alert'
 import { formatDate, computeAge } from '@/lib/slots'
 import { genderLabel } from '@/lib/gender'
 import { format, parseISO } from 'date-fns'
@@ -80,6 +83,8 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
   const [editing, setEditing] = useState(false)
   const [rescheduling, setRescheduling] = useState(false)
   const [editingPatient, setEditingPatient] = useState(false)
+  // A saved prescription is shown read-only (preview, share again); Edit opens the form on purpose.
+  const [rxEditing, setRxEditing] = useState(false)
 
   // A link from a list can open straight on the prescription: /doctor/appointments/<id>?tab=prescription
   useEffect(() => {
@@ -171,10 +176,24 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
         else setShare({ state: 'failed', message: await readFailure(res, 'Could not send on WhatsApp.') })
       }
       await fetchAppt(true)
+      setRxEditing(false) // saved: back to the read-only view
     } catch {
       setRxProblem(networkFailureText())
     } finally {
       setRxBusy(null)
+    }
+  }
+
+  /** Send the saved prescription to the patient on WhatsApp again. */
+  const shareAgain = async () => {
+    if (!appt?.prescription) return
+    setShare({ state: 'sending' })
+    try {
+      const res = await fetch(`/api/prescriptions/${appt.prescription.id}/whatsapp`, { method: 'POST' })
+      if (res.ok) { const d = await res.json().catch(() => ({})); setShare({ state: 'sent', message: `Sent to ${d.to ?? appt.patient.phone}` }) }
+      else setShare({ state: 'failed', message: await readFailure(res, 'Could not send on WhatsApp.') })
+    } catch {
+      setShare({ state: 'failed', message: networkFailureText() })
     }
   }
 
@@ -231,7 +250,8 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
                 <Pencil size={16} aria-hidden="true" />
               </button>
             </h1>
-            <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {appt.patient.phone} · {formatDate(appt.startTime)}</p>
+            <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {formatDate(appt.startTime)}</p>
+            <ContactButtons phone={appt.patient.phone} name={appt.patient.name} className="mt-2" />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -293,11 +313,6 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
         <div><span className="text-slate-500">Chief Complaint:</span> <span className="font-medium">{appt.chiefComplaint ?? '—'}</span></div>
         {appt.patient.medicalHistory && (
           <div className="w-full"><span className="text-slate-500">Medical History:</span> <span className="text-slate-700">{appt.patient.medicalHistory}</span></div>
-        )}
-        {appt.patient.phone && (
-          <a href={`tel:${appt.patient.phone}`} className="flex items-center gap-1 text-blue-600 hover:underline">
-            <Phone size={14} /> {appt.patient.phone}
-          </a>
         )}
       </div>
 
@@ -361,44 +376,58 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
           {/* At the top, so a handwritten prescription is one tap away without scrolling past the whole form */}
           <HandwrittenRx appointmentId={appt.id} />
 
-          {/* Copies of what is already saved; they wrap onto more lines on a narrow screen instead of running off it */}
-          {appt.prescription && (
-            <div className="space-y-2 -mt-2">
+          {appt.prescription && !rxEditing ? (
+            // Saved: not editable by default. Preview it, send it again, or choose Edit on purpose.
+            <div className="space-y-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-green-700"><CheckCircle2 size={16} aria-hidden="true" /> Prescription saved</p>
+              {share.state === 'sent' && <Alert variant="success">{share.message}. The patient has the prescription on WhatsApp.</Alert>}
+              {share.state === 'failed' && <Alert variant="error">{share.message} The prescription is saved. You can try again.</Alert>}
               <div className="flex flex-wrap gap-2">
-                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf`} disabled={rxDirty} download>
-                  <Download size={14} aria-hidden="true" /> Download PDF
-                </DocLink>
-                <DocLink href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1${onLetterhead ? '&mode=preprinted' : ''}`} disabled={rxDirty}>
-                  <Printer size={14} aria-hidden="true" /> Print
-                </DocLink>
+                <a href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1${onLetterhead ? '&mode=preprinted' : ''}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                  <Eye size={16} aria-hidden="true" /> Preview
+                </a>
+                <button type="button" onClick={shareAgain} disabled={!phoneOk || share.state === 'sending'} className="btn disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
+                  <WhatsAppIcon size={16} /> {share.state === 'sending' ? 'Sending...' : 'Share again'}
+                </button>
+                <button type="button" onClick={() => { setShare({ state: 'idle' }); setRxEditing(true) }} className="btn btn-ghost" aria-label="Edit prescription">
+                  <Pencil size={14} aria-hidden="true" /> Edit
+                </button>
               </div>
               <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer select-none">
                 <input type="checkbox" className="mt-0.5" checked={onLetterhead} onChange={e => setOnLetterhead(e.target.checked)} />
                 <span>
                   Print on letterhead
-                  <span className="block text-xs text-slate-500">Tick when the paper already has your letterhead printed on it.</span>
+                  <span className="block text-xs text-slate-500">Tick when the paper already has your letterhead printed on it. It changes what Preview shows.</span>
                 </span>
               </label>
-              {rxDirty && <p className="text-xs text-amber-700">You have unsaved changes. Save the prescription to download or print the latest version.</p>}
+              {!phoneOk && <p className="text-xs text-slate-500">Add a valid mobile number (pencil next to the name) to share on WhatsApp.</p>}
             </div>
+          ) : (
+            <>
+              {appt.prescription && (
+                <div className="flex items-center justify-between gap-2 -mt-2">
+                  <p className="text-sm text-slate-600">Editing the saved prescription.</p>
+                  <button type="button" onClick={() => { setRxEditing(false); fetchAppt(true) }} className="btn btn-ghost btn-sm" disabled={rxBusy !== null}>Cancel</button>
+                </div>
+              )}
+
+              <PrescriptionFields
+                value={rx}
+                onChange={patch => setRx(prev => ({ ...prev, ...patch }))}
+                baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
+              />
+
+              <SaveShareBar
+                bleed
+                busy={rxBusy}
+                canShare={phoneOk}
+                problem={rxProblem}
+                share={share}
+                onSaveAndShare={() => submitRx(true)}
+                onSave={() => submitRx(false)}
+              />
+            </>
           )}
-
-          <PrescriptionFields
-            value={rx}
-            onChange={patch => setRx(prev => ({ ...prev, ...patch }))}
-            baseDate={new Date(appt.startTime).toISOString().slice(0, 10)}
-          />
-
-          <SaveShareBar
-            bleed
-            busy={rxBusy}
-            canShare={phoneOk}
-            sendTo={appt.patient.phone}
-            problem={rxProblem}
-            share={share}
-            onSaveAndShare={() => submitRx(true)}
-            onSave={() => submitRx(false)}
-          />
         </div>
       )}
 

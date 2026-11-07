@@ -5,6 +5,7 @@ import { format, addDays, subDays, parseISO, isSameDay, startOfDay, endOfDay } f
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
 import { ageSex } from '@/lib/gender'
+import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { formatDate, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
 import { LangText } from '@/components/ui/LangText'
 
@@ -251,16 +252,19 @@ export default function CalendarPage() {
                     )
                   })}
                   {dayAppts.map(appt => (
-                    <Link
+                    // The whole card opens the visit (the name link stretches over it); Call and WhatsApp sit above that link.
+                    <div
                       key={appt.id}
-                      href={`/doctor/appointments/${appt.id}`}
-                      className="block card-data p-3 hover:shadow-md transition-shadow"
+                      className="relative block card-data p-3 hover:shadow-md transition-shadow"
                       style={statusColor(appt.status)}
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-semibold text-sm"><LangText>{appt.patient.name}</LangText>{tagOf(appt) && <span className="font-normal opacity-70"> {tagOf(appt)}</span>}</p>
-                          <p className="text-xs opacity-70">{appt.patient.phone}</p>
+                          <p className="font-semibold text-sm">
+                            <Link href={`/doctor/appointments/${appt.id}`} className="after:absolute after:inset-0"><LangText>{appt.patient.name}</LangText></Link>
+                            {tagOf(appt) && <span className="font-normal opacity-70"> {tagOf(appt)}</span>}
+                          </p>
+                          <ContactButtons phone={appt.patient.phone} name={appt.patient.name} className="relative z-10 mt-1.5" />
                           {appt.chiefComplaint && <p className="text-xs opacity-70 mt-0.5">{appt.chiefComplaint}</p>}
                         </div>
                         <div className="text-right text-xs shrink-0 ml-2">
@@ -272,7 +276,7 @@ export default function CalendarPage() {
                           </div>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               </div>
