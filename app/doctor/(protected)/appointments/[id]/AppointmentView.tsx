@@ -387,6 +387,9 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
                 <a href={`/api/prescriptions/${appt.prescription.id}/pdf?inline=1${onLetterhead ? '&mode=preprinted' : ''}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
                   <Eye size={16} aria-hidden="true" /> Preview
                 </a>
+                <a href={`/api/prescriptions/${appt.prescription.id}/pdf${onLetterhead ? '?mode=preprinted' : ''}`} download className="btn btn-outline">
+                  <Download size={16} aria-hidden="true" /> Download
+                </a>
                 <button type="button" onClick={shareAgain} disabled={!phoneOk || share.state === 'sending'} className="btn disabled:opacity-60" style={{ backgroundColor: '#25D366', color: 'var(--color-on-whatsapp)' }}>
                   <WhatsAppIcon size={16} /> {share.state === 'sending' ? 'Sending...' : 'Share again'}
                 </button>
