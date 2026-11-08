@@ -12,11 +12,11 @@ export function ContactButtons({ phone, name, className = '' }: { phone?: string
   const who = name ? ` ${name}` : ''
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
-      <a href={`tel:+${digits}`} className="btn btn-outline btn-sm" aria-label={`Call${who}`}>
-        <Phone size={14} aria-hidden="true" /> Call
+      <a href={`tel:+${digits}`} className="btn btn-outline btn-sm !px-2.5" aria-label={`Call${who}`} title="Call">
+        <Phone size={16} aria-hidden="true" />
       </a>
-      <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm" aria-label={`WhatsApp${who}`}>
-        <WhatsAppIcon size={14} /> WhatsApp
+      <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm !px-2.5" aria-label={`WhatsApp${who}`} title="WhatsApp">
+        <WhatsAppIcon size={16} />
       </a>
     </div>
   )
