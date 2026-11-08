@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, FilePlus2, UserRound } from 'lucide-react'
+import { CheckCircle2, Download, Eye, FilePlus2, UserRound } from 'lucide-react'
 import { ageDobPayload } from '@/components/ui/AgeDobFields'
 import { PatientEntryFields, usePatientEntry, type KnownPatient } from '@/components/doctor/PatientEntry'
 import { emptyRx, rxHasContent, rxToPayload, type RxContent } from '@/lib/rxContent'
@@ -109,6 +109,7 @@ export default function QuickPrescriptionPage() {
                 <WhatsAppIcon size={16} /> {sending ? 'Sending...' : share.state === 'failed' ? 'Try again' : `Send on WhatsApp to ${saved.phone}`}
               </button>
             )}
+            <a href={`/api/prescriptions/${saved.prescriptionId}/pdf?inline=1`} target="_blank" rel="noopener noreferrer" className="btn btn-outline"><Eye size={16} aria-hidden="true" /> Preview</a>
             <a href={`/api/prescriptions/${saved.prescriptionId}/pdf`} download className="btn btn-outline"><Download size={16} aria-hidden="true" /> Download PDF</a>
             <Link href={`/doctor/appointments/${saved.appointmentId}`} className="btn btn-outline"><UserRound size={16} aria-hidden="true" /> Open visit</Link>
           </div>

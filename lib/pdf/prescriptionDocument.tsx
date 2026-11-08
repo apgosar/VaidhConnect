@@ -97,7 +97,7 @@ function MedicineRow({ med, index }: { med: Medicine; index: number }) {
 export function PrescriptionDocument({ prescription, patient, visit, doctor, layout = STANDARD_LAYOUT }: PrescriptionDocProps) {
   const accent = accentOf(doctor.primary, '#1e40af')
   const registration = printableRegistration(doctor.registrationNumber)
-  const adviceLines = [...(prescription.advice ?? []), ...(prescription.adviceOther?.trim() ? [prescription.adviceOther.trim()] : [])].filter(a => a.trim())
+  const adviceLines = [...(prescription.advice ?? []), ...(prescription.adviceOther ?? '').split(/\r?\n/)].filter(a => a.trim())
 
   // Our own header and footer are used only when nothing else says who the clinic is.
   const ownBranding = layout.mode === 'standard' && !layout.letterhead
@@ -217,12 +217,16 @@ export function PrescriptionDocument({ prescription, patient, visit, doctor, lay
         {adviceLines.length > 0 ? (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Advice</Text>
-            {adviceLines.map((line, i) => (
-              <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }}>
-                <Text style={{ width: 12, fontSize: 10 }}>{'•'}</Text>
-                <Txt style={{ flex: 1, fontSize: 10 }}>{line}</Txt>
-              </View>
-            ))}
+            {adviceLines.map((line, i) => {
+              // Advice the doctor typed as "1. ..." keeps its own number instead of getting a bullet as well.
+              const m = line.match(/^(\d+[.)])\s+([\s\S]*)$/)
+              return (
+                <View key={i} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                  <Text style={{ width: m ? 16 : 12, fontSize: 10 }}>{m ? m[1] : '•'}</Text>
+                  <Txt style={{ flex: 1, fontSize: 10 }}>{m ? m[2] : line}</Txt>
+                </View>
+              )
+            })}
           </View>
         ) : null}
 
