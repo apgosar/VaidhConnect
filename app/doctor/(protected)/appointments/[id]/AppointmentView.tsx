@@ -10,7 +10,7 @@ import {
 import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { WhatsAppIcon } from '@/components/ui/WhatsAppIcon'
 import { Alert } from '@/components/ui/Alert'
-import { formatDate, computeAge } from '@/lib/slots'
+import { formatDate, computeAge, durationLabel } from '@/lib/slots'
 import { genderLabel } from '@/lib/gender'
 import { format, parseISO } from 'date-fns'
 import { PrescriptionFields } from '@/components/doctor/PrescriptionFields'
@@ -250,7 +250,7 @@ export default function AppointmentView({ canPrescribe }: { canPrescribe: boolea
                 <Pencil size={16} aria-hidden="true" />
               </button>
             </h1>
-            <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {formatDate(appt.startTime)}</p>
+            <p className="text-sm text-slate-500">{age} yrs{genderLabel(appt.patient.gender) ? ` · ${genderLabel(appt.patient.gender)}` : ''} · {formatDate(appt.startTime)}{durationLabel(appt.startTime, appt.endTime) && ` · ${durationLabel(appt.startTime, appt.endTime)}`}</p>
             <ContactButtons phone={appt.patient.phone} name={appt.patient.name} className="mt-2" />
           </div>
         </div>

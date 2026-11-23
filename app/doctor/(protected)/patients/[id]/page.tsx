@@ -10,7 +10,7 @@ import PatientActions from '@/components/doctor/PatientActions'
 import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { ymdInTz } from '@/lib/time'
 import { ArrowLeft, Calendar, FileText, CreditCard, ChevronRight, FilePlus2 } from 'lucide-react'
-import { computeAge, formatDate } from '@/lib/slots'
+import { computeAge, formatDate, durationLabel } from '@/lib/slots'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -198,7 +198,7 @@ export default async function PatientHistoryPage({ params }: { params: Promise<{
                     />
                   </div>
                   <div>
-                    <p className="font-medium text-sm font-tabular" style={{ color: 'var(--color-charcoal)' }}>{formatDate(appt.startTime)}</p>
+                    <p className="font-medium text-sm font-tabular" style={{ color: 'var(--color-charcoal)' }}>{formatDate(appt.startTime)}{durationLabel(appt.startTime, appt.endTime) && ` · ${durationLabel(appt.startTime, appt.endTime)}`}</p>
                     {appt.chiefComplaint && <p className="text-xs mt-0.5" style={{ color: 'var(--color-sage)' }}>{appt.chiefComplaint}</p>}
                     <div className="flex gap-2 mt-1.5">
                       <span className={`status-${appt.status.toLowerCase()}`}>{appt.status}</span>

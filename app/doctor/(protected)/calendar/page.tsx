@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus } from 'lucide-react'
 import { ageSex } from '@/lib/gender'
 import { ContactButtons } from '@/components/doctor/ContactButtons'
-import { formatDate, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
+import { formatDate, formatBlockRangeForDay, isMultiDayBlock, durationLabel } from '@/lib/slots'
 import { LangText } from '@/components/ui/LangText'
 
 interface Appointment {
@@ -31,7 +31,6 @@ interface BlockedSlot {
 }
 
 /** How long the visit is booked for, in minutes. */
-const visitMinutes = (a: { startTime: string; endTime: string }) => Math.round((parseISO(a.endTime).getTime() - parseISO(a.startTime).getTime()) / 60_000)
 
 export default function CalendarPage() {
   const [startDate, setStartDate] = useState<Date>(() => startOfDay(new Date()))
@@ -269,7 +268,7 @@ export default function CalendarPage() {
                         </div>
                         <div className="text-right text-xs shrink-0 ml-2">
                           <p className="font-medium font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
-                          {visitMinutes(appt) > 0 && <p className="opacity-70 font-tabular">{visitMinutes(appt)} min</p>}
+                          {durationLabel(appt.startTime, appt.endTime) && <p className="opacity-70 font-tabular">{durationLabel(appt.startTime, appt.endTime)}</p>}
                           <div className="flex gap-1 justify-end mt-1">
                             {appt.prescription && <span className="badge badge-green" style={{ fontSize: 12 }}>Rx</span>}
                             {appt.payment && <span className="badge badge-blue" style={{ fontSize: 12 }}>Paid</span>}
@@ -360,7 +359,7 @@ export default function CalendarPage() {
                         style={statusColor(appt.status)}
                       >
                         <p className="font-semibold truncate"><LangText>{appt.patient.name}</LangText>{tagOf(appt) && <span className="font-normal opacity-70"> {tagOf(appt)}</span>}</p>
-                        <p className="opacity-70 font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}</p>
+                        <p className="opacity-70 font-tabular">{format(parseISO(appt.startTime), 'hh:mm a')}{durationLabel(appt.startTime, appt.endTime) && ` · ${durationLabel(appt.startTime, appt.endTime)}`}</p>
                       </Link>
                     ))}
                   </div>

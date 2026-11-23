@@ -3,7 +3,7 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { tenantDb } from '@/lib/db/tenant'
 import { notFound } from 'next/navigation'
 import { dayBoundsInTz, ymdInTz } from '@/lib/time'
-import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock } from '@/lib/slots'
+import { formatDate, formatDateOnly, formatBlockRangeForDay, isMultiDayBlock, durationLabel } from '@/lib/slots'
 import { ageSex } from '@/lib/gender'
 import { ContactButtons } from '@/components/doctor/ContactButtons'
 import { startOfDay, endOfDay, addDays } from 'date-fns'
@@ -268,6 +268,9 @@ export default async function DoctorDashboard() {
                     <p className="text-sm font-medium font-tabular" style={{ color: 'var(--color-charcoal-mid)' }}>
                       {formatDate(appt.startTime).split(',')[1]?.trim()}
                     </p>
+                    {durationLabel(appt.startTime, appt.endTime) && (
+                      <p className="text-xs font-tabular text-right" style={{ color: 'var(--color-sage)' }}>{durationLabel(appt.startTime, appt.endTime)}</p>
+                    )}
                     <div className="flex gap-1 justify-end mt-1">
                       {appt.prescription && (
                         <span className="badge badge-green" style={{ fontSize: '10px' }}>Rx</span>
@@ -368,7 +371,7 @@ export default async function DoctorDashboard() {
                     {appt.patient?.name ?? 'Unknown'}
                   </p>
                   <p className="text-xs font-tabular" style={{ color: 'var(--color-sage)' }}>
-                    {formatDate(appt.startTime)}
+                    {formatDate(appt.startTime)}{durationLabel(appt.startTime, appt.endTime) && ` · ${durationLabel(appt.startTime, appt.endTime)}`}
                   </p>
                 </div>
                 <ChevronRight size={15} style={{ color: 'var(--color-sage-light)' }} />

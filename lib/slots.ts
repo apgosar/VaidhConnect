@@ -100,6 +100,17 @@ export function formatDate(date: Date | string): string {
   return format(d, 'dd MMM yyyy, hh:mm a')
 }
 
+/** How long a visit is, as "30 min", "1 hr" or "1 hr 15 min". Empty when the times are missing or make no sense. */
+export function durationLabel(start: Date | string | null | undefined, end: Date | string | null | undefined): string {
+  if (!start || !end) return ''
+  const s = typeof start === 'string' ? parseISO(start) : start
+  const e = typeof end === 'string' ? parseISO(end) : end
+  const mins = Math.round((e.getTime() - s.getTime()) / 60_000)
+  if (!Number.isFinite(mins) || mins <= 0) return ''
+  const h = Math.floor(mins / 60), m = mins % 60
+  return h === 0 ? `${m} min` : m === 0 ? `${h} hr` : `${h} hr ${m} min`
+}
+
 export function formatDateOnly(date: Date | string): string {
   const d = typeof date === 'string' ? parseISO(date) : date
   return format(d, 'dd MMM yyyy')
