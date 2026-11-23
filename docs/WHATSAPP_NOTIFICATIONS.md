@@ -1,20 +1,39 @@
 # WhatsApp notifications
 
-One WhatsApp Business number sends every message for **all clinics**, so each
-template carries the clinic's name. Templates are created once in Meta Business
-Manager (language **English**, body only, no header/footer/buttons) and used by
-every clinic. The code that sends them is `lib/whatsapp.ts`; the triggers are in
-`lib/modules/notifications.ts`, `reminders.ts`, `dailySummary.ts` and `patientAccess.ts`.
+One WhatsApp Business number (through **Gupshup**) sends every message for **all
+clinics**, so each template carries the clinic's name. Templates are created once
+in the Gupshup dashboard (language **English**) and used by every clinic. The code
+that sends them is `lib/whatsapp.ts`; the triggers are in
+`lib/modules/notifications.ts`, `reminders.ts`, `dailySummary.ts`, `followUp.ts` and `patientAccess.ts`.
 
-**Credentials** (`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`) come from the
-environment: a permanent system-user token, never the 24-hour test token.
+**Settings** (environment): `GUPSHUP_API_KEY` (secret), `GUPSHUP_APP_NAME`, `GUPSHUP_SOURCE`
+(sender number, digits only) and `GUPSHUP_WEBHOOK_SECRET` (see below).
 
-## Rules for writing templates (Meta rejects otherwise)
+**Template IDs.** Gupshup addresses a template by ID, not name. The table is
+`lib/whatsappTemplates.ts`; when you add or recreate a template, put its Gupshup ID there. Check them with
+`npx tsx --env-file=.env.staging scripts/check-gupshup-templates.ts --app-id <app id>`.
+Variables are sent as one ordered list. The PIN template sends the code twice (body and copy-code button);
+the prescription template's PDF goes as a separate document message.
+
+**Delivery status.** Gupshup calls `POST /api/webhooks/gupshup/<GUPSHUP_WEBHOOK_SECRET>` as a message is
+sent, delivered, read or fails. Set that full URL (any clinic's host, e.g. the Cloud Run URL) under
+Webhooks in the Gupshup dashboard. The WhatsApp Logs page then shows delivered / read, and a failed
+delivery turns the entry to failed with the reason. Gupshup does not sign webhooks, so the secret in the URL is the protection.
+
+**Time of each step.** The logs show when each step (sent, delivered, read, failed) happened, to the second.
+
+**Replies from patients.** Nobody reads the shared number, so a message to it gets one automatic answer (once per 24 hours per number)
+with the clinic's phone numbers (`lib/whatsappInbox.ts`). The webhook must have **Message** ticked for this. Each outgoing message records
+which clinic wrote to that number (`whatsapp_recipient_index`); a number that is a patient at two clinics gets both clinics' numbers.
+
+**Wallet.** Gupshup is prepaid; with an empty wallet sends fail (shown as "sending balance is empty").
+
+## Rules for writing templates (WhatsApp rejects otherwise)
 - A variable can't be the first or last thing in the body: end with fixed text, even just a full stop after a sentence.
 - Variables are numbered `{{1}}`, `{{2}}`… in order of appearance, and the code sends them in exactly that order. Changing the wording or the order means changing `lib/whatsapp.ts` too.
 - No two variables side by side without text between them.
 - Variable values can't contain newlines, tabs or 4+ spaces. The sender flattens multi-line values (a schedule list) into one line separated by ` | `.
-- Meta needs example values for every variable when you submit a template.
+- Gupshup needs example values for every variable when you submit a template.
 
 ## Messages
 
