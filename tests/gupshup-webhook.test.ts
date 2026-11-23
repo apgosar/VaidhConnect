@@ -43,8 +43,8 @@ describe('Gupshup delivery webhook', () => {
     await hit('sekret', ev('read', { payload: { ts: 1_700_000_100 } }))
     await hit('sekret', ev('delivered', { payload: { ts: 1_700_000_050 } }))
     const t = (await log()).deliveryTimes
-    expect(t.read.getTime()).toBe(1_700_000_100_000)
-    expect(t.delivered.getTime()).toBe(1_700_000_050_000)
+    expect((t.read.toDate?.() ?? t.read).getTime()).toBe(1_700_000_100_000)
+    expect((t.delivered.toDate?.() ?? t.delivered).getTime()).toBe(1_700_000_050_000)
     expect((await log()).deliveryStatus).toBe('read')
   })
 
