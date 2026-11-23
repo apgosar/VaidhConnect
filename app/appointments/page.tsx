@@ -18,6 +18,7 @@ import { LoadingBlock } from '@/components/ui/Spinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { RescheduleDialog } from '@/components/booking/RescheduleDialog'
 import { LangText } from '@/components/ui/LangText'
+import { durationLabel } from '@/lib/slots'
 
 interface Appointment {
   id: string
@@ -169,7 +170,7 @@ function MyAppointments() {
                 <div key={appt.id} className="card p-5 space-y-3 animate-fade-in">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-semibold text-slate-800">{formatDateTimeInTz(new Date(appt.startTime), timezone)}</p>
+                      <p className="font-semibold text-slate-800">{formatDateTimeInTz(new Date(appt.startTime), timezone)}{durationLabel(appt.startTime, appt.endTime) && <span className="font-normal text-slate-500"> · {durationLabel(appt.startTime, appt.endTime)}</span>}</p>
                       {appt.patientName && <p className="text-sm text-slate-500 mt-0.5"><LangText>{appt.patientName}</LangText></p>}
                       {appt.chiefComplaint && <p className="text-sm text-slate-500 mt-0.5">{appt.chiefComplaint}</p>}
                     </div>
