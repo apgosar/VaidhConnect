@@ -82,6 +82,8 @@ async function logWhatsAppMessage(entry: {
       await adminDb.collection('whatsapp_message_index').doc(entry.messageId).set({
         clinicId: tenant.clinicId, storage: tenant.storage, logId: ref.id, createdAt: new Date(),
       })
+      const { rememberRecipient } = await import('@/lib/whatsappInbox')
+      await rememberRecipient(entry.to, tenant.clinicId, tenant.storage)
     }
   } catch (err) {
     // Never let logging failures affect the main flow
@@ -467,4 +469,34 @@ export async function sendRescheduled(to: string, params: {
       ],
     }],
   }, { messageType: 'Rescheduled', recipientName: params.patientName })
+}
+
+/**
+ * A free-form text, allowed by WhatsApp only as an answer within 24 hours of the person writing to us
+ * (no template needed). Used for the automatic reply; not logged against any clinic.
+ */
+export async function sendSessionText(to: string, text: string): Promise<SendResult> {
+  const apiKey = process.env.GUPSHUP_API_KEY
+  const appName = process.env.GUPSHUP_APP_NAME
+  const source = (process.env.GUPSHUP_SOURCE ?? '').replace(/\D/g, '')
+  if (!apiKey || !appName || !source) return { ok: false, error: 'WhatsApp is not set up for this service yet' }
+  try {
+    const response = await fetch('https://api.gupshup.io/wa/api/v1/msg', {
+      method: 'POST',
+      headers: { apikey: apiKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        channel: 'whatsapp', source, destination: to.replace(/\D/g, ''), 'src.name': appName,
+        message: JSON.stringify({ type: 'text', text }),
+      }).toString(),
+    })
+    const data: any = await response.json().catch(() => ({}))
+    if (!response.ok || String(data?.status).toLowerCase() === 'error') {
+      console.error('[WhatsApp] Auto-reply failed:', JSON.stringify(data))
+      return { ok: false, error: gupshupErrorMessage(data?.code, 'WhatsApp did not accept the message') }
+    }
+    return { ok: true }
+  } catch (error) {
+    console.error('[WhatsApp] Auto-reply network error:', error)
+    return { ok: false, error: 'Could not reach WhatsApp. Please try again.' }
+  }
 }

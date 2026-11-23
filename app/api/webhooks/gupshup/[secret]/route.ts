@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { adminDb } from '@/lib/firebase/server'
 import { tenantDb } from '@/lib/db/tenant'
 import { gupshupErrorMessage } from '@/lib/whatsappTemplates'
+import { handleInboundMessage } from '@/lib/whatsappInbox'
 
 // Gupshup delivery updates (message-event). Gupshup does not sign these, so the URL itself carries a
 // secret (GUPSHUP_WEBHOOK_SECRET). It must answer 2xx within 10 seconds, so unknown events are simply accepted.
@@ -20,6 +21,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ sec
 
   try {
     const body = await request.json().catch(() => null)
+    if (body?.type === 'message') {
+      // A patient wrote to the shared number: answer once with the clinic's contact numbers.
+      const from = body.payload?.source ?? body.payload?.sender?.phone
+      if (typeof from === 'string') await handleInboundMessage(from)
+      return new Response('ok')
+    }
     if (body?.type !== 'message-event') return new Response('ok')
     const event = body.payload ?? {}
     const type = String(event.type ?? '')
@@ -39,17 +46,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ sec
     const log = await ref.get()
     if (!log.exists) return new Response('ok')
 
+    // When the event happened: Gupshup's own time (seconds) if given, else the webhook's, else now.
+    const rawTs = Number(event.payload?.ts ?? 0) * 1000 || Number(body.timestamp ?? 0) || Date.now()
+    const at = new Date(rawTs)
+    const times = { ...((log.data()?.deliveryTimes as Record<string, Date> | undefined) ?? {}) }
+    if (!times[type]) times[type] = at
+
     if (type === 'failed') {
       const inner = event.payload ?? {}
       await ref.update({
         status: 'failed',
         deliveryStatus: 'failed',
+        deliveryTimes: times,
         errorDetail: gupshupErrorMessage(inner.code, String(inner.reason ?? 'WhatsApp could not deliver the message')),
       })
     } else {
       const current = String(log.data()?.deliveryStatus ?? '')
       // Updates can arrive out of order; never step backwards (read -> delivered).
-      if ((RANK[type] ?? 0) > (RANK[current] ?? 0)) await ref.update({ deliveryStatus: type })
+      await ref.update((RANK[type] ?? 0) > (RANK[current] ?? 0) ? { deliveryStatus: type, deliveryTimes: times } : { deliveryTimes: times })
     }
   } catch (err) {
     console.error('[gupshup-webhook]', err)

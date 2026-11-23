@@ -15,7 +15,8 @@ interface WhatsAppLog {
   params: string[]
   messageBody?: string
   status: 'sent' | 'failed'
-  deliveryStatus?: 'sent' | 'delivered' | 'read' | null
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed' | null
+  deliveryTimes?: Partial<Record<'sent' | 'delivered' | 'read' | 'failed', string | null>>
   errorDetail: string | null
   sentAt: string | null
 }
@@ -101,6 +102,16 @@ function LogCard({ log }: { log: WhatsAppLog }) {
               {log.to}
             </span>
           </div>
+
+          {/* When each delivery step happened */}
+          {log.deliveryTimes && (['sent', 'delivered', 'read', 'failed'] as const).some(k => log.deliveryTimes?.[k]) && (
+            <p className="text-xs mt-1.5 font-tabular" style={{ color: 'var(--color-sage)' }}>
+              {(['sent', 'delivered', 'read', 'failed'] as const)
+                .filter(k => log.deliveryTimes?.[k])
+                .map(k => `${k[0].toUpperCase()}${k.slice(1)} ${format(parseISO(log.deliveryTimes![k]!), 'dd MMM, hh:mm:ss a')}`)
+                .join('  ·  ')}
+            </p>
+          )}
 
           {/* Error detail */}
           {!isSent && log.errorDetail && (

@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
         messageBody,
         status: data.status,
         deliveryStatus: data.deliveryStatus ?? null,
+        deliveryTimes: Object.fromEntries(Object.entries((data.deliveryTimes ?? {}) as Record<string, any>).map(([k, v]) => [k, v?.toDate?.()?.toISOString() ?? null])),
         errorDetail: data.errorDetail ?? null,
         sentAt: data.sentAt?.toDate?.()?.toISOString() ?? null,
       }
