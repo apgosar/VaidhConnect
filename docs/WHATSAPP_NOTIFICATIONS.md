@@ -20,6 +20,12 @@ sent, delivered, read or fails. Set that full URL (any clinic's host, e.g. the C
 Webhooks in the Gupshup dashboard. The WhatsApp Logs page then shows delivered / read, and a failed
 delivery turns the entry to failed with the reason. Gupshup does not sign webhooks, so the secret in the URL is the protection.
 
+**Time of each step.** The logs show when each step (sent, delivered, read, failed) happened, to the second.
+
+**Replies from patients.** Nobody reads the shared number, so a message to it gets one automatic answer (once per 24 hours per number)
+with the clinic's phone numbers (`lib/whatsappInbox.ts`). The webhook must have **Message** ticked for this. Each outgoing message records
+which clinic wrote to that number (`whatsapp_recipient_index`); a number that is a patient at two clinics gets both clinics' numbers.
+
 **Wallet.** Gupshup is prepaid; with an empty wallet sends fail (shown as "sending balance is empty").
 
 ## Rules for writing templates (WhatsApp rejects otherwise)

@@ -6,6 +6,7 @@ const h = vi.hoisted(() => {
   return { db: null as any, index: {} as Record<string, any> }
 })
 vi.mock('@/lib/db/tenant', () => ({ tenantDb: () => h.db }))
+vi.mock('@/lib/whatsappInbox', () => ({ handleInboundMessage: vi.fn(async () => true) }))
 vi.mock('@/lib/firebase/server', () => ({
   adminDb: { collection: () => ({ doc: (id: string) => ({ get: async () => ({ exists: !!h.index[id], data: () => h.index[id] }) }) }) },
 }))
@@ -36,6 +37,21 @@ describe('Gupshup delivery webhook', () => {
     expect((await log()).deliveryStatus).toBe('read')
     await hit('sekret', ev('delivered'))
     expect((await log()).deliveryStatus).toBe('read')
+  })
+
+  it('records the time of each step, even one that arrives late', async () => {
+    await hit('sekret', ev('read', { payload: { ts: 1_700_000_100 } }))
+    await hit('sekret', ev('delivered', { payload: { ts: 1_700_000_050 } }))
+    const t = (await log()).deliveryTimes
+    expect(t.read.getTime()).toBe(1_700_000_100_000)
+    expect(t.delivered.getTime()).toBe(1_700_000_050_000)
+    expect((await log()).deliveryStatus).toBe('read')
+  })
+
+  it('hands patient messages to the auto-reply', async () => {
+    const { handleInboundMessage } = await import('@/lib/whatsappInbox')
+    await hit('sekret', { type: 'message', payload: { source: '919800000001', type: 'text' } })
+    expect(handleInboundMessage).toHaveBeenCalledWith('919800000001')
   })
 
   it('turns a failure into a failed log with a readable reason', async () => {
