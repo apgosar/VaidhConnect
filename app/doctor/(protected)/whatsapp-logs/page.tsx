@@ -15,6 +15,7 @@ interface WhatsAppLog {
   params: string[]
   messageBody?: string
   status: 'sent' | 'failed'
+  deliveryStatus?: 'sent' | 'delivered' | 'read' | null
   errorDetail: string | null
   sentAt: string | null
 }
@@ -84,7 +85,7 @@ function LogCard({ log }: { log: WhatsAppLog }) {
                 color: isSent ? 'var(--color-pine)' : '#B54A3C',
               }}
             >
-              {log.status}
+              {log.status === 'sent' && log.deliveryStatus && log.deliveryStatus !== 'sent' ? log.deliveryStatus : log.status}
             </span>
           </div>
 

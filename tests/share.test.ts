@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FakeFirestore, fakeTenantDb } from './helpers/fakeFirestore'
 
 const h = vi.hoisted(() => {
-  process.env.WHATSAPP_ACCESS_TOKEN = 'test-token'
-  process.env.WHATSAPP_PHONE_NUMBER_ID = '123456'
+  process.env.GUPSHUP_API_KEY = 'test-key'
+  process.env.GUPSHUP_APP_NAME = 'TestApp'
+  process.env.GUPSHUP_SOURCE = '17111096090'
   return {
     db: null as any,
     session: null as any,
@@ -27,7 +28,7 @@ vi.mock('@/lib/modules/documents', () => ({ renderPrescriptionPdf: async () => h
 
 import { POST } from '@/app/api/prescriptions/[id]/whatsapp/route'
 import { audit } from '@/lib/audit'
-import { sendPrescription } from '@/lib/whatsapp'
+import { sendPrescription, sendPinResetCode } from '@/lib/whatsapp'
 
 const call = (id = 'rx1') => POST(new Request('http://x/api/prescriptions/rx1/whatsapp', { method: 'POST' }), { params: Promise.resolve({ id }) })
 const goodPdf = () => ({
@@ -43,22 +44,36 @@ describe('sendPrescription (WhatsApp payload)', () => {
     sent = []
   })
   const stubFetch = (status: number, body: unknown) =>
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: any) => { sent.push(JSON.parse(init.body)); return new Response(JSON.stringify(body), { status }) }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: any) => { const f = Object.fromEntries(new URLSearchParams(init.body)); sent.push({ url, headers: init.headers, form: f, template: JSON.parse(f.template), message: f.message ? JSON.parse(f.message) : undefined }); return new Response(JSON.stringify(body), { status }) }))
 
-  it('sends the PDF as a document header and the four details as the body, in order', async () => {
-    stubFetch(200, { messages: [{ id: 'wamid.1' }] })
+  it('sends the template id, the four details in order, and the PDF as a document message', async () => {
+    stubFetch(202, { status: 'submitted', messageId: 'gs-1' })
     const r = await sendPrescription('+919800000001', details)
     expect(r).toEqual({ ok: true })
     const msg = sent[0]
-    expect(msg.to).toBe('919800000001')
-    expect(msg.template.name).toBe('prescription_share')
-    expect(msg.template.language).toEqual({ code: 'en' })
-    expect(msg.template.components[0]).toEqual({ type: 'header', parameters: [{ type: 'document', document: { link: details.pdfUrl, filename: 'Prescription.pdf' } }] })
-    expect(msg.template.components[1].parameters.map((p: any) => p.text)).toEqual(['Asha Rao', 'Shah Clinic', '02 Nov 2026', '+919900000000'])
+    expect(msg.url).toBe('https://api.gupshup.io/wa/api/v1/template/msg')
+    expect(msg.headers.apikey).toBe('test-key')
+    expect(msg.form).toMatchObject({ channel: 'whatsapp', source: '17111096090', destination: '919800000001', 'src.name': 'TestApp' })
+    expect(msg.template).toEqual({ id: 'c3add336-7d22-4b8d-b813-7e29c682cfdf', params: ['Asha Rao', 'Shah Clinic', '02 Nov 2026', '+919900000000'] })
+    expect(msg.message).toEqual({ type: 'document', document: { link: details.pdfUrl, filename: 'Prescription.pdf' } })
+  })
+
+  it('sends the PIN code twice, for the body and the copy-code button', async () => {
+    stubFetch(202, { status: 'submitted', messageId: 'gs-2' })
+    expect(await sendPinResetCode('+919800000001', { code: '123456' })).toBe(true)
+    expect(sent[0].template).toEqual({ id: '8935045b-3841-4e2f-b0a0-b83280e01716', params: ['123456', '123456'] })
+    expect(sent[0].message).toBeUndefined()
+  })
+
+  it('keeps the message id in the log so delivery updates can find it', async () => {
+    stubFetch(202, { status: 'submitted', messageId: 'gs-3' })
+    await sendPrescription('+919800000001', details)
+    const logs = (await h.db.col('whatsapp_logs').get()).docs.map((d: any) => d.data())
+    expect(logs[0].messageId).toBe('gs-3')
   })
 
   it('logs the message with only its text parameters and a readable preview, never the signed link', async () => {
-    stubFetch(200, { messages: [{ id: 'wamid.1' }] })
+    stubFetch(202, { status: 'submitted', messageId: 'gs-1' })
     await sendPrescription('+919800000001', details)
     const logs = (await h.db.col('whatsapp_logs').get()).docs.map((d: any) => d.data())
     expect(logs).toHaveLength(1)
@@ -69,17 +84,17 @@ describe('sendPrescription (WhatsApp payload)', () => {
   })
 
   it('flattens newlines in the text variables but leaves the document link alone', async () => {
-    stubFetch(200, { messages: [{ id: 'wamid.1' }] })
+    stubFetch(202, { status: 'submitted', messageId: 'gs-1' })
     await sendPrescription('+919800000001', { ...details, patientName: 'Asha\nRao', pdfUrl: 'https://storage.googleapis.com/b/a%0Ab.pdf' })
-    expect(sent[0].template.components[1].parameters[0].text).toBe('Asha | Rao')
-    expect(sent[0].template.components[0].parameters[0].document.link).toBe('https://storage.googleapis.com/b/a%0Ab.pdf')
+    expect(sent[0].template.params[0]).toBe('Asha | Rao')
+    expect(sent[0].message.document.link).toBe('https://storage.googleapis.com/b/a%0Ab.pdf')
   })
 
-  it("reports Meta's reason when it refuses, and logs the failure", async () => {
-    stubFetch(400, { error: { message: '(#132001) Template name does not exist in the translation', code: 132001 } })
+  it("reports Gupshup's reason when it refuses, and logs the failure", async () => {
+    stubFetch(400, { status: 'error', code: 1003, message: 'wallet' })
     const r = await sendPrescription('+919800000001', details)
     expect(r.ok).toBe(false)
-    expect(r.error).toContain('Template name does not exist')
+    expect(r.error).toContain('balance is empty')
     const logs = (await h.db.col('whatsapp_logs').get()).docs.map((d: any) => d.data())
     expect(logs[0].status).toBe('failed')
   })
@@ -97,7 +112,7 @@ describe('POST /api/prescriptions/[id]/whatsapp', () => {
     h.pdf = goodPdf()
     h.uploads.length = 0
     vi.mocked(audit).mockClear()
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ messages: [{ id: 'wamid.1' }] }), { status: 200 })))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'submitted', messageId: 'gs-1' }), { status: 202 })))
   })
 
   it('needs a login and the prescriptions permission', async () => {
@@ -115,8 +130,8 @@ describe('POST /api/prescriptions/[id]/whatsapp', () => {
     expect(body.ok).toBe(true)
     expect(body.to).toBe('+91********01')
     expect(h.uploads[0]).toMatch(/^shares\/c1\/rx1\/\d+\.pdf$/)
-    const sentBody = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as any).body)
-    expect(sentBody.template.components[0].parameters[0].document.link).toContain('exp=60')
+    const sentBody = Object.fromEntries(new URLSearchParams((vi.mocked(fetch).mock.calls[0][1] as any).body))
+    expect(JSON.parse(sentBody.message).document.link).toContain('exp=60')
     expect(audit).toHaveBeenCalledWith(tenant, h.session, 'prescription.share', 'prescriptions/rx1')
   })
 
@@ -138,11 +153,11 @@ describe('POST /api/prescriptions/[id]/whatsapp', () => {
     expect(h.uploads).toHaveLength(0)
   })
 
-  it("passes on WhatsApp's reason when sending fails", async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: '(#131030) Recipient phone number not in allowed list' } }), { status: 400 })))
+  it("passes on Gupshup's reason when sending fails", async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'error', code: 1002, message: 'x' }), { status: 400 })))
     const res = await call()
     expect(res.status).toBe(502)
-    expect((await res.json()).error).toContain('not in allowed list')
+    expect((await res.json()).error).toContain('not on WhatsApp')
     expect(audit).toHaveBeenCalledWith(tenant, h.session, 'prescription.share_failed', 'prescriptions/rx1')
   })
 

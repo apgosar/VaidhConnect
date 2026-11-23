@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         params,
         messageBody,
         status: data.status,
+        deliveryStatus: data.deliveryStatus ?? null,
         errorDetail: data.errorDetail ?? null,
         sentAt: data.sentAt?.toDate?.()?.toISOString() ?? null,
       }

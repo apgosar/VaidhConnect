@@ -21,7 +21,7 @@
 | `TENANT_LEGACY_FALLBACK` | `off` once all hosts are mapped (see ROLLOUT.md) |
 | `PATIENT_PIN_SECRET` | Random string, 32+ chars. Peppers PIN hashes and signs patient sessions. **Required** — without it PIN features return 503. Changing it invalidates every PIN. |
 | `PLATFORM_ADMIN_HOSTS` | Comma-separated hosts that serve `/admin`. Unset = console disabled |
-| `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | The one shared sender for all clinics |
+| `GUPSHUP_API_KEY`, `GUPSHUP_APP_NAME`, `GUPSHUP_SOURCE`, `GUPSHUP_WEBHOOK_SECRET` | The one shared WhatsApp sender (Gupshup) for all clinics, and the secret in the delivery-webhook URL |
 | `SMTP_*` | Optional email (confirmations, team invites) |
 
 ## Day-to-day

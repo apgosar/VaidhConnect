@@ -1,8 +1,5 @@
-// WhatsApp Cloud API Integration
-
-const API_VERSION = 'v19.0'
-const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
+// WhatsApp messaging through Gupshup (template messages only).
+import { GUPSHUP_TEMPLATE_IDS, gupshupErrorMessage } from './whatsappTemplates'
 
 interface TemplateParams {
   name: string;
@@ -66,6 +63,8 @@ async function logWhatsAppMessage(entry: {
   messageBody: string
   status: 'sent' | 'failed'
   errorDetail?: string
+  /** Gupshup's id for the message, used to attach delivery updates later. */
+  messageId?: string
 }) {
   try {
     // Lazy-import to avoid bundling server-only firebase-admin in edge contexts
@@ -73,10 +72,17 @@ async function logWhatsAppMessage(entry: {
     const { tenantDb } = await import('@/lib/db/tenant')
     const tenant = await getTenant()
     if (!tenant) throw new Error('no tenant in request scope')
-    await tenantDb(tenant).col('whatsapp_logs').add({
+    const ref = await tenantDb(tenant).col('whatsapp_logs').add({
       ...entry,
       sentAt: new Date(),
     })
+    // Delivery updates arrive from Gupshup with only a message id, so remember which clinic's log it belongs to.
+    if (entry.messageId) {
+      const { adminDb } = await import('@/lib/firebase/server')
+      await adminDb.collection('whatsapp_message_index').doc(entry.messageId).set({
+        clinicId: tenant.clinicId, storage: tenant.storage, logId: ref.id, createdAt: new Date(),
+      })
+    }
   } catch (err) {
     // Never let logging failures affect the main flow
     console.error('[WhatsApp][Log] Failed to write log:', err)
@@ -146,8 +152,11 @@ export async function sendWhatsAppTemplateDetailed(
     }
   }
 
-  if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-    console.warn('[WhatsApp] Meta Cloud API credentials not configured, skipping.')
+  const apiKey = process.env.GUPSHUP_API_KEY
+  const appName = process.env.GUPSHUP_APP_NAME
+  const source = (process.env.GUPSHUP_SOURCE ?? '').replace(/\D/g, '')
+  if (!apiKey || !appName || !source) {
+    console.warn('[WhatsApp] Gupshup credentials not configured, skipping.')
     await logWhatsAppMessage({
       to,
       templateName,
@@ -161,27 +170,45 @@ export async function sendWhatsAppTemplateDetailed(
     return { ok: false, error: 'WhatsApp is not set up for this service yet' }
   }
 
+  const templateId = GUPSHUP_TEMPLATE_IDS[templateName]
+  if (!templateId) {
+    await logWhatsAppMessage({
+      to, templateName, messageType, recipientName, params, messageBody,
+      status: 'failed', errorDetail: `No Gupshup template ID for ${templateName}`,
+    })
+    return { ok: false, error: 'This WhatsApp message is not set up yet' }
+  }
+
   // Normalize phone number to E.164 format without '+' for WhatsApp API
-  const normalized = to.replace('+', '')
+  const normalized = to.replace(/\D/g, '')
+
+  // Gupshup takes the variables as one ordered list (body variables, then the PIN template's button code),
+  // and a document header as a separate `message` field.
+  const form = new URLSearchParams({
+    channel: 'whatsapp',
+    source,
+    destination: normalized,
+    'src.name': appName,
+    template: JSON.stringify({ id: templateId, params }),
+  })
+  const doc = sanitizedTemplate.components.flatMap(c => c.parameters).find(p => p.type === 'document')
+  if (doc && doc.type === 'document') {
+    form.set('message', JSON.stringify({ type: 'document', document: { link: doc.document.link, filename: doc.document.filename } }))
+  }
 
   try {
-    const response = await fetch(`https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`, {
+    const response = await fetch('https://api.gupshup.io/wa/api/v1/template/msg', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: normalized,
-        type: 'template',
-        template: sanitizedTemplate
-      })
+      headers: { apikey: apiKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
     })
 
-    const data = await response.json()
+    const text = await response.text()
+    let data: any = {}
+    try { data = JSON.parse(text) } catch { data = { message: text } }
 
-    if (!response.ok) {
+    // Gupshup can answer 200/202 with status "error", so check the body as well as the HTTP status.
+    if (!response.ok || String(data?.status).toLowerCase() === 'error') {
       const errorDetail = JSON.stringify(data)
       console.error('[WhatsApp] Failed to send template:', errorDetail)
       await logWhatsAppMessage({
@@ -194,7 +221,8 @@ export async function sendWhatsAppTemplateDetailed(
         status: 'failed',
         errorDetail
       })
-      return { ok: false, error: (data?.error?.message as string | undefined) ?? 'WhatsApp did not accept the message' }
+      const raw = (data?.message as string | undefined) ?? 'WhatsApp did not accept the message'
+      return { ok: false, error: gupshupErrorMessage(data?.code ?? data?.errorCode, raw) }
     }
 
     console.log('[WhatsApp] Successfully sent template:', JSON.stringify(data, null, 2))
@@ -205,7 +233,8 @@ export async function sendWhatsAppTemplateDetailed(
       recipientName,
       params,
       messageBody,
-      status: 'sent'
+      status: 'sent',
+      messageId: typeof data?.messageId === 'string' ? data.messageId : undefined,
     })
     return { ok: true }
   } catch (error) {
