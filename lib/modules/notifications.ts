@@ -104,11 +104,12 @@ export async function notifyDoctorScheduleUpdate(tenant: Tenant, doctor: Doctor,
   if (!notifyPhone) return
 
   const db = tenantDb(tenant)
-  const { start, end } = dayBoundsInTz(now, tenant.timezone)
+  // Only what is still ahead: appointments already done are no use to the doctor in an update.
+  const { end } = dayBoundsInTz(now, tenant.timezone)
   const snap = await db.col('appointments')
     .where('doctorId', '==', doctor.id)
     .where('status', '==', 'BOOKED')
-    .where('startTime', '>=', start)
+    .where('startTime', '>=', now)
     .where('startTime', '<=', end)
     .orderBy('startTime', 'asc')
     .get()
