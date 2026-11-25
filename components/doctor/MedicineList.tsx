@@ -6,10 +6,15 @@ import { DEFAULT_TAPER_STEP_DAYS, DURATION_CHOICES, FREQUENCY_CHOICES, type Medi
 import { MAX_TAPER_STEPS, dayRangeLabel, taperSchedule, taperTotalDays } from '@/lib/taper'
 import { emptyMedicine } from '@/lib/rxContent'
 import { Chip, ChipRow } from '@/components/ui/Chip'
+import { SuggestInput } from '@/components/ui/SuggestInput'
 
 export { emptyMedicine }
 
 interface Suggestion { name: string; dosage: string; frequency: string; duration: string; instructions?: string; taper?: Medicine['taper'] }
+
+/** What a remembered medicine was last prescribed with, as one short line for the dropdown. */
+const summary = (s: Suggestion) =>
+  s.taper ? `Tapering · ${s.taper.steps.length} steps` : [s.dosage, s.frequency, s.duration].filter(Boolean).join(' · ')
 
 /**
  * The medicines part of a prescription: add and remove medicines, optional tapering doses, and suggestions
@@ -18,9 +23,11 @@ interface Suggestion { name: string; dosage: string; frequency: string; duration
  */
 export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; onChange: (next: Medicine[]) => void }) {
   const uid = useId()
-  // Medicines this clinic has prescribed before, offered as the doctor types.
+  // Medicines this clinic has prescribed before, offered as the doctor types, for the medicine being typed in.
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [typingIn, setTypingIn] = useState(-1)
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestAsk = useRef(0)
 
   const setMedicines = (fn: (prev: Medicine[]) => Medicine[]) => onChange(fn(medicines))
   const addMedicine = () => setMedicines(prev => [...prev, emptyMedicine()])
@@ -41,29 +48,36 @@ export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; o
   const removeMedicine = (i: number) => setMedicines(prev => prev.filter((_, idx) => idx !== i))
   const askForSuggestions = (text: string) => {
     if (suggestTimer.current) clearTimeout(suggestTimer.current)
+    const ask = ++latestAsk.current
     if (text.trim().length < 2) { setSuggestions([]); return }
     suggestTimer.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/prescriptions/medicines?q=${encodeURIComponent(text.trim())}`)
-        if (res.ok) setSuggestions((await res.json()).medicines ?? [])
+        // An older, slower answer must not replace the list for what is typed now.
+        if (res.ok && ask === latestAsk.current) setSuggestions((await res.json()).medicines ?? [])
       } catch { /* suggestions are a convenience; typing carries on without them */ }
-    }, 250)
+    }, 200)
   }
 
-  // Picking a remembered medicine from the list fills in how it was prescribed last time (blank fields only).
   const onNameChange = (i: number, value: string) => {
+    setTypingIn(i)
     askForSuggestions(value)
-    const hit = suggestions.find(s => s.name.toLowerCase() === value.trim().toLowerCase())
+    setMedicines(prev => prev.map((m, idx) => idx === i ? { ...m, name: value } : m))
+  }
+
+  // Choosing a remembered medicine from the list fills in everything it was prescribed with last time.
+  const pickSuggestion = (i: number, name: string) => {
+    const hit = suggestions.find(s => s.name === name)
+    setSuggestions([])
+    if (!hit) return
     setMedicines(prev => prev.map((m, idx) => {
       if (idx !== i) return m
-      const next = { ...m, name: value }
-      const untouched = !m.dosage && !m.frequency && !m.duration && !m.taper
-      if (hit && untouched) {
-        next.dosage = hit.dosage; next.frequency = hit.frequency; next.duration = hit.duration
-        if (hit.instructions) next.instructions = hit.instructions
-        if (hit.taper) next.taper = hit.taper
+      const { taper: _old, ...rest } = m
+      return {
+        ...rest, name: hit.name, dosage: hit.dosage, frequency: hit.frequency, duration: hit.duration,
+        instructions: hit.instructions ?? '',
+        ...(hit.taper ? { taper: hit.taper } : {}),
       }
-      return next
     }))
   }
 
@@ -73,9 +87,6 @@ export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; o
 
   return (
     <>
-      <datalist id={`${uid}-suggestions`}>
-        {suggestions.map(s => <option key={s.name} value={s.name} />)}
-      </datalist>
       <div>
         <div className="flex justify-between items-center mb-3">
           <p className="form-label mb-0">Medicines</p>
@@ -100,8 +111,10 @@ export function MedicineList({ medicines, onChange }: { medicines: Medicine[]; o
 
                 <div>
                   <label htmlFor={`${base}-name`} className="form-label">Medicine name</label>
-                  <input id={`${base}-name`} className="form-input" placeholder="e.g. Paracetamol" value={med.name}
-                    list={`${uid}-suggestions`} autoComplete="off" onChange={e => onNameChange(i, e.target.value)} />
+                  <SuggestInput id={`${base}-name`} className="form-input" placeholder="e.g. Paracetamol" value={med.name}
+                    onFocus={() => setTypingIn(i)} onChange={e => onNameChange(i, e.target.value)}
+                    suggestions={typingIn === i ? suggestions.map(s => ({ key: s.name, primary: s.name, secondary: summary(s) })) : []}
+                    onPick={name => pickSuggestion(i, name)} listLabel="Medicines used before" />
                 </div>
 
                 {/* One choice, two clear buttons: easier to read than a tick box */}
